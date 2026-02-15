@@ -1,5 +1,10 @@
 import Vapor
 
+struct IdempotencyEntry: Sendable {
+    let jobId: UUID
+    let requestHash: String
+}
+
 actor AppState {
     private var jobs: [UUID: JobRecord] = [:]
     private var previews: [UUID: PreviewRecord] = [:]
@@ -10,15 +15,15 @@ actor AppState {
     private var workers: [UUID: WorkerRecord] = [:]
     private var events: [EventRecord] = []
     private var nextEventId: Int = 1
-    private var idempotency: [String: UUID] = [:]
+    private var idempotency: [String: IdempotencyEntry] = [:]
 
-    func getOrCreateJobId(for idempotencyKey: String?) -> UUID? {
+    func idempotencyEntry(for idempotencyKey: String?) -> IdempotencyEntry? {
         guard let idempotencyKey else { return nil }
         return idempotency[idempotencyKey]
     }
 
-    func rememberIdempotency(_ key: String, jobId: UUID) {
-        idempotency[key] = jobId
+    func rememberIdempotency(_ key: String, requestHash: String, jobId: UUID) {
+        idempotency[key] = IdempotencyEntry(jobId: jobId, requestHash: requestHash)
     }
 
     func createJob(fileURL: String, source: JobSource, tags: [String]) -> JobRecord {
@@ -38,8 +43,12 @@ actor AppState {
             needsReview: false
         )
         jobs[job.id] = job
-        addEvent(type: "job.created", payload: ["job_id": job.id.uuidString])
+        addEvent(type: "job.ingest_received", payload: ["job_id": job.id.uuidString])
         return job
+    }
+
+    func cacheJob(_ job: JobRecord) {
+        jobs[job.id] = job
     }
 
     func job(id: UUID) -> JobRecord? {
@@ -56,19 +65,20 @@ actor AppState {
         return job
     }
 
-    func markPreviewReady(jobId: UUID, preview: PreviewRecord) {
+    func markPreviewReady(jobId: UUID, preview: PreviewRecord) -> JobRecord? {
         previews[jobId] = preview
-        guard var job = jobs[jobId] else { return }
+        guard var job = jobs[jobId] else { return nil }
         job.status = .running
         job.updatedAt = Date()
         job.steps.previewReady = preview.createdAt
         jobs[jobId] = job
-        addEvent(type: "preview.ready", payload: ["job_id": jobId.uuidString])
+        addEvent(type: "job.preview_ready", payload: ["job_id": jobId.uuidString])
+        return job
     }
 
-    func attachAnalysis(jobId: UUID, analysis: AnalysisResponse, needsReview: Bool) {
+    func attachAnalysis(jobId: UUID, analysis: AnalysisResponse, needsReview: Bool) -> JobRecord? {
         analyses[jobId] = analysis
-        guard var job = jobs[jobId] else { return }
+        guard var job = jobs[jobId] else { return nil }
         job.updatedAt = Date()
         job.steps.analysed = Date()
         job.suggestedPreset = analysis.suggested_preset
@@ -80,7 +90,13 @@ actor AppState {
             job.steps.completed = Date()
         }
         jobs[jobId] = job
-        addEvent(type: "analysis.completed", payload: ["job_id": jobId.uuidString])
+        addEvent(type: "job.analysed", payload: ["job_id": jobId.uuidString])
+        if needsReview {
+            addEvent(type: "job.needs_review", payload: ["job_id": jobId.uuidString])
+        } else {
+            addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
+        }
+        return job
     }
 
     func preview(jobId: UUID) -> PreviewRecord? {

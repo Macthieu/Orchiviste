@@ -2,6 +2,7 @@ import Vapor
 import RediStack
 import NIOCore
 import Foundation
+import CryptoKit
 import OrchivisteSharedKit
 
 // --------- Modèles d’E/S ----------
@@ -41,16 +42,67 @@ struct IngestsResponse: Content {
     let taskId: String
 }
 
+private extension IngestRequest {
+    func idempotencyFingerprint() -> String {
+        let normalizedTags = (tags ?? []).sorted().joined(separator: ",")
+        let normalized = [
+            fileURL,
+            source.kind,
+            source.url ?? "",
+            source.site ?? "",
+            source.library ?? "",
+            source.itemId ?? "",
+            normalizedTags,
+            hints?.session_id ?? "",
+            hints?.agenda_id ?? ""
+        ].joined(separator: "|")
+        let digest = SHA256.hash(data: Data(normalized.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 // --------- Routes ----------
 func registerIngestRoutes(_ app: Application) {
     app.group("v1") { v1 in
-        v1.post("ingest") { req async throws -> IngestsResponse in
+        v1.post("ingest") { req async throws -> Response in
             // 1) Parse du body + préparation du job
             let body = try req.content.decode(IngestRequest.self)
-            if let key = req.headers.first(name: "Idempotency-Key"),
-               let existingId = await req.application.appState.getOrCreateJobId(for: key),
-               let existing = await req.application.appState.job(id: existingId) {
-                return IngestsResponse(status: "queued", taskId: existing.id.uuidString)
+            guard !body.fileURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw Abort(.badRequest, reason: "fileURL is required.")
+            }
+            let requestHash = body.idempotencyFingerprint()
+            let idempotencyKey = req.headers.first(name: "Idempotency-Key")
+
+            if let idempotencyKey, !idempotencyKey.isEmpty {
+                if let inMemory = await req.application.appState.idempotencyEntry(for: idempotencyKey) {
+                    guard inMemory.requestHash == requestHash else {
+                        throw Abort(.conflict, reason: "Idempotency-Key already used with a different payload.")
+                    }
+                    if let cached = await req.application.appState.job(id: inMemory.jobId) {
+                        return try queuedResponse(taskId: cached.id)
+                    }
+                    if let existing = try await JobPersistenceRepository.fetchJob(id: inMemory.jobId, on: req.db) {
+                        await req.application.appState.cacheJob(existing)
+                        return try queuedResponse(taskId: existing.id)
+                    }
+                    throw Abort(.conflict, reason: "Idempotency-Key points to an unknown job.")
+                }
+
+                if let persisted = try await JobPersistenceRepository.fetchIdempotency(key: idempotencyKey, on: req.db) {
+                    await req.application.appState.rememberIdempotency(
+                        idempotencyKey,
+                        requestHash: persisted.requestHash,
+                        jobId: persisted.jobId
+                    )
+                    guard persisted.requestHash == requestHash else {
+                        throw Abort(.conflict, reason: "Idempotency-Key already used with a different payload.")
+                    }
+                    if let existing = try await JobPersistenceRepository.fetchJob(id: persisted.jobId, on: req.db) {
+                        await req.application.appState.cacheJob(existing)
+                        return try queuedResponse(taskId: existing.id)
+                    }
+                    throw Abort(.conflict, reason: "Idempotency-Key points to an unknown job.")
+                }
             }
 
             let job = await req.application.appState.createJob(
@@ -58,8 +110,26 @@ func registerIngestRoutes(_ app: Application) {
                 source: body.source,
                 tags: body.tags ?? []
             )
-            if let key = req.headers.first(name: "Idempotency-Key") {
-                await req.application.appState.rememberIdempotency(key, jobId: job.id)
+
+            try await JobPersistenceRepository.upsert(job: job, on: req.db)
+            try await JobPersistenceRepository.appendEvent(
+                type: "job.ingest_received",
+                payload: ["job_id": job.id.uuidString],
+                on: req.db
+            )
+
+            if let idempotencyKey, !idempotencyKey.isEmpty {
+                await req.application.appState.rememberIdempotency(
+                    idempotencyKey,
+                    requestHash: requestHash,
+                    jobId: job.id
+                )
+                try await JobPersistenceRepository.saveIdempotency(
+                    key: idempotencyKey,
+                    requestHash: requestHash,
+                    jobId: job.id,
+                    on: req.db
+                )
             }
 
             let enqueue = IngestJob(
@@ -84,7 +154,11 @@ func registerIngestRoutes(_ app: Application) {
                     configuration: .init(hostname: host, port: port),
                     boundEventLoop: req.application.eventLoopGroup.next()
                 ).get()
-                defer { try? connection.close().wait() }
+                defer {
+                    Task {
+                        _ = try? await connection.close().get()
+                    }
+                }
 
                 // Encodage RESP en BulkString (RediStack)
                 var buffer = ByteBufferAllocator().buffer(capacity: data.count)
@@ -101,6 +175,7 @@ func registerIngestRoutes(_ app: Application) {
                 req.logger.warning("ORCHIVISTE_REDIS_URL non défini → la tâche \(job.id) n’a PAS été envoyée dans Redis.")
             }
 
+            let app = req.application
             Task.detached(priority: .background) {
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 let preview = PreviewRecord(
@@ -110,7 +185,14 @@ func registerIngestRoutes(_ app: Application) {
                     imagesByPage: [1: PreviewHelper.placeholderJPEG()],
                     createdAt: Date()
                 )
-                await req.application.appState.markPreviewReady(jobId: job.id, preview: preview)
+                if let updatedJob = await app.appState.markPreviewReady(jobId: job.id, preview: preview) {
+                    try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
+                    try? await JobPersistenceRepository.appendEvent(
+                        type: "job.preview_ready",
+                        payload: ["job_id": job.id.uuidString],
+                        on: app.db
+                    )
+                }
 
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 let diskPresets = ConfigLoader.loadPresets()
@@ -125,11 +207,36 @@ func registerIngestRoutes(_ app: Application) {
                 )
                 let minConfidence = 0.7
                 let needsReview = analysis.confidence < minConfidence
-                await req.application.appState.attachAnalysis(jobId: job.id, analysis: analysis, needsReview: needsReview)
+                if let updatedJob = await app.appState.attachAnalysis(
+                    jobId: job.id,
+                    analysis: analysis,
+                    needsReview: needsReview
+                ) {
+                    try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
+                    try? await JobPersistenceRepository.appendEvent(
+                        type: "job.analysed",
+                        payload: ["job_id": job.id.uuidString],
+                        on: app.db
+                    )
+                    let statusEvent = updatedJob.status == .needs_review ? "job.needs_review" : "job.completed"
+                    try? await JobPersistenceRepository.appendEvent(
+                        type: statusEvent,
+                        payload: ["job_id": job.id.uuidString],
+                        on: app.db
+                    )
+                }
             }
 
             // 3) Toujours répondre 202/queued (asynchrone)
-            return IngestsResponse(status: "queued", taskId: job.id.uuidString)
+            return try queuedResponse(taskId: job.id)
         }
     }
+}
+
+private func queuedResponse(taskId: UUID) throws -> Response {
+    let response = Response(status: .accepted)
+    try response.content.encode(
+        IngestsResponse(status: "queued", taskId: taskId.uuidString)
+    )
+    return response
 }

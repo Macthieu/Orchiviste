@@ -3,6 +3,36 @@ import Fluent
 import FluentPostgresDriver
 import FluentSQLiteDriver
 
+func configure(_ app: Application) throws {
+    app.logger.logLevel = .info
+    app.http.server.configuration.hostname = "127.0.0.1"
+    app.http.server.configuration.port = Environment.get("ORCHIVISTE_API_PORT")
+        .flatMap(Int.init) ?? 8080
+
+    app.middleware.use(CorrelationIDMiddleware())
+    app.middleware.use(CORSMiddleware(configuration: makeCORSConfiguration()))
+    app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
+
+    try configureDatabase(app)
+    registerMigrations(app)
+    if Environment.get("ORCHIVISTE_AUTO_MIGRATE") == "1" {
+        try app.autoMigrate().wait()
+    }
+
+    registerHealthRoutes(app)
+    registerIngestRoutes(app)
+    registerJobRoutes(app)
+    registerPreviewRoutes(app)
+    registerAnalyseRoutes(app)
+    registerPresetRoutes(app)
+    registerTaxonomyRoutes(app)
+    registerAgendaRoutes(app)
+    registerRoutingRoutes(app)
+    registerWorkerRoutes(app)
+    registerEventRoutes(app)
+    registerOpenAPIRoutes(app)
+}
+
 @main
 struct Boot {
     static func main() throws {
@@ -11,45 +41,61 @@ struct Boot {
         let app = Application(env)
         defer { app.shutdown() }
 
-        app.logger.logLevel = .info
-        app.http.server.configuration.hostname = "127.0.0.1"
-        app.http.server.configuration.port = 8080
+        try configure(app)
 
-        // CORS
-        let corsCfg = CORSMiddleware.Configuration(
-            allowedOrigin: .originBased,
-            allowedMethods: [.GET, .POST, .PUT, .PATCH, .DELETE, .OPTIONS],
-            allowedHeaders: [.accept, .contentType, .origin, .authorization]
-        )
-        app.middleware.use(CORSMiddleware(configuration: corsCfg))
-        app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
-
-        // DB provider (optionnel)
-        let provider = Environment.get("ORCHIVISTE_DB_PROVIDER")?.lowercased()
-        if provider == "postgres", let url = Environment.get("ORCHIVISTE_POSTGRES_URL") {
-            app.logger.info("Connecting to Postgres at \(url)")
-            try app.databases.use(.postgres(url: url), as: .psql)
-        } else if provider == "sqlite" || Environment.get("ORCHIVISTE_SQLITE_PATH") != nil {
-            let path = Environment.get("ORCHIVISTE_SQLITE_PATH") ?? "orchiviste.sqlite"
-            app.logger.info("Connecting to SQLite at \(path)")
-            app.databases.use(.sqlite(.file(path)), as: .sqlite)
-        }
-
-        // 👉 Enregistre nos routes séparées
-        registerHealthRoutes(app)
-        registerIngestRoutes(app)
-        registerJobRoutes(app)
-        registerPreviewRoutes(app)
-        registerAnalyseRoutes(app)
-        registerPresetRoutes(app)
-        registerTaxonomyRoutes(app)
-        registerAgendaRoutes(app)
-        registerRoutingRoutes(app)
-        registerWorkerRoutes(app)
-        registerEventRoutes(app)
-        registerOpenAPIRoutes(app)
-
-        app.logger.info("➡️ OrchivisteAPI listening on http://127.0.0.1:8080")
+        app.logger.info("OrchivisteAPI listening on \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
         try app.run()
     }
+}
+
+private func makeCORSConfiguration() -> CORSMiddleware.Configuration {
+    let allowedMethods: [HTTPMethod] = [.GET, .POST, .PUT, .PATCH, .DELETE, .OPTIONS]
+    let allowedHeaders: [HTTPHeaders.Name] = [
+        .accept,
+        .contentType,
+        .origin,
+        .authorization,
+        .init("x-correlation-id"),
+        .init("idempotency-key")
+    ]
+
+    let rawOrigins = Environment.get("ORCHIVISTE_CORS_ALLOWED_ORIGINS")
+        .map {
+            $0.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        } ?? []
+    if rawOrigins.isEmpty || rawOrigins == ["*"] {
+        return .init(
+            allowedOrigin: .all,
+            allowedMethods: allowedMethods,
+            allowedHeaders: allowedHeaders
+        )
+    }
+    return .init(
+        allowedOrigin: .originBased,
+        allowedMethods: allowedMethods,
+        allowedHeaders: allowedHeaders
+    )
+}
+
+private func configureDatabase(_ app: Application) throws {
+    let provider = Environment.get("ORCHIVISTE_DB_PROVIDER")?.lowercased()
+    if provider == "postgres", let url = Environment.get("ORCHIVISTE_POSTGRES_URL") {
+        app.logger.info("Connecting to Postgres.")
+        try app.databases.use(.postgres(url: url), as: .psql)
+        app.databases.default(to: .psql)
+        return
+    }
+
+    let path = Environment.get("ORCHIVISTE_SQLITE_PATH") ?? "orchiviste.sqlite"
+    app.logger.info("Connecting to SQLite at \(path)")
+    app.databases.use(.sqlite(.file(path)), as: .sqlite)
+    app.databases.default(to: .sqlite)
+}
+
+private func registerMigrations(_ app: Application) {
+    app.migrations.add(CreateJobsMigration())
+    app.migrations.add(CreateEventsMigration())
+    app.migrations.add(CreateIdempotencyKeysMigration())
 }
