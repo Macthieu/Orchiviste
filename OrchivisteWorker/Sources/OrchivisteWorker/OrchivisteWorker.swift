@@ -20,11 +20,12 @@ struct Worker {
         let pool = RedisConnectionPool(
             configuration: .init(
                 initialServerConnectionAddresses: [address],
-                .maximumActiveConnections(2),
+                maximumConnectionCount: .maximumActiveConnections(2),
                 connectionFactoryConfiguration: .init()
             ),
             boundEventLoop: group.next()
         )
+        pool.activate()
 
         let key = RedisKey("orchiviste:ingest")
         print("🧰 Worker démarré. En attente de tâches sur \(host):\(port)…")
@@ -32,11 +33,11 @@ struct Worker {
         while true {
             do {
                 // ⬇️ .seconds(0) vient de NIOCore
-                let popped = try pool.withConnection {
-                    $0.blpop(from: key, timeout: .seconds(0))
+                let popped = try pool.leaseConnection {
+                    $0.blpop(from: key, timeout: TimeAmount.seconds(0))
                 }.wait()
 
-                guard let (_, value) = popped, let json = value.string else { continue }
+                guard let json = popped.string else { continue }
                 let item = try JSONDecoder().decode(IngestJob.self, from: Data(json.utf8))
 
                 let tags = item.tags ?? []

@@ -83,8 +83,8 @@ func registerIngestRoutes(_ app: Application) {
                 let connection = try await RedisConnection.make(
                     configuration: .init(hostname: host, port: port),
                     boundEventLoop: req.application.eventLoopGroup.next()
-                )
-                defer { try? await connection.close() }
+                ).get()
+                defer { try? connection.close().wait() }
 
                 // Encodage RESP en BulkString (RediStack)
                 var buffer = ByteBufferAllocator().buffer(capacity: data.count)
@@ -95,9 +95,7 @@ func registerIngestRoutes(_ app: Application) {
                 let queueKey = RedisKey("orchiviste:ingest")
 
                 // RPUSH
-                _ = try await pool.withConnection { redis in
-    redis.rpush([RESPValue.bulkString(value)], into: queueKey)
-}.get()
+                _ = try await connection.rpush([value], into: queueKey).get()
 
             } else {
                 req.logger.warning("ORCHIVISTE_REDIS_URL non défini → la tâche \(job.id) n’a PAS été envoyée dans Redis.")
