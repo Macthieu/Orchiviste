@@ -140,7 +140,11 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "get": ["responses": ["200": ["description": "Preset list", "content": ["application/json": ["schema": ["type": "array", "items": ["$ref": "#/components/schemas/Preset"]]]]]]],
                     "post": [
                         "requestBody": ["required": true, "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
-                        "responses": ["200": ["description": "Preset saved", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]]]
+                        "responses": [
+                            "200": ["description": "Preset saved", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
+                            "400": ["$ref": "#/components/responses/Error400"],
+                            "500": ["$ref": "#/components/responses/Error500"]
+                        ]
                     ]
                 ],
                 "/v1/analyse": [
@@ -215,7 +219,8 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "get": [
                         "parameters": [["name": "cursor", "in": "query", "required": false, "schema": ["type": "integer", "minimum": 0]]],
                         "responses": [
-                            "200": ["description": "Events", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/EventsResponse"]]]]
+                            "200": ["description": "Events", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/EventsResponse"]]]],
+                            "400": ["$ref": "#/components/responses/Error400"]
                         ]
                     ]
                 ]

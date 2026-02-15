@@ -34,7 +34,7 @@ func registerPreviewRoutes(_ app: Application) {
             return RangeResponse.make(req: req, data: image, contentType: .jpeg)
         }
 
-        preview.get(":id", "page", ":n.jpg", use: pageHandler)
+        preview.get(":id", "page", ":n", use: pageHandler)
 
         preview.get(":id", "text") { req async throws -> PreviewTextResponse in
             guard let id = req.parameters.get("id"),

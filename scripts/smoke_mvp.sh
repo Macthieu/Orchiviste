@@ -178,6 +178,16 @@ health_code="$(http_raw GET "$API_BASE/v1/health" "$health_file")"
 assert_code "$health_code" "200" "health" "$health_file"
 echo "OK  health"
 
+ui_redirect_headers="$TMP_DIR/ui_redirect_headers.txt"
+ui_redirect_code="$(curl -sS -D "$ui_redirect_headers" -o /dev/null -w "%{http_code}" "$API_BASE/u")"
+assert_code "$ui_redirect_code" "303" "ui.alias.redirect" "$ui_redirect_headers"
+if ! tr -d '\r' < "$ui_redirect_headers" | grep -qi '^location: /ui$'; then
+  echo "FAIL [ui.alias.redirect] expected Location: /ui" >&2
+  cat "$ui_redirect_headers" >&2
+  exit 1
+fi
+echo "OK  ui alias redirect (/u -> /ui)"
+
 ingest_payload="$TMP_DIR/ingest.json"
 idem_key="smoke-$(date +%s)"
 cat >"$ingest_payload" <<JSON
@@ -259,16 +269,8 @@ echo "OK  preview thumbnail"
 
 page_file="$TMP_DIR/page1.jpg"
 page_code="$(http_raw GET "$API_BASE/v1/preview/$job_id/page/1.jpg" "$page_file")"
-if [[ "$page_code" == "200" ]]; then
-  echo "OK  preview page 1 (.jpg)"
-elif [[ "$page_code" == "400" ]]; then
-  # Backward-compatible fallback for older route parsing.
-  page_code="$(http_raw GET "$API_BASE/v1/preview/$job_id/page/1" "$page_file")"
-  assert_code "$page_code" "200" "preview.page1 fallback" "$page_file"
-  echo "OK  preview page 1 (fallback legacy path)"
-else
-  assert_code "$page_code" "200" "preview.page1" "$page_file"
-fi
+assert_code "$page_code" "200" "preview.page1" "$page_file"
+echo "OK  preview page 1 (.jpg)"
 
 text_file="$TMP_DIR/text.json"
 text_code="$(http_raw GET "$API_BASE/v1/preview/$job_id/text?page=1" "$text_file")"

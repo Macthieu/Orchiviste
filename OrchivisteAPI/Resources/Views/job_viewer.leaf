@@ -109,6 +109,8 @@
     <nav>
         <a href="/ui">Dashboard</a>
         <a href="/ui/jobs">Jobs</a>
+        <a href="/ui/workers">Workers</a>
+        <a href="/ui/presets">Presets</a>
         <a class="btn" href="#(download_url)">Download explicit</a>
     </nav>
 </header>

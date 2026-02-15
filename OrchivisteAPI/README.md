@@ -25,6 +25,8 @@ Run:
 UI (SSR Leaf):
 - http://127.0.0.1:28780/ui
 - alias: http://127.0.0.1:28780/u
+- workers: http://127.0.0.1:28780/ui/workers
+- presets: http://127.0.0.1:28780/ui/presets
 - viewer uses lazy preview (`/v1/preview/...`) and only downloads on explicit button
 
 Docker compose:

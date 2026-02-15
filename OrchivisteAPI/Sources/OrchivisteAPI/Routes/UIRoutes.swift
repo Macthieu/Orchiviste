@@ -19,6 +19,16 @@ private struct UIJobsContext: Encodable {
     let jobs: [UIJobSummary]
 }
 
+private struct UIWorkersContext: Encodable {
+    let workers: [UIWorkerSummary]
+    let queue_ingest_depth: Int
+    let queue_dead_letter_depth: Int
+}
+
+private struct UIPresetsContext: Encodable {
+    let presets: [UIPresetSummary]
+}
+
 private struct UIJobSummary: Encodable {
     let id: String
     let status: String
@@ -27,6 +37,25 @@ private struct UIJobSummary: Encodable {
     let confidence: String
     let suggested_class_code: String
     let updated_at: String
+}
+
+private struct UIWorkerSummary: Encodable {
+    let id: String
+    let name: String
+    let status: String
+    let capabilities: String
+    let last_seen: String
+    let version: String
+    let load: String
+    let ram_mb: String
+}
+
+private struct UIPresetSummary: Encodable {
+    let id: String
+    let name: String
+    let name_format: String
+    let class_code: String
+    let postprocess: String
 }
 
 private struct UIJobViewerContext: Encodable {
@@ -44,11 +73,21 @@ private struct UIJobViewerContext: Encodable {
 }
 
 func registerUIRoutes(_ app: Application) {
+    app.get { req async throws -> Response in
+        req.redirect(to: "/ui")
+    }
+
     app.get("u") { req async throws -> Response in
         req.redirect(to: "/ui")
     }
     app.get("u", "jobs") { req async throws -> Response in
         req.redirect(to: "/ui/jobs")
+    }
+    app.get("u", "workers") { req async throws -> Response in
+        req.redirect(to: "/ui/workers")
+    }
+    app.get("u", "presets") { req async throws -> Response in
+        req.redirect(to: "/ui/presets")
     }
     app.get("u", "jobs", ":id") { req async throws -> Response in
         guard let id = req.parameters.get("id") else {
@@ -84,6 +123,22 @@ func registerUIRoutes(_ app: Application) {
         return try await req.view.render("jobs", UIJobsContext(jobs: jobs))
     }
 
+    app.get("ui", "workers") { req async throws -> View in
+        let workers = await loadWorkers(req: req)
+        let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
+        let context = UIWorkersContext(
+            workers: workers,
+            queue_ingest_depth: queueStats.ingest_depth,
+            queue_dead_letter_depth: queueStats.dead_letter_depth
+        )
+        return try await req.view.render("workers", context)
+    }
+
+    app.get("ui", "presets") { req async throws -> View in
+        let presets = await loadPresets(req: req)
+        return try await req.view.render("presets", UIPresetsContext(presets: presets))
+    }
+
     app.get("ui", "jobs", ":id") { req async throws -> View in
         guard let id = req.parameters.get("id"),
               let jobID = UUID(uuidString: id) else {
@@ -106,6 +161,44 @@ func registerUIRoutes(_ app: Application) {
         )
         return try await req.view.render("job_viewer", context)
     }
+}
+
+private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
+    let workers = await req.application.appState.listWorkers()
+        .sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    return workers.map { worker in
+        UIWorkerSummary(
+            id: worker.id.uuidString,
+            name: worker.name,
+            status: worker.status.rawValue,
+            capabilities: worker.capabilities.joined(separator: ", "),
+            last_seen: worker.lastSeen.map(formatTimestamp) ?? "-",
+            version: worker.version ?? "-",
+            load: worker.load.map { String(format: "%.2f", $0) } ?? "-",
+            ram_mb: worker.ram_mb.map(String.init) ?? "-"
+        )
+    }
+}
+
+private func loadPresets(req: Request) async -> [UIPresetSummary] {
+    let disk = ConfigLoader.loadPresets()
+    let memory = await req.application.appState.listPresets()
+    let merged = Dictionary(uniqueKeysWithValues: (disk + memory).map { ($0.id, $0) })
+    return merged.values
+        .sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+        .map { preset in
+            UIPresetSummary(
+                id: preset.id,
+                name: preset.name,
+                name_format: preset.name_format,
+                class_code: preset.class_code ?? "-",
+                postprocess: (preset.postprocess ?? []).joined(separator: ", ")
+            )
+        }
 }
 
 private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
