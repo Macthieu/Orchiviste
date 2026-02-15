@@ -1,6 +1,4 @@
 import Vapor
-import RediStack
-import NIOCore
 import Foundation
 import CryptoKit
 import OrchivisteSharedKit
@@ -112,10 +110,12 @@ func registerIngestRoutes(_ app: Application) {
             )
 
             try await JobPersistenceRepository.upsert(job: job, on: req.db)
-            try await JobPersistenceRepository.appendEvent(
+            await EventPublisher.publish(
                 type: "job.ingest_received",
                 payload: ["job_id": job.id.uuidString],
-                on: req.db
+                application: req.application,
+                database: req.db,
+                logger: req.logger
             )
 
             if let idempotencyKey, !idempotencyKey.isEmpty {
@@ -142,37 +142,37 @@ func registerIngestRoutes(_ app: Application) {
 
             let data = try JSONEncoder().encode(enqueue)
 
-            // 2) Si ORCHIVISTE_REDIS_URL est défini : push dans Redis
-            if let redisURLStr = Environment.get("ORCHIVISTE_REDIS_URL"),
-               let url = URL(string: redisURLStr),
-               let host = url.host {
-
-                let port = url.port ?? 6379
-
-                // crée une connexion Redis liée à l’event loop de la requête
-                let connection = try await RedisConnection.make(
-                    configuration: .init(hostname: host, port: port),
-                    boundEventLoop: req.application.eventLoopGroup.next()
-                ).get()
-                defer {
-                    Task {
-                        _ = try? await connection.close().get()
-                    }
-                }
-
-                // Encodage RESP en BulkString (RediStack)
-                var buffer = ByteBufferAllocator().buffer(capacity: data.count)
-                buffer.writeBytes(data)
-                let value = RESPValue.bulkString(buffer)
-
-                // Utilise une clé de queue; RPUSH + BLPOP -> FIFO
-                let queueKey = RedisKey("orchiviste:ingest")
-
-                // RPUSH
-                _ = try await connection.rpush([value], into: queueKey).get()
-
+            // 2) Queue Redis (squelette MVP)
+            let queueResult = await RedisQueueService.enqueueIngest(
+                payload: data,
+                application: req.application,
+                logger: req.logger
+            )
+            if queueResult.enqueued {
+                await EventPublisher.publish(
+                    type: "queue.ingest_enqueued",
+                    payload: ["job_id": job.id.uuidString, "queue": queueResult.queue],
+                    application: req.application,
+                    database: req.db,
+                    logger: req.logger
+                )
             } else {
-                req.logger.warning("ORCHIVISTE_REDIS_URL non défini → la tâche \(job.id) n’a PAS été envoyée dans Redis.")
+                await RedisQueueService.enqueueDeadLetter(
+                    payload: data,
+                    reason: "redis_enqueue_failed",
+                    application: req.application,
+                    logger: req.logger
+                )
+                await EventPublisher.publish(
+                    type: "queue.ingest_dead_lettered",
+                    payload: ["job_id": job.id.uuidString],
+                    application: req.application,
+                    database: req.db,
+                    logger: req.logger
+                )
+                req.logger.warning("Ingest queued in dead-letter due to Redis enqueue failure.", metadata: [
+                    "job_id": .string(job.id.uuidString)
+                ])
             }
 
             let app = req.application
@@ -181,10 +181,12 @@ func registerIngestRoutes(_ app: Application) {
                 let preview = PreviewRenderer.makePreview(for: job, logger: app.logger)
                 if let updatedJob = await app.appState.markPreviewReady(jobId: job.id, preview: preview) {
                     try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
-                    try? await JobPersistenceRepository.appendEvent(
+                    await EventPublisher.publish(
                         type: "job.preview_ready",
                         payload: ["job_id": job.id.uuidString],
-                        on: app.db
+                        application: app,
+                        database: app.db,
+                        logger: app.logger
                     )
                 }
 

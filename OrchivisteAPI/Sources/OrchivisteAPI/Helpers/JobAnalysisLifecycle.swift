@@ -36,15 +36,19 @@ enum JobAnalysisLifecycle {
         }
 
         try await JobPersistenceRepository.upsert(job: updatedJob, on: database)
-        try await JobPersistenceRepository.appendEvent(
+        await EventPublisher.publish(
             type: "job.analysed",
             payload: ["job_id": jobId.uuidString],
-            on: database
+            application: application,
+            database: database,
+            logger: logger
         )
-        try await JobPersistenceRepository.appendEvent(
+        await EventPublisher.publish(
             type: needsReview ? "job.needs_review" : "job.completed",
             payload: ["job_id": jobId.uuidString],
-            on: database
+            application: application,
+            database: database,
+            logger: logger
         )
 
         if needsReview {
