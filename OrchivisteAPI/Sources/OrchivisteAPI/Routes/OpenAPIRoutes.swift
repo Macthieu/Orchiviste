@@ -7,7 +7,7 @@ func registerOpenAPIRoutes(_ app: Application) {
             "info": [
                 "title": "Orchiviste API",
                 "version": "0.3.0",
-                "description": "MVP ingestion -> apercu -> analyse -> revue -> routage -> evenements"
+                "description": "MVP ingestion -> aperçu -> analyse -> revue -> routage -> événements"
             ],
             "servers": [
                 ["url": "http://127.0.0.1:28780"]
@@ -24,7 +24,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                 ],
                 "/v1/ingest": [
                     "post": [
-                        "summary": "Creer une tache d'ingestion",
+                        "summary": "Creer une tâche d'ingestion",
                         "parameters": [
                             [
                                 "name": "Idempotency-Key",
@@ -46,7 +46,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "parameters": [["$ref": "#/components/parameters/JobID"]],
                     "get": [
                         "responses": [
-                            "200": ["description": "Tache", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobRecord"]]]],
+                            "200": ["description": "Tâche", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobRecord"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"]
                         ]
@@ -56,7 +56,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "parameters": [["$ref": "#/components/parameters/JobID"]],
                     "post": [
                         "responses": [
-                            "200": ["description": "Annulee", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobCancelResponse"]]]],
+                            "200": ["description": "Annulée", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobCancelResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"],
                             "409": ["$ref": "#/components/responses/Error409"]
@@ -72,7 +72,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobReviewRequest"]]]
                         ],
                         "responses": [
-                            "200": ["description": "Tache revue", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobRecord"]]]],
+                            "200": ["description": "Tâche revue", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/JobRecord"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"],
                             "409": ["$ref": "#/components/responses/Error409"]
@@ -107,7 +107,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "parameters": [["$ref": "#/components/parameters/WorkerID"]],
                     "post": [
                         "responses": [
-                            "200": ["description": "Agent approuve", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/WorkerRecord"]]]],
+                            "200": ["description": "Agent approuvé", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/WorkerRecord"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"]
                         ]
@@ -137,11 +137,11 @@ func registerOpenAPIRoutes(_ app: Application) {
                     ]
                 ],
                 "/v1/presets": [
-                    "get": ["responses": ["200": ["description": "Liste des prereglages", "content": ["application/json": ["schema": ["type": "array", "items": ["$ref": "#/components/schemas/Preset"]]]]]]],
+                    "get": ["responses": ["200": ["description": "Liste des préréglages", "content": ["application/json": ["schema": ["type": "array", "items": ["$ref": "#/components/schemas/Preset"]]]]]]],
                     "post": [
                         "requestBody": ["required": true, "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
                         "responses": [
-                            "200": ["description": "Prereglage enregistre", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
+                            "200": ["description": "Préréglage enregistre", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "500": ["$ref": "#/components/responses/Error500"]
                         ]
@@ -151,7 +151,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "post": [
                         "requestBody": ["required": true, "content": ["application/json": ["schema": ["$ref": "#/components/schemas/AnalysisRequest"]]]],
                         "responses": [
-                            "200": ["description": "Reponse d'analyse", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/AnalysisResponse"]]]],
+                            "200": ["description": "Réponse d'analyse", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/AnalysisResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "500": ["$ref": "#/components/responses/Error500"]
                         ]
@@ -162,7 +162,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "get": ["responses": ["200": ["description": "Image miniature"], "400": ["$ref": "#/components/responses/Error400"], "404": ["$ref": "#/components/responses/Error404"]]]
                 ],
                 "/v1/preview/{id}/page/{n}.jpg": [
-                    "get": ["responses": ["200": ["description": "Page d'apercu"], "400": ["$ref": "#/components/responses/Error400"], "404": ["$ref": "#/components/responses/Error404"]]],
+                    "get": ["responses": ["200": ["description": "Page d'aperçu"], "400": ["$ref": "#/components/responses/Error400"], "404": ["$ref": "#/components/responses/Error404"]]],
                     "parameters": [
                         ["$ref": "#/components/parameters/JobID"],
                         ["name": "n", "in": "path", "required": true, "schema": ["type": "integer"]]
@@ -173,7 +173,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "get": [
                         "parameters": [["name": "page", "in": "query", "required": false, "schema": ["type": "integer", "minimum": 1]]],
                         "responses": [
-                            "200": ["description": "Texte d'apercu", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/PreviewTextResponse"]]]],
+                            "200": ["description": "Texte d'aperçu", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/PreviewTextResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"]
                         ]
@@ -207,7 +207,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                     "parameters": [["name": "file_id", "in": "path", "required": true, "schema": ["type": "string"]]],
                     "post": [
                         "responses": [
-                            "200": ["description": "Reponse de routage", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/RoutingResponse"]]]],
+                            "200": ["description": "Réponse de routage", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/RoutingResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"],
                             "409": ["$ref": "#/components/responses/Error409"],
@@ -452,7 +452,7 @@ func registerOpenAPIRoutes(_ app: Application) {
             "webhooks": [
                 "eventDelivered": [
                     "post": [
-                        "summary": "Webhook sortant pour les evenements emis",
+                        "summary": "Webhook sortant pour les événements émis",
                         "requestBody": [
                             "required": true,
                             "content": ["application/json": ["schema": ["$ref": "#/components/schemas/EventRecord"]]]
@@ -462,7 +462,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                             ["name": "x-orchiviste-timestamp", "in": "header", "required": true, "schema": ["type": "string"]]
                         ],
                         "responses": [
-                            "200": ["description": "Webhook recu"]
+                            "200": ["description": "Webhook reçu"]
                         ]
                     ]
                 ]

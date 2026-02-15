@@ -19,10 +19,10 @@ func registerRoutingRoutes(_ app: Application) {
                 if let job = inMemory ?? persisted {
                     await req.application.appState.cacheJob(job)
                     if job.status == .needs_review {
-                        throw Abort(.conflict, reason: "La tache exige une revue humaine avant le routage.")
+                        throw Abort(.conflict, reason: "La tâche exige une revue humaine avant le routage.")
                     }
                     if job.status == .pending || job.status == .running {
-                        throw Abort(.conflict, reason: "L'analyse de la tache n'est pas terminee.")
+                        throw Abort(.conflict, reason: "L'analyse de la tâche n'est pas terminée.")
                     }
                     suggestedCode = job.suggestedClassCode
                     resolvedJobID = jobId

@@ -19,7 +19,7 @@ struct Boot {
 
         registerAnalyseRoutes(app)
 
-        app.logger.info("OrchivisteAnalyse en ecoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
+        app.logger.info("OrchivisteAnalyse en écoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
         try app.run()
     }
 }

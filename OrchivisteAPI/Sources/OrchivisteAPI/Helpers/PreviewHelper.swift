@@ -7,6 +7,6 @@ enum PreviewHelper {
     }
 
     static func defaultText(page: Int) -> String {
-        "Apercu OCR - page \(page)."
+        "Aperçu OCR - page \(page)."
     }
 }

@@ -78,7 +78,7 @@ func registerIngestRoutes(_ app: Application) {
             if let idempotencyKey, !idempotencyKey.isEmpty {
                 if let inMemory = await req.application.appState.idempotencyEntry(for: idempotencyKey) {
                     guard inMemory.requestHash == requestHash else {
-                        throw Abort(.conflict, reason: "Idempotency-Key est deja utilise avec une charge differente.")
+                        throw Abort(.conflict, reason: "Idempotency-Key est déjà utilise avec une charge differente.")
                     }
                     if let cached = await req.application.appState.job(id: inMemory.jobId) {
                         return try queuedResponse(taskId: cached.id)
@@ -87,7 +87,7 @@ func registerIngestRoutes(_ app: Application) {
                         await req.application.appState.cacheJob(existing)
                         return try queuedResponse(taskId: existing.id)
                     }
-                    throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tache inconnue.")
+                    throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tâche inconnue.")
                 }
 
                 if let persisted = try await JobPersistenceRepository.fetchIdempotency(key: idempotencyKey, on: req.db) {
@@ -97,13 +97,13 @@ func registerIngestRoutes(_ app: Application) {
                         jobId: persisted.jobId
                     )
                     guard persisted.requestHash == requestHash else {
-                        throw Abort(.conflict, reason: "Idempotency-Key est deja utilise avec une charge differente.")
+                        throw Abort(.conflict, reason: "Idempotency-Key est déjà utilise avec une charge differente.")
                     }
                     if let existing = try await JobPersistenceRepository.fetchJob(id: persisted.jobId, on: req.db) {
                         await req.application.appState.cacheJob(existing)
                         return try queuedResponse(taskId: existing.id)
                     }
-                    throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tache inconnue.")
+                    throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tâche inconnue.")
                 }
             }
 
@@ -174,7 +174,7 @@ func registerIngestRoutes(_ app: Application) {
                     database: req.db,
                     logger: req.logger
                 )
-                req.logger.warning("Ingestion placee en file rejet suite a un echec d'enfilement Redis.", metadata: [
+                req.logger.warning("Ingestion placee en file rejet suite a un échec d'enfilement Redis.", metadata: [
                     "job_id": .string(job.id.uuidString)
                 ])
             }

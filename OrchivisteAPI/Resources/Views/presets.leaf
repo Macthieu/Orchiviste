@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Prereglages</title>
+    <title>Orchiviste Préréglages</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -52,12 +52,12 @@
 </head>
 <body>
 <header>
-    <strong>Orchiviste Prereglages</strong>
+    <strong>Orchiviste Préréglages</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Prereglages</a>
+        <a href="/ui/presets">Préréglages</a>
     </nav>
 </header>
 <main class="wrap">

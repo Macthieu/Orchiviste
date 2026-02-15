@@ -48,7 +48,7 @@ enum PreviewRenderer {
             }
         }
 
-        logger.info("Apercu genere.", metadata: ["job_id": .string(job.id.uuidString), "pages": .stringConvertible(pageCount)])
+        logger.info("Aperçu genere.", metadata: ["job_id": .string(job.id.uuidString), "pages": .stringConvertible(pageCount)])
         return PreviewRecord(
             jobId: job.id,
             pages: pageCount,
@@ -57,7 +57,7 @@ enum PreviewRenderer {
             createdAt: Date()
         )
         #else
-        logger.warning("Rendu PDF indisponible sur cette plateforme. Utilisation d'un apercu de substitution.")
+        logger.warning("Rendu PDF indisponible sur cette plateforme. Utilisation d'un aperçu de substitution.")
         return placeholder(jobId: job.id)
         #endif
     }

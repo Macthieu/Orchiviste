@@ -52,7 +52,7 @@ enum RedisQueueService {
                 dead_letter_depth: Int(truncatingIfNeeded: dead)
             )
         } catch {
-            logger.warning("Impossible de recuperer les statistiques de file Redis.", metadata: [
+            logger.warning("Impossible de récupérer les statistiques de file Redis.", metadata: [
                 "error": .string(error.localizedDescription)
             ])
             return QueueStatsResponse(ingest_depth: 0, dead_letter_depth: 0)

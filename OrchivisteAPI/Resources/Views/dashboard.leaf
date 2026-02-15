@@ -82,24 +82,24 @@
     <strong>Orchiviste MVP</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Prereglages</a>
+        <a href="/ui/presets">Préréglages</a>
     </nav>
 </header>
 <main class="wrap">
     <section class="grid">
-        <article class="card"><div>Total des taches</div><div class="kpi">#(total_jobs)</div></article>
+        <article class="card"><div>Total des tâches</div><div class="kpi">#(total_jobs)</div></article>
         <article class="card"><div>En attente</div><div class="kpi">#(pending_jobs)</div></article>
         <article class="card"><div>En cours</div><div class="kpi">#(running_jobs)</div></article>
         <article class="card"><div>Revue requise</div><div class="kpi">#(needs_review_jobs)</div></article>
-        <article class="card"><div>Terminees</div><div class="kpi">#(completed_jobs)</div></article>
+        <article class="card"><div>Terminées</div><div class="kpi">#(completed_jobs)</div></article>
         <article class="card"><div>Agents</div><div class="kpi">#(worker_count)</div></article>
         <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
         <article class="card"><div>File de rejet</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
     </section>
 
-    <h2>Taches recentes</h2>
+    <h2>Tâches récentes</h2>
     <table>
         <thead>
         <tr>
@@ -108,7 +108,7 @@
             <th>Source</th>
             <th>Code</th>
             <th>Confiance</th>
-            <th>Mise a jour</th>
+            <th>Mise à jour</th>
         </tr>
         </thead>
         <tbody>

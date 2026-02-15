@@ -46,7 +46,7 @@ struct LocalHeuristicsProvider: AnalysisProvider {
         if hasSignature { matchedRules.append("rule_signature_detected") }
         if matchedRules.isEmpty { matchedRules.append("rule_fallback_autre") }
 
-        logger.debug("Analyse heuristique locale terminee.", metadata: [
+        logger.debug("Analyse heuristique locale terminée.", metadata: [
             "file_id": .string(request.file_id),
             "type_doc": .string(selected.type),
             "confidence": .string("\(confidence)")

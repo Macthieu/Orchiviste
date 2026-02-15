@@ -143,7 +143,7 @@ func registerUIRoutes(_ app: Application) {
     app.get("ui", "jobs", ":id") { req async throws -> View in
         guard let id = req.parameters.get("id"),
               let jobID = UUID(uuidString: id) else {
-            throw Abort(.badRequest, reason: "Identifiant de tache invalide.")
+            throw Abort(.badRequest, reason: "Identifiant de tâche invalide.")
         }
         let job = try await resolveUIJob(jobID: jobID, req: req)
         let preview = await req.application.appState.preview(jobId: jobID)
@@ -232,7 +232,7 @@ private func resolveUIJob(jobID: UUID, req: Request) async throws -> JobRecord {
         await req.application.appState.cacheJob(persisted)
         return persisted
     }
-    throw Abort(.notFound, reason: "Tache introuvable.")
+    throw Abort(.notFound, reason: "Tâche introuvable.")
 }
 
 private func formatTimestamp(_ date: Date) -> String {
@@ -246,9 +246,9 @@ private func localizedJobStatus(_ raw: String) -> String {
     case "pending": return "En attente"
     case "running": return "En cours"
     case "needs_review": return "Revue requise"
-    case "completed": return "Terminee"
-    case "failed": return "En echec"
-    case "cancelled": return "Annulee"
+    case "completed": return "Terminée"
+    case "failed": return "En échec"
+    case "cancelled": return "Annulée"
     default: return raw
     }
 }
@@ -256,7 +256,7 @@ private func localizedJobStatus(_ raw: String) -> String {
 private func localizedWorkerStatus(_ raw: String) -> String {
     switch raw {
     case "pending": return "En attente"
-    case "approved": return "Approuve"
+    case "approved": return "Approuvé"
     default: return raw
     }
 }

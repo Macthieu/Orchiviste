@@ -39,7 +39,7 @@ enum WebhookDispatcher {
                 throw Abort(.badGateway, reason: "Le recepteur webhook a retourne \(response.status.code).")
             } catch {
                 if attempt == retries {
-                    logger.error("Echec de livraison du webhook.", metadata: [
+                    logger.error("Échec de livraison du webhook.", metadata: [
                         "event_id": .string("\(event.id)"),
                         "event_type": .string(event.type),
                         "error": .string(error.localizedDescription)

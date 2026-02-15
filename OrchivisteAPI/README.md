@@ -26,8 +26,8 @@ UI (SSR Leaf) :
 - http://127.0.0.1:28780/ui
 - alias : http://127.0.0.1:28780/u
 - agents : http://127.0.0.1:28780/ui/workers
-- prereglages : http://127.0.0.1:28780/ui/presets
-- la visionneuse utilise l'apercu lazy-load (`/v1/preview/...`) et ne telecharge que sur action explicite
+- préréglages : http://127.0.0.1:28780/ui/presets
+- la visionneuse utilise l'aperçu lazy-load (`/v1/preview/...`) et ne télécharge que sur action explicite
 
 Docker Compose :
 - `docker compose up --build`
@@ -36,7 +36,7 @@ Docker Compose :
 - Redis : `redis://127.0.0.1:6379`
 - profil worker optionnel : `docker compose --profile worker up --build -d`
 
-Tests fumee MVP :
+Tests fumée MVP :
 - `docker compose up --build -d`
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
@@ -74,7 +74,7 @@ Webhooks HMAC :
 - `ORCHIVISTE_WEBHOOK_SECRET` (secret partage)
 
 Configurations (optionnel, lues depuis `./configs`) :
-- Prereglages : `configs/presets/*.json`
+- Préréglages : `configs/presets/*.json`
 - Taxonomie : `configs/analysis/taxonomy/*.json`
 - Table de routage : `configs/analysis/routing/routing.map.json`
 

@@ -35,7 +35,7 @@ trap cleanup EXIT
 need_cmd python3
 need_cmd curl
 
-echo "== Test fumee webhook HMAC Orchiviste =="
+echo "== Test fumée webhook HMAC Orchiviste =="
 echo "Port API : $API_PORT, port Analyse : $ANALYSE_PORT, port Webhook : $WEBHOOK_PORT"
 
 python3 - "$WEBHOOK_PORT" "$CAPTURE_FILE" >"$RECEIVER_LOG" 2>&1 <<'PY' &
@@ -110,7 +110,7 @@ for _ in $(seq 1 40); do
 done
 
 if [[ ! -f "$CAPTURE_FILE" ]]; then
-  echo "ECHEC : aucune charge webhook capturee" >&2
+  echo "ECHEC : aucune charge webhook capturée" >&2
   tail -n 80 "$API_LOG" >&2 || true
   tail -n 80 "$ANALYSE_LOG" >&2 || true
   exit 1
@@ -143,7 +143,7 @@ if not sig.startswith("sha256="):
     print("ECHEC : prefixe de signature invalide")
     sys.exit(1)
 if not event_type or not event_id:
-    print("ECHEC : en-tetes de metadonnees d'evenement manquants")
+    print("ECHEC : en-tetes de métadonnées d'événement manquants")
     sys.exit(1)
 
 expected = hmac.new(secret, ts.encode("utf-8") + b"." + body, hashlib.sha256).hexdigest()
@@ -153,7 +153,7 @@ if not hmac.compare_digest(expected, actual):
     sys.exit(1)
 
 print("OK  signature webhook valide")
-print(f"OK  metadonnees evenement type={event_type} id={event_id}")
+print(f"OK  métadonnées événement type={event_type} id={event_id}")
 PY
 
-echo "Test fumee webhook HMAC reussi."
+echo "Test fumée webhook HMAC réussi."

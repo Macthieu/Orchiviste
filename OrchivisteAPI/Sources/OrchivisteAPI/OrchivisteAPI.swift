@@ -48,7 +48,7 @@ struct Boot {
 
         try configure(app)
 
-        app.logger.info("OrchivisteAPI en ecoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
+        app.logger.info("OrchivisteAPI en écoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
         try app.run()
     }
 }

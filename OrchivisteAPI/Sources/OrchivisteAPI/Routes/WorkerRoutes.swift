@@ -54,7 +54,7 @@ func registerWorkerRoutes(_ app: Application) {
                 throw Abort(.notFound, reason: "Agent introuvable.")
             }
             guard existing.status == .approved else {
-                throw Abort(.conflict, reason: "L'agent n'est pas approuve.")
+                throw Abort(.conflict, reason: "L'agent n'est pas approuvé.")
             }
             if let token = existing.token, !token.isEmpty {
                 guard req.headers.bearerAuthorization?.token == token else {

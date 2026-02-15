@@ -168,14 +168,14 @@ enum SharePointGraphRouter {
         guard response.status == .ok else {
             throw graphError(
                 status: .internalServerError,
-                reason: "Impossible d'obtenir un jeton d'acces Microsoft Graph.",
+                reason: "Impossible d'obtenir un jeton d'accès Microsoft Graph.",
                 response: response
             )
         }
 
         let payload = try response.content.decode(GraphTokenResponse.self)
         guard !payload.access_token.isEmpty else {
-            throw Abort(.internalServerError, reason: "Jeton d'acces Graph vide recu.")
+            throw Abort(.internalServerError, reason: "Jeton d'accès Graph vide reçu.")
         }
         return payload.access_token
     }
@@ -359,7 +359,7 @@ enum SharePointGraphRouter {
         if detail.count > 300 {
             detail = String(detail.prefix(300))
         }
-        let suffix = detail.isEmpty ? "" : " Reponse Graph: \(detail)"
+        let suffix = detail.isEmpty ? "" : " Réponse Graph: \(detail)"
         return Abort(status, reason: "\(reason) (status \(response.status.code)).\(suffix)")
     }
 }

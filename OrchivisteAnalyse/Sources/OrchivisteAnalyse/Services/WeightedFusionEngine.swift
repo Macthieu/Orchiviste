@@ -16,7 +16,7 @@ struct WeightedFusionEngine: Sendable {
                     candidates.append(output)
                 }
             } catch {
-                logger.warning("Echec d'un fournisseur d'analyse.", metadata: [
+                logger.warning("Échec d'un fournisseur d'analyse.", metadata: [
                     "provider": .string(provider.name),
                     "error": .string(error.localizedDescription)
                 ])

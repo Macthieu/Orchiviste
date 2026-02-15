@@ -105,19 +105,19 @@
 </head>
 <body>
 <header>
-    <strong>Visionneuse tache <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
+    <strong>Visionneuse tâche <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Prereglages</a>
-        <a class="btn" href="#(download_url)">Telecharger (action explicite)</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a class="btn" href="#(download_url)">Télécharger (action explicite)</a>
     </nav>
 </header>
 
 <main class="wrap">
     <section class="panel">
-        <h3>Apercu des pages (chargement paresseux)</h3>
+        <h3>Aperçu des pages (chargement paresseux)</h3>
         <div id="pages"></div>
     </section>
 
@@ -127,20 +127,20 @@
             <dt>Statut</dt><dd>#(status)</dd>
             <dt>Source</dt><dd>#(source_kind)</dd>
             <dt>Fichier</dt><dd>#(file_url)</dd>
-            <dt>Prereglage</dt><dd>#(suggested_preset)</dd>
+            <dt>Préréglage</dt><dd>#(suggested_preset)</dd>
             <dt>Code de classement</dt><dd>#(suggested_class_code)</dd>
             <dt>Confiance</dt><dd>#(confidence)</dd>
         </dl>
 
-        <h4>Texte d'apercu</h4>
+        <h4>Texte d'aperçu</h4>
         <label>Page <input id="textPage" type="number" min="1" value="1"></label>
         <button class="btn" type="button" onclick="loadText()">Charger le texte</button>
         <textarea id="textArea" rows="10" readonly></textarea>
 
         #if(can_review):
         <p class="notice">Revue requise : correction obligatoire avant routage.</p>
-        <label>Code de classement corrige <input id="reviewClass" type="text"></label>
-        <label>Prereglage corrige <input id="reviewPreset" type="text"></label>
+        <label>Code de classement corrigé <input id="reviewClass" type="text"></label>
+        <label>Préréglage corrigé <input id="reviewPreset" type="text"></label>
         <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
         <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
         #endif
@@ -202,7 +202,7 @@ async function submitReview() {
         return;
     }
     const msg = await res.text();
-    alert(`Echec de la revue (${res.status}) : ${msg}`);
+    alert(`Échec de la revue (${res.status}) : ${msg}`);
 }
 </script>
 </body>

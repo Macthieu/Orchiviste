@@ -73,9 +73,9 @@
     <strong>Orchiviste Agents</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Prereglages</a>
+        <a href="/ui/presets">Préréglages</a>
     </nav>
 </header>
 <main class="wrap">
@@ -91,7 +91,7 @@
             <th>ID</th>
             <th>Nom</th>
             <th>Statut</th>
-            <th>Capacites</th>
+            <th>Capacités</th>
             <th>Dernier signalement</th>
             <th>Version</th>
             <th>Charge</th>

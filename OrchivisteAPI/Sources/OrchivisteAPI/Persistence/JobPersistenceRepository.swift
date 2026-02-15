@@ -130,7 +130,7 @@ enum JobPersistenceRepository {
     private static func encodeJSONString<T: Encodable>(_ value: T) throws -> String {
         let data = try JSONEncoder().encode(value)
         guard let text = String(data: data, encoding: .utf8) else {
-            throw Abort(.internalServerError, reason: "Echec de l'encodage JSON.")
+            throw Abort(.internalServerError, reason: "Échec de l'encodage JSON.")
         }
         return text
     }

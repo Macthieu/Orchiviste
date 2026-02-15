@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Taches</title>
+    <title>Orchiviste Tâches</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -53,12 +53,12 @@
 </head>
 <body>
 <header>
-    <strong>Orchiviste Taches</strong>
+    <strong>Orchiviste Tâches</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Prereglages</a>
+        <a href="/ui/presets">Préréglages</a>
     </nav>
 </header>
 <main class="wrap">
@@ -71,7 +71,7 @@
             <th>Fichier</th>
             <th>Code</th>
             <th>Confiance</th>
-            <th>Mise a jour</th>
+            <th>Mise à jour</th>
         </tr>
         </thead>
         <tbody>
