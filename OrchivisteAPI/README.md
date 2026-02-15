@@ -13,14 +13,14 @@ Prerequisites:
 - Redis (for worker queue) optional for MVP
 
 Build products:
-- `swift build -c debug --product OrchivisteAPI`
-- `swift build -c debug --product OrchivisteAnalyse`
-- `swift build -c debug --product OrchivisteWorker`
+- `cd OrchivisteAPI && swift build -c debug --product OrchivisteAPI`
+- `cd OrchivisteAnalyse && swift build -c debug --product OrchivisteAnalyse`
+- `cd OrchivisteWorker && swift build -c debug --product OrchivisteWorker`
 
 Run:
-- API: `swift run OrchivisteAPI`
-- Analyse: `swift run OrchivisteAnalyse` (default 127.0.0.1:18081; override ORCHIVISTE_ANALYSE_PORT)
-- Worker: `ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379 WORKER_MAX_PARALLEL_PAGES=12 WORKER_TOTAL_PAGES=12 swift run OrchivisteWorker`
+- API: `cd OrchivisteAPI && swift run OrchivisteAPI`
+- Analyse: `cd OrchivisteAnalyse && swift run OrchivisteAnalyse` (default 127.0.0.1:18081; override `ORCHIVISTE_ANALYSE_PORT`)
+- Worker: `cd OrchivisteWorker && ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379 WORKER_MAX_PARALLEL_PAGES=12 WORKER_TOTAL_PAGES=12 swift run OrchivisteWorker`
 
 UI (SSR Leaf):
 - http://127.0.0.1:18080/ui
@@ -58,4 +58,3 @@ DAL (hybrid):
 
 Examples (dev):
 - SQLite (dev) with auto-migrate and hybrid read/write:
-

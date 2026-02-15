@@ -189,36 +189,29 @@ func registerIngestRoutes(_ app: Application) {
                 }
 
                 try? await Task.sleep(nanoseconds: 350_000_000)
-                let diskPresets = ConfigLoader.loadPresets()
-                let preset = diskPresets.first
-                let routing = ConfigLoader.loadRoutingMap()
-                let classCode = preset?.class_code ?? routing?.mappings.keys.first
-                let analysis = AnalysisStub.make(
-                    fileId: job.fileURL,
+                let analysisRequest = AnalysisRequest(
+                    file_id: job.id.uuidString,
                     text: preview.textPages[1],
-                    preset: preset,
-                    classCode: classCode
+                    source: job.source,
+                    lang: nil,
+                    hints: nil,
+                    preset_id: nil,
+                    policy: nil
                 )
-                let minConfidence = 0.7
-                let needsReview = analysis.confidence < minConfidence
-                if let updatedJob = await app.appState.attachAnalysis(
-                    jobId: job.id,
+                let analysis = await AnalysisProxyClient.analyzeWithFallback(
+                    request: analysisRequest,
+                    correlationId: nil,
+                    using: app.client,
+                    logger: app.logger
+                )
+                _ = try? await JobAnalysisLifecycle.apply(
                     analysis: analysis,
-                    needsReview: needsReview
-                ) {
-                    try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
-                    try? await JobPersistenceRepository.appendEvent(
-                        type: "job.analysed",
-                        payload: ["job_id": job.id.uuidString],
-                        on: app.db
-                    )
-                    let statusEvent = updatedJob.status == .needs_review ? "job.needs_review" : "job.completed"
-                    try? await JobPersistenceRepository.appendEvent(
-                        type: statusEvent,
-                        payload: ["job_id": job.id.uuidString],
-                        on: app.db
-                    )
-                }
+                    forFileID: job.id.uuidString,
+                    policy: Optional<AnalysisPolicy>.none,
+                    application: app,
+                    database: app.db,
+                    logger: app.logger
+                )
             }
 
             // 3) Toujours répondre 202/queued (asynchrone)
