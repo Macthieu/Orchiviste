@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  swift-and-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "5.9"
+
+      - name: Build and test packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd OrchivisteAPI
+          swift test
+          cd ../OrchivisteAnalyse
+          swift build
+          cd ../OrchivisteWorker
+          swift build
+
+      - name: Validate Compose files
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose config
+          docker compose --profile worker config
+
+      - name: MVP smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke_mvp.sh
+
+          ./OrchivisteAnalyse/.build/debug/OrchivisteAnalyse > /tmp/orchiviste-analyse.log 2>&1 &
+          ANALYSE_PID=$!
+
+          ORCHIVISTE_API_HOST=127.0.0.1 \
+          ORCHIVISTE_API_PORT=28780 \
+          ORCHIVISTE_SQLITE_PATH=/tmp/orchiviste-ci.sqlite \
+          ORCHIVISTE_AUTO_MIGRATE=1 \
+          ORCHIVISTE_ANALYSE_URL=http://127.0.0.1:28781 \
+          ./OrchivisteAPI/.build/debug/OrchivisteAPI > /tmp/orchiviste-api.log 2>&1 &
+          API_PID=$!
+
+          cleanup() {
+            kill "$API_PID" >/dev/null 2>&1 || true
+            kill "$ANALYSE_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for _ in $(seq 1 60); do
+            if curl -sSf http://127.0.0.1:28780/v1/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          ./scripts/smoke_mvp.sh
+
+      - name: Webhook HMAC smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke_webhook_hmac.sh
+          ./scripts/smoke_webhook_hmac.sh

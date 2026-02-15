@@ -31,11 +31,14 @@ Docker compose:
 - `docker compose up --build`
 - API: http://127.0.0.1:28780/u
 - Analyse: http://127.0.0.1:28781/v1/analyse
+- Redis: `redis://127.0.0.1:6379`
+- optional worker profile: `docker compose --profile worker up --build -d`
 
 Smoke test MVP:
 - `docker compose up --build -d`
 - `./scripts/smoke_mvp.sh`
 - optional override: `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
+- webhook HMAC end-to-end: `./scripts/smoke_webhook_hmac.sh`
 
 ## Environment variables
 
@@ -57,6 +60,12 @@ Analysis:
 - `ORCHIVISTE_ANALYSE_HOST` (default 127.0.0.1; use 0.0.0.0 in Docker)
 - `ORCHIVISTE_ANALYSE_URL` (API proxies to this URL if set)
 - `ORCHIVISTE_ANALYSE_PORT` (service port, default 28781)
+
+SharePoint Graph routing (optional):
+- `ORCHIVISTE_GRAPH_ENABLED` = 1
+- `ORCHIVISTE_GRAPH_TENANT_ID`
+- `ORCHIVISTE_GRAPH_CLIENT_ID`
+- `ORCHIVISTE_GRAPH_CLIENT_SECRET`
 
 Webhooks HMAC:
 - `ORCHIVISTE_WEBHOOK_URL` (receiver URL)

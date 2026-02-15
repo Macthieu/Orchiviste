@@ -1,4 +1,10 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: orchiviste-redis
+    ports:
+      - "6379:6379"
+
   analyse:
     build:
       context: .
@@ -17,16 +23,29 @@ services:
     container_name: orchiviste-api
     depends_on:
       - analyse
+      - redis
     environment:
       ORCHIVISTE_API_HOST: "0.0.0.0"
       ORCHIVISTE_API_PORT: "28780"
       ORCHIVISTE_ANALYSE_URL: "http://analyse:28781"
+      ORCHIVISTE_REDIS_URL: "redis://redis:6379"
       ORCHIVISTE_SQLITE_PATH: "/data/orchiviste.sqlite"
       ORCHIVISTE_AUTO_MIGRATE: "1"
     ports:
       - "28780:28780"
     volumes:
       - orchiviste_sqlite_data:/data
+
+  worker:
+    build:
+      context: .
+      dockerfile: OrchivisteWorker/Dockerfile
+    container_name: orchiviste-worker
+    profiles: ["worker"]
+    depends_on:
+      - redis
+    environment:
+      ORCHIVISTE_REDIS_URL: "redis://redis:6379"
 
 volumes:
   orchiviste_sqlite_data:

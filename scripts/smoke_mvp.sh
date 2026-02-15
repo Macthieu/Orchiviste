@@ -96,6 +96,23 @@ else:
 PY
 }
 
+json_all_event_ids_gt() {
+  local file="$1"
+  local threshold="$2"
+  python3 - "$file" "$threshold" <<'PY'
+import json
+import sys
+
+file_path = sys.argv[1]
+threshold = int(sys.argv[2])
+with open(file_path, "r", encoding="utf-8") as f:
+    payload = json.load(f)
+events = payload.get("events", [])
+ok = all(isinstance(item.get("id"), int) and item["id"] > threshold for item in events)
+print("yes" if ok else "no")
+PY
+}
+
 http_json() {
   local method="$1"
   local url="$2"
@@ -181,6 +198,30 @@ if [[ -z "$job_id" ]]; then
   exit 1
 fi
 echo "OK  ingest (job_id=$job_id)"
+
+ingest_repeat_file="$TMP_DIR/ingest_repeat.json"
+ingest_repeat_code="$(http_json POST "$API_BASE/v1/ingest" "$ingest_payload" "$ingest_repeat_file" -H "Idempotency-Key: $idem_key")"
+assert_code "$ingest_repeat_code" "202" "ingest.idempotent_repeat" "$ingest_repeat_file"
+repeat_job_id="$(json_get "$ingest_repeat_file" "taskId")"
+if [[ "$repeat_job_id" != "$job_id" ]]; then
+  echo "FAIL [ingest.idempotent_repeat] expected same taskId, got $repeat_job_id vs $job_id" >&2
+  cat "$ingest_repeat_file" >&2
+  exit 1
+fi
+echo "OK  ingest idempotent replay"
+
+ingest_conflict_payload="$TMP_DIR/ingest_conflict.json"
+cat >"$ingest_conflict_payload" <<JSON
+{
+  "fileURL": "smoke-proces-verbal-different.pdf",
+  "source": { "kind": "local" },
+  "tags": ["smoke", "mvp"]
+}
+JSON
+ingest_conflict_file="$TMP_DIR/ingest_conflict_response.json"
+ingest_conflict_code="$(http_json POST "$API_BASE/v1/ingest" "$ingest_conflict_payload" "$ingest_conflict_file" -H "Idempotency-Key: $idem_key")"
+assert_code "$ingest_conflict_code" "409" "ingest.idempotent_conflict" "$ingest_conflict_file"
+echo "OK  ingest idempotent conflict"
 
 job_file="$TMP_DIR/job.json"
 job_status=""
@@ -285,7 +326,19 @@ events_file="$TMP_DIR/events.json"
 events_code="$(http_raw GET "$API_BASE/v1/events?cursor=0" "$events_file")"
 assert_code "$events_code" "200" "events" "$events_file"
 events_count="$(json_len "$events_file" "events")"
-echo "OK  events (count=$events_count)"
+events_cursor="$(json_get "$events_file" "cursor")"
+echo "OK  events (count=$events_count cursor=$events_cursor)"
+
+events_delta_file="$TMP_DIR/events_delta.json"
+events_delta_code="$(http_raw GET "$API_BASE/v1/events?cursor=$events_cursor" "$events_delta_file")"
+assert_code "$events_delta_code" "200" "events.cursor" "$events_delta_file"
+ids_check="$(json_all_event_ids_gt "$events_delta_file" "$events_cursor")"
+if [[ "$ids_check" != "yes" ]]; then
+  echo "FAIL [events.cursor] expected all event ids to be greater than cursor=$events_cursor" >&2
+  cat "$events_delta_file" >&2
+  exit 1
+fi
+echo "OK  events cursor filtering"
 
 echo
 echo "Smoke test passed."

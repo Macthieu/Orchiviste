@@ -1,9 +1,4 @@
 import Foundation
-#if canImport(CryptoKit)
-import CryptoKit
-#elseif canImport(Crypto)
-import Crypto
-#endif
 import Vapor
 
 enum WebhookDispatcher {
@@ -24,7 +19,7 @@ enum WebhookDispatcher {
             ])
             return
         }
-        let signature = sign(secret: secret, timestamp: timestamp, body: body)
+        let signature = WebhookSignature.sign(secret: secret, timestamp: timestamp, body: body)
 
         var headers = HTTPHeaders()
         headers.replaceOrAdd(name: .contentType, value: "application/json")
@@ -55,15 +50,5 @@ enum WebhookDispatcher {
                 try? await Task.sleep(nanoseconds: backoffMillis * 1_000_000)
             }
         }
-    }
-
-    private static func sign(secret: String, timestamp: String, body: Data) -> String {
-        var payload = Data(timestamp.utf8)
-        payload.append(Data([0x2E])) // "."
-        payload.append(body)
-
-        let key = SymmetricKey(data: Data(secret.utf8))
-        let signature = HMAC<SHA256>.authenticationCode(for: payload, using: key)
-        return signature.map { String(format: "%02x", $0) }.joined()
     }
 }

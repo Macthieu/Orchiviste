@@ -44,7 +44,7 @@ struct IngestsResponse: Content {
     let taskId: String
 }
 
-private extension IngestRequest {
+extension IngestRequest {
     func idempotencyFingerprint() -> String {
         let normalizedTags = (tags ?? []).sorted().joined(separator: ",")
         let normalized = [
