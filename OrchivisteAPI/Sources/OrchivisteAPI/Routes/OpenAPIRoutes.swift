@@ -206,7 +206,8 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "200": ["description": "Routing response", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/RoutingResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "404": ["$ref": "#/components/responses/Error404"],
-                            "409": ["$ref": "#/components/responses/Error409"]
+                            "409": ["$ref": "#/components/responses/Error409"],
+                            "500": ["$ref": "#/components/responses/Error500"]
                         ]
                     ]
                 ],
@@ -412,7 +413,10 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "file_id": ["type": "string"],
                             "class_code": ["type": "string"],
                             "target": ["$ref": "#/components/schemas/RoutingTarget"],
-                            "resolved_folder": ["type": "string"]
+                            "resolved_folder": ["type": "string"],
+                            "mode": ["type": "string", "enum": ["stub", "graph"]],
+                            "destination_url": ["type": "string"],
+                            "moved_item_id": ["type": "string"]
                         ]
                     ],
                     "EventRecord": [

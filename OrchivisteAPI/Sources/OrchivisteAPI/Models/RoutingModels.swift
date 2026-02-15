@@ -16,4 +16,7 @@ struct RoutingResponse: Content {
     let class_code: String
     let target: RoutingTarget
     let resolved_folder: String
+    let mode: String
+    let destination_url: String?
+    let moved_item_id: String?
 }

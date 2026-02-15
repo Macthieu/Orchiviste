@@ -12,19 +12,21 @@ func registerRoutingRoutes(_ app: Application) {
 
             var suggestedCode: String?
             var resolvedJobID: UUID?
+            var resolvedJob: JobRecord?
             if let jobId = UUID(uuidString: fileId) {
                 let inMemory = await req.application.appState.job(id: jobId)
                 let persisted = try await JobPersistenceRepository.fetchJob(id: jobId, on: req.db)
                 if let job = inMemory ?? persisted {
-                await req.application.appState.cacheJob(job)
-                if job.status == .needs_review {
-                    throw Abort(.conflict, reason: "Job requires human review before routing.")
-                }
-                if job.status == .pending || job.status == .running {
-                    throw Abort(.conflict, reason: "Job analysis is not completed yet.")
-                }
-                suggestedCode = job.suggestedClassCode
-                resolvedJobID = jobId
+                    await req.application.appState.cacheJob(job)
+                    if job.status == .needs_review {
+                        throw Abort(.conflict, reason: "Job requires human review before routing.")
+                    }
+                    if job.status == .pending || job.status == .running {
+                        throw Abort(.conflict, reason: "Job analysis is not completed yet.")
+                    }
+                    suggestedCode = job.suggestedClassCode
+                    resolvedJobID = jobId
+                    resolvedJob = job
                 }
             }
 
@@ -39,12 +41,59 @@ func registerRoutingRoutes(_ app: Application) {
                 .replacingOccurrences(of: "{code}", with: classCode)
                 .replacingOccurrences(of: "{year}", with: year)
 
+            var routeMode = "stub"
+            var destinationURL: String?
+            var movedItemID: String?
+
+            if let resolvedJob {
+                do {
+                    if let graphRoute = try await SharePointGraphRouter.routeIfEnabled(
+                        job: resolvedJob,
+                        target: target,
+                        resolvedFolder: resolved,
+                        classCode: classCode,
+                        req: req
+                    ) {
+                        routeMode = "graph"
+                        destinationURL = graphRoute.destinationURL
+                        movedItemID = graphRoute.movedItemID
+                        await EventPublisher.publish(
+                            type: "route.graph_applied",
+                            payload: [
+                                "job_id": resolvedJob.id.uuidString,
+                                "class_code": classCode,
+                                "mode": routeMode
+                            ],
+                            application: req.application,
+                            database: req.db,
+                            logger: req.logger
+                        )
+                    }
+                } catch {
+                    await EventPublisher.publish(
+                        type: "route.failed",
+                        payload: [
+                            "job_id": resolvedJob.id.uuidString,
+                            "class_code": classCode
+                        ],
+                        application: req.application,
+                        database: req.db,
+                        logger: req.logger
+                    )
+                    throw error
+                }
+            }
+
             if let resolvedJobID,
                let updatedJob = await req.application.appState.markRouted(jobId: resolvedJobID, classCode: classCode) {
                 try await JobPersistenceRepository.upsert(job: updatedJob, on: req.db)
                 await EventPublisher.publish(
                     type: "job.routed",
-                    payload: ["job_id": resolvedJobID.uuidString, "class_code": classCode],
+                    payload: [
+                        "job_id": resolvedJobID.uuidString,
+                        "class_code": classCode,
+                        "mode": routeMode
+                    ],
                     application: req.application,
                     database: req.db,
                     logger: req.logger
@@ -52,7 +101,11 @@ func registerRoutingRoutes(_ app: Application) {
             } else {
                 await EventPublisher.publish(
                     type: "route.ready",
-                    payload: ["file_id": fileId, "class_code": classCode],
+                    payload: [
+                        "file_id": fileId,
+                        "class_code": classCode,
+                        "mode": routeMode
+                    ],
                     application: req.application,
                     database: req.db,
                     logger: req.logger
@@ -63,7 +116,10 @@ func registerRoutingRoutes(_ app: Application) {
                 file_id: fileId,
                 class_code: classCode,
                 target: target,
-                resolved_folder: resolved
+                resolved_folder: resolved,
+                mode: routeMode,
+                destination_url: destinationURL,
+                moved_item_id: movedItemID
             )
         }
     }
