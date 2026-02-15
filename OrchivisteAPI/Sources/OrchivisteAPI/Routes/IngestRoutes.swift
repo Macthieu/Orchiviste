@@ -178,13 +178,7 @@ func registerIngestRoutes(_ app: Application) {
             let app = req.application
             Task.detached(priority: .background) {
                 try? await Task.sleep(nanoseconds: 350_000_000)
-                let preview = PreviewRecord(
-                    jobId: job.id,
-                    pages: 1,
-                    textPages: [1: PreviewHelper.defaultText(page: 1)],
-                    imagesByPage: [1: PreviewHelper.placeholderJPEG()],
-                    createdAt: Date()
-                )
+                let preview = PreviewRenderer.makePreview(for: job, logger: app.logger)
                 if let updatedJob = await app.appState.markPreviewReady(jobId: job.id, preview: preview) {
                     try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
                     try? await JobPersistenceRepository.appendEvent(
