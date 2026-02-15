@@ -1,6 +1,10 @@
 import Vapor
 import Foundation
+#if canImport(CryptoKit)
 import CryptoKit
+#elseif canImport(Crypto)
+import Crypto
+#endif
 import OrchivisteSharedKit
 
 // --------- Modèles d’E/S ----------
