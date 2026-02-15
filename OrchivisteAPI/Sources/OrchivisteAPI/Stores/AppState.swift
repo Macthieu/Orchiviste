@@ -55,6 +55,14 @@ actor AppState {
         jobs[id]
     }
 
+    func listJobs(limit: Int = 100) -> [JobRecord] {
+        let bounded = max(1, min(500, limit))
+        return jobs.values
+            .sorted(by: { $0.createdAt > $1.createdAt })
+            .prefix(bounded)
+            .map { $0 }
+    }
+
     func cancelJob(id: UUID) -> JobRecord? {
         guard var job = jobs[id] else { return nil }
         job.status = .cancelled
@@ -96,6 +104,42 @@ actor AppState {
         } else {
             addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
         }
+        return job
+    }
+
+    func markRouted(jobId: UUID, classCode: String?) -> JobRecord? {
+        guard var job = jobs[jobId] else { return nil }
+        let now = Date()
+        job.updatedAt = now
+        job.steps.routed = now
+        if let classCode, !classCode.isEmpty {
+            job.suggestedClassCode = classCode
+        }
+        if job.status != .cancelled && job.status != .failed && job.status != .needs_review {
+            job.status = .completed
+            job.steps.completed = job.steps.completed ?? now
+        }
+        jobs[jobId] = job
+        addEvent(type: "job.routed", payload: ["job_id": jobId.uuidString])
+        return job
+    }
+
+    func applyReview(jobId: UUID, request: JobReviewRequest) -> JobRecord? {
+        guard var job = jobs[jobId] else { return nil }
+        let now = Date()
+        job.updatedAt = now
+        job.needsReview = false
+        job.status = .completed
+        job.steps.completed = job.steps.completed ?? now
+        if let correctedClassCode = request.corrected_class_code, !correctedClassCode.isEmpty {
+            job.suggestedClassCode = correctedClassCode
+        }
+        if let correctedPreset = request.corrected_preset, !correctedPreset.isEmpty {
+            job.suggestedPreset = correctedPreset
+        }
+        jobs[jobId] = job
+        addEvent(type: "job.reviewed", payload: ["job_id": jobId.uuidString])
+        addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
         return job
     }
 
@@ -162,6 +206,10 @@ actor AppState {
         workers[id] = worker
         addEvent(type: "worker.approved", payload: ["worker_id": id.uuidString])
         return worker
+    }
+
+    func worker(id: UUID) -> WorkerRecord? {
+        workers[id]
     }
 
     func heartbeatWorker(id: UUID, payload: WorkerHeartbeatRequest) -> WorkerRecord? {

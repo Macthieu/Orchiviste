@@ -1,4 +1,6 @@
+import Foundation
 import Vapor
+import Leaf
 import Fluent
 import FluentPostgresDriver
 import FluentSQLiteDriver
@@ -12,6 +14,8 @@ func configure(_ app: Application) throws {
     app.middleware.use(CorrelationIDMiddleware())
     app.middleware.use(CORSMiddleware(configuration: makeCORSConfiguration()))
     app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
+    app.views.use(.leaf)
+    app.leaf.configuration.rootDirectory = resolveViewsDirectory()
 
     try configureDatabase(app)
     registerMigrations(app)
@@ -31,6 +35,7 @@ func configure(_ app: Application) throws {
     registerWorkerRoutes(app)
     registerEventRoutes(app)
     registerOpenAPIRoutes(app)
+    registerUIRoutes(app)
 }
 
 @main
@@ -98,4 +103,16 @@ private func registerMigrations(_ app: Application) {
     app.migrations.add(CreateJobsMigration())
     app.migrations.add(CreateEventsMigration())
     app.migrations.add(CreateIdempotencyKeysMigration())
+}
+
+private func resolveViewsDirectory() -> String {
+    if let env = Environment.get("ORCHIVISTE_VIEWS_DIR"), !env.isEmpty {
+        return env
+    }
+    let sourceURL = URL(fileURLWithPath: #filePath)
+    let packageRoot = sourceURL
+        .deletingLastPathComponent() // OrchivisteAPI.swift
+        .deletingLastPathComponent() // OrchivisteAPI
+        .deletingLastPathComponent() // Sources
+    return packageRoot.appendingPathComponent("Resources/Views", isDirectory: true).path
 }

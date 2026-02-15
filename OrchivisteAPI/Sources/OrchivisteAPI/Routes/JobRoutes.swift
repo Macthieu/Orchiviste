@@ -1,10 +1,10 @@
+import Foundation
 import Vapor
 
 func registerJobRoutes(_ app: Application) {
     app.group("v1") { v1 in
         v1.get("jobs", ":id") { req async throws -> JobRecord in
-            guard let idStr = req.parameters.get("id"),
-                  let id = UUID(uuidString: idStr) else {
+            guard let id = jobID(from: req) else {
                 throw Abort(.badRequest, reason: "Invalid job id.")
             }
             if let inMemory = await req.application.appState.job(id: id) {
@@ -18,8 +18,7 @@ func registerJobRoutes(_ app: Application) {
         }
 
         v1.post("jobs", ":id", "cancel") { req async throws -> JobCancelResponse in
-            guard let idStr = req.parameters.get("id"),
-                  let id = UUID(uuidString: idStr) else {
+            guard let id = jobID(from: req) else {
                 throw Abort(.badRequest, reason: "Invalid job id.")
             }
 
@@ -38,12 +37,106 @@ func registerJobRoutes(_ app: Application) {
                 throw Abort(.notFound, reason: "Job not found.")
             }
             try await JobPersistenceRepository.upsert(job: job, on: req.db)
-            try await JobPersistenceRepository.appendEvent(
+            await EventPublisher.publish(
                 type: "job.cancelled",
                 payload: ["job_id": id.uuidString],
-                on: req.db
+                application: req.application,
+                database: req.db,
+                logger: req.logger
             )
             return JobCancelResponse(id: job.id, status: job.status)
         }
+
+        v1.post("jobs", ":id", "review") { req async throws -> JobRecord in
+            guard let id = jobID(from: req) else {
+                throw Abort(.badRequest, reason: "Invalid job id.")
+            }
+            let review = try req.content.decode(JobReviewRequest.self)
+
+            if await req.application.appState.job(id: id) == nil,
+               let persisted = try await JobPersistenceRepository.fetchJob(id: id, on: req.db) {
+                await req.application.appState.cacheJob(persisted)
+            }
+
+            guard let current = await req.application.appState.job(id: id) else {
+                throw Abort(.notFound, reason: "Job not found.")
+            }
+            guard current.status == .needs_review else {
+                throw Abort(.conflict, reason: "Job is not in needs_review state.")
+            }
+            guard let reviewed = await req.application.appState.applyReview(jobId: id, request: review) else {
+                throw Abort(.notFound, reason: "Job not found.")
+            }
+            try await JobPersistenceRepository.upsert(job: reviewed, on: req.db)
+            await EventPublisher.publish(
+                type: "job.reviewed",
+                payload: [
+                    "job_id": id.uuidString,
+                    "corrected_fields": "\(review.corrected_fields?.count ?? 0)"
+                ],
+                application: req.application,
+                database: req.db,
+                logger: req.logger
+            )
+            await EventPublisher.publish(
+                type: "job.completed",
+                payload: ["job_id": id.uuidString],
+                application: req.application,
+                database: req.db,
+                logger: req.logger
+            )
+            return reviewed
+        }
+
+        v1.get("jobs", ":id", "download") { req async throws -> Response in
+            guard let id = jobID(from: req) else {
+                throw Abort(.badRequest, reason: "Invalid job id.")
+            }
+            let job = try await resolveJob(id: id, req: req)
+
+            if job.source.kind.lowercased() == "sharepoint",
+               let url = job.source.url,
+               !url.isEmpty {
+                return req.redirect(to: url)
+            }
+
+            guard let localFile = resolveLocalFileURL(raw: job.fileURL),
+                  FileManager.default.fileExists(atPath: localFile.path) else {
+                throw Abort(.notFound, reason: "Local source file is unavailable.")
+            }
+
+            var response = req.fileio.streamFile(at: localFile.path)
+            response.headers.replaceOrAdd(
+                name: .contentDisposition,
+                value: "attachment; filename=\"\(localFile.lastPathComponent)\""
+            )
+            return response
+        }
     }
+}
+
+private func resolveJob(id: UUID, req: Request) async throws -> JobRecord {
+    if let inMemory = await req.application.appState.job(id: id) {
+        return inMemory
+    }
+    if let persisted = try await JobPersistenceRepository.fetchJob(id: id, on: req.db) {
+        await req.application.appState.cacheJob(persisted)
+        return persisted
+    }
+    throw Abort(.notFound, reason: "Job not found.")
+}
+
+private func jobID(from req: Request) -> UUID? {
+    req.parameters.get("id").flatMap(UUID.init(uuidString:))
+}
+
+private func resolveLocalFileURL(raw: String) -> URL? {
+    if let url = URL(string: raw), url.isFileURL {
+        return url
+    }
+    if raw.hasPrefix("/") {
+        return URL(fileURLWithPath: raw)
+    }
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    return cwd.appendingPathComponent(raw)
 }

@@ -37,35 +37,18 @@ enum JobPersistenceRepository {
         guard let row = try await JobRow.find(id, on: db) else {
             return nil
         }
+        return try jobRecord(from: row)
+    }
 
-        let tags: [String] = (try? decodeJSONValue(row.tagsJSON)) ?? []
-        let status = JobStatus(rawValue: row.status) ?? .pending
-        return JobRecord(
-            id: id,
-            status: status,
-            fileURL: row.fileURL,
-            source: JobSource(
-                kind: row.sourceKind,
-                url: row.sourceURL,
-                site: row.sourceSite,
-                library: row.sourceLibrary,
-                itemId: row.sourceItemID
-            ),
-            tags: tags,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            steps: JobStepTimestamps(
-                ingestReceived: row.ingestReceivedAt,
-                previewReady: row.previewReadyAt,
-                analysed: row.analysedAt,
-                routed: row.routedAt,
-                completed: row.completedAt
-            ),
-            suggestedPreset: row.suggestedPreset,
-            suggestedClassCode: row.suggestedClassCode,
-            confidence: row.confidence,
-            needsReview: row.needsReview
-        )
+    static func listJobs(limit: Int = 100, on db: Database) async throws -> [JobRecord] {
+        let bounded = max(1, min(500, limit))
+        let rows = try await JobRow.query(on: db)
+            .sort(\.$createdAt, .descending)
+            .limit(bounded)
+            .all()
+        return try rows.map { row in
+            try jobRecord(from: row)
+        }
     }
 
     static func saveIdempotency(
@@ -109,17 +92,20 @@ enum JobPersistenceRepository {
         )
     }
 
+    @discardableResult
     static func appendEvent(
         type: String,
         payload: [String: String],
         on db: Database
-    ) async throws {
+    ) async throws -> EventRecord {
         let row = EventRow(
             type: type,
             createdAt: Date(),
             payloadJSON: try encodeJSONString(payload)
         )
         try await row.create(on: db)
+        let id = row.id ?? 0
+        return EventRecord(id: id, type: row.type, created_at: row.createdAt, payload: payload)
     }
 
     static func listEvents(after cursor: Int, on db: Database) async throws -> EventsResponse {
@@ -154,5 +140,37 @@ enum JobPersistenceRepository {
             throw Abort(.internalServerError, reason: "Invalid JSON payload.")
         }
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private static func jobRecord(from row: JobRow) throws -> JobRecord {
+        let id = row.id ?? UUID()
+        let tags: [String] = (try? decodeJSONValue(row.tagsJSON)) ?? []
+        let status = JobStatus(rawValue: row.status) ?? .pending
+        return JobRecord(
+            id: id,
+            status: status,
+            fileURL: row.fileURL,
+            source: JobSource(
+                kind: row.sourceKind,
+                url: row.sourceURL,
+                site: row.sourceSite,
+                library: row.sourceLibrary,
+                itemId: row.sourceItemID
+            ),
+            tags: tags,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+            steps: JobStepTimestamps(
+                ingestReceived: row.ingestReceivedAt,
+                previewReady: row.previewReadyAt,
+                analysed: row.analysedAt,
+                routed: row.routedAt,
+                completed: row.completedAt
+            ),
+            suggestedPreset: row.suggestedPreset,
+            suggestedClassCode: row.suggestedClassCode,
+            confidence: row.confidence,
+            needsReview: row.needsReview
+        )
     }
 }

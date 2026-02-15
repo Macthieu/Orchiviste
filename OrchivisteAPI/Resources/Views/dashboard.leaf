@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Dashboard</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(140deg, #f9f6ef 0%, #f1ece4 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1120px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .kpi {
+            font-size: 28px;
+            font-weight: 800;
+            margin-top: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 14px;
+        }
+        th { color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+        .status-needs_review { color: var(--warning); font-weight: 700; }
+        .status-completed { color: var(--accent); font-weight: 700; }
+        .mono { font-family: "SF Mono", Menlo, monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste MVP</strong>
+    <nav>
+        <a href="/ui">Dashboard</a>
+        <a href="/ui/jobs">Jobs</a>
+    </nav>
+</header>
+<main class="wrap">
+    <section class="grid">
+        <article class="card"><div>Total jobs</div><div class="kpi">#(total_jobs)</div></article>
+        <article class="card"><div>Pending</div><div class="kpi">#(pending_jobs)</div></article>
+        <article class="card"><div>Running</div><div class="kpi">#(running_jobs)</div></article>
+        <article class="card"><div>Needs review</div><div class="kpi">#(needs_review_jobs)</div></article>
+        <article class="card"><div>Completed</div><div class="kpi">#(completed_jobs)</div></article>
+        <article class="card"><div>Workers</div><div class="kpi">#(worker_count)</div></article>
+        <article class="card"><div>Queue ingest</div><div class="kpi">#(queue_ingest_depth)</div></article>
+        <article class="card"><div>Queue dead-letter</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
+    </section>
+
+    <h2>Recent Jobs</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Class</th>
+            <th>Confidence</th>
+            <th>Updated</th>
+        </tr>
+        </thead>
+        <tbody>
+        #for(job in recent_jobs):
+        <tr>
+            <td class="mono"><a href="/ui/jobs/#(job.id)">#(job.id)</a></td>
+            <td class="status-#(job.status)">#(job.status)</td>
+            <td>#(job.source_kind)</td>
+            <td>#(job.suggested_class_code)</td>
+            <td>#(job.confidence)</td>
+            <td>#(job.updated_at)</td>
+        </tr>
+        #endfor
+        </tbody>
+    </table>
+</main>
+</body>
+</html>

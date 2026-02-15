@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Viewer #(id)</title>
+    <style>
+        :root {
+            --bg: #f2efe8;
+            --surface: #fffefb;
+            --ink: #1f252a;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --border: #d8d1c4;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Avenir Next", "Helvetica Neue", sans-serif; color: var(--ink); background: linear-gradient(170deg, #f6f3ec 0%, #ece6dc 100%); }
+        header {
+            padding: 18px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 12px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1280px;
+            margin: 16px auto 30px;
+            padding: 0 14px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 12px;
+        }
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .meta dl { margin: 0; display: grid; grid-template-columns: 160px 1fr; row-gap: 8px; column-gap: 8px; }
+        .meta dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .meta dd { margin: 0; font-weight: 600; word-break: break-word; }
+        .btn {
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: #ebf8f4;
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-decoration: none;
+            font-weight: 700;
+            display: inline-block;
+        }
+        #pages {
+            display: grid;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        .page {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            min-height: 220px;
+            background: #f3ede4;
+            position: relative;
+        }
+        .page::before {
+            content: "Loading page";
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .page img {
+            width: 100%;
+            display: block;
+            opacity: 0;
+            transition: opacity 220ms ease;
+        }
+        .page img.ready { opacity: 1; }
+        textarea, input {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            margin-top: 4px;
+            background: #fff;
+        }
+        label { display: block; margin-top: 10px; font-size: 13px; }
+        .notice { color: var(--warning); font-weight: 700; }
+        @media (max-width: 960px) {
+            .wrap { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Viewer Job <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
+    <nav>
+        <a href="/ui">Dashboard</a>
+        <a href="/ui/jobs">Jobs</a>
+        <a class="btn" href="#(download_url)">Download explicit</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <section class="panel">
+        <h3>Preview pages (lazy-load)</h3>
+        <div id="pages"></div>
+    </section>
+
+    <aside class="panel meta">
+        <h3>Analyse & review</h3>
+        <dl>
+            <dt>Status</dt><dd>#(status)</dd>
+            <dt>Source</dt><dd>#(source_kind)</dd>
+            <dt>File</dt><dd>#(file_url)</dd>
+            <dt>Preset</dt><dd>#(suggested_preset)</dd>
+            <dt>Class code</dt><dd>#(suggested_class_code)</dd>
+            <dt>Confidence</dt><dd>#(confidence)</dd>
+        </dl>
+
+        <h4>Preview text</h4>
+        <label>Page <input id="textPage" type="number" min="1" value="1"></label>
+        <button class="btn" type="button" onclick="loadText()">Load text</button>
+        <textarea id="textArea" rows="10" readonly></textarea>
+
+        #if(can_review):
+        <p class="notice">Needs review: correction required before routing.</p>
+        <label>Corrected class code <input id="reviewClass" type="text"></label>
+        <label>Corrected preset <input id="reviewPreset" type="text"></label>
+        <label>Comment <textarea id="reviewComment" rows="3"></textarea></label>
+        <button class="btn" type="button" onclick="submitReview()">Submit review</button>
+        #endif
+    </aside>
+</main>
+
+<script>
+const jobId = "#(id)";
+const pagesCount = Number("#(preview_pages)") || 1;
+const container = document.getElementById("pages");
+for (let page = 1; page <= pagesCount; page += 1) {
+    const box = document.createElement("div");
+    box.className = "page";
+    box.dataset.page = String(page);
+    const img = document.createElement("img");
+    img.alt = `Page ${page}`;
+    box.appendChild(img);
+    container.appendChild(box);
+}
+
+const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const page = entry.target.dataset.page;
+        const img = entry.target.querySelector("img");
+        if (img.dataset.loaded === "1") continue;
+        img.src = `/v1/preview/${jobId}/page/${page}.jpg`;
+        img.onload = () => { img.classList.add("ready"); img.dataset.loaded = "1"; };
+    }
+}, { rootMargin: "300px 0px" });
+
+document.querySelectorAll(".page").forEach((node) => observer.observe(node));
+
+async function loadText() {
+    const page = document.getElementById("textPage").value || "1";
+    const res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
+    const area = document.getElementById("textArea");
+    if (!res.ok) {
+        area.value = `Error loading text (${res.status})`;
+        return;
+    }
+    const json = await res.json();
+    area.value = json.text || "";
+}
+
+async function submitReview() {
+    const payload = {
+        corrected_class_code: document.getElementById("reviewClass").value || null,
+        corrected_preset: document.getElementById("reviewPreset").value || null,
+        comment: document.getElementById("reviewComment").value || null
+    };
+    const res = await fetch(`/v1/jobs/${jobId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+        window.location.reload();
+        return;
+    }
+    const msg = await res.text();
+    alert(`Review failed (${res.status}): ${msg}`);
+}
+</script>
+</body>
+</html>
