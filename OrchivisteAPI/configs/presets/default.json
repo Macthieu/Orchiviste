@@ -1,0 +1,9 @@
+{
+  "id": "preset_default",
+  "name": "Preset Defaut",
+  "name_format": "{type}-{date}-{numero}",
+  "class_code": "FIN-001",
+  "postprocess": [
+    "upper"
+  ]
+}

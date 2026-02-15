@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# SwiftPM builds (dans chaque sous-package)
+.build/
+.swiftpm/
+
+# Xcode
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# VS Code
+.vscode/
+
+# Logs / runtime
+*.log
+
+# DB locale
+db.sqlite
+*.sqlite
+*.sqlite3
+
+# Env / secrets
+.env
+.env.*

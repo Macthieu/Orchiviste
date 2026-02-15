@@ -1,0 +1,18 @@
+{
+  "taxonomy_id": "syged_2025-10",
+  "root": [
+    {
+      "code": "FIN-001",
+      "label": "Finances et budget",
+      "notes": "Documents financiers",
+      "keywords": [
+        "budget",
+        "facture"
+      ],
+      "synonyms": [
+        "finance"
+      ],
+      "children": []
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "mappings": {
+    "FIN-001": {
+      "site": "site-finances",
+      "library": "Documents",
+      "folder_expr": "Archives/{year}/{code}",
+      "metadata": {
+        "Departement": "Finances"
+      }
+    }
+  }
+}
