@@ -10,7 +10,7 @@ struct Boot {
         defer { app.shutdown() }
 
         app.logger.logLevel = .info
-        app.http.server.configuration.hostname = "127.0.0.1"
+        app.http.server.configuration.hostname = Environment.get("ORCHIVISTE_ANALYSE_HOST") ?? "127.0.0.1"
         app.http.server.configuration.port = Environment.get("ORCHIVISTE_ANALYSE_PORT")
             .flatMap(Int.init) ?? 28781
 

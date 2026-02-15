@@ -5,6 +5,7 @@ services:
       dockerfile: OrchivisteAnalyse/Dockerfile
     container_name: orchiviste-analyse
     environment:
+      ORCHIVISTE_ANALYSE_HOST: "0.0.0.0"
       ORCHIVISTE_ANALYSE_PORT: "28781"
     ports:
       - "28781:28781"
@@ -17,6 +18,7 @@ services:
     depends_on:
       - analyse
     environment:
+      ORCHIVISTE_API_HOST: "0.0.0.0"
       ORCHIVISTE_API_PORT: "28780"
       ORCHIVISTE_ANALYSE_URL: "http://analyse:28781"
       ORCHIVISTE_SQLITE_PATH: "/data/orchiviste.sqlite"

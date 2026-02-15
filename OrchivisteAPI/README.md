@@ -40,6 +40,7 @@ Database:
 - `ORCHIVISTE_SQLITE_PATH` (optional)
 
 API:
+- `ORCHIVISTE_API_HOST` (default 127.0.0.1; use 0.0.0.0 in Docker)
 - `ORCHIVISTE_API_PORT` (default 28780)
 
 Redis / Dispatcher:
@@ -48,6 +49,7 @@ Redis / Dispatcher:
 - `ORCHIVISTE_DISPATCHER_INTERVAL` seconds (default 5)
 
 Analysis:
+- `ORCHIVISTE_ANALYSE_HOST` (default 127.0.0.1; use 0.0.0.0 in Docker)
 - `ORCHIVISTE_ANALYSE_URL` (API proxies to this URL if set)
 - `ORCHIVISTE_ANALYSE_PORT` (service port, default 28781)
 

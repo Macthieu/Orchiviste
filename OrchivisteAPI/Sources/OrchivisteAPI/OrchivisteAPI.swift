@@ -7,7 +7,7 @@ import FluentSQLiteDriver
 
 func configure(_ app: Application) throws {
     app.logger.logLevel = .info
-    app.http.server.configuration.hostname = "127.0.0.1"
+    app.http.server.configuration.hostname = Environment.get("ORCHIVISTE_API_HOST") ?? "127.0.0.1"
     app.http.server.configuration.port = Environment.get("ORCHIVISTE_API_PORT")
         .flatMap(Int.init) ?? 28780
 

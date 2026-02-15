@@ -17,6 +17,7 @@ COPY --from=builder /app/OrchivisteAPI/Resources ./Resources
 COPY --from=builder /app/OrchivisteAPI/configs ./configs
 
 ENV ORCHIVISTE_API_PORT=28780
+ENV ORCHIVISTE_API_HOST=0.0.0.0
 ENV ORCHIVISTE_ANALYSE_URL=http://analyse:28781
 ENV ORCHIVISTE_SQLITE_PATH=/data/orchiviste.sqlite
 ENV ORCHIVISTE_AUTO_MIGRATE=1

@@ -11,6 +11,7 @@ FROM swift:5.9-jammy
 WORKDIR /app/OrchivisteAnalyse
 COPY --from=builder /app/OrchivisteAnalyse/.build/release/OrchivisteAnalyse /usr/local/bin/OrchivisteAnalyse
 
+ENV ORCHIVISTE_ANALYSE_HOST=0.0.0.0
 ENV ORCHIVISTE_ANALYSE_PORT=28781
 EXPOSE 28781
 
