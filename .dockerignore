@@ -1,0 +1,13 @@
+.DS_Store
+.git
+.gitignore
+**/.build
+**/.swiftpm
+**/.DS_Store
+**/Packages
+**/*.xcodeproj
+**/*.xcworkspace
+**/xcuserdata
+**/DerivedData
+**/*.sqlite-shm
+**/*.sqlite-wal

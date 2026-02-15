@@ -27,12 +27,20 @@ UI (SSR Leaf):
 - alias: http://127.0.0.1:28780/u
 - viewer uses lazy preview (`/v1/preview/...`) and only downloads on explicit button
 
+Docker compose:
+- `docker compose up --build`
+- API: http://127.0.0.1:28780/u
+- Analyse: http://127.0.0.1:28781/v1/analyse
+
 ## Environment variables
 
 Database:
 - `ORCHIVISTE_DB_PROVIDER` = postgres|sqlite (optional)
 - `ORCHIVISTE_POSTGRES_URL` (optional)
 - `ORCHIVISTE_SQLITE_PATH` (optional)
+
+API:
+- `ORCHIVISTE_API_PORT` (default 28780)
 
 Redis / Dispatcher:
 - `ORCHIVISTE_REDIS_URL` (e.g. redis://127.0.0.1:6379)

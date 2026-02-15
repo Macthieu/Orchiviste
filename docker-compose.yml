@@ -1,0 +1,30 @@
+services:
+  analyse:
+    build:
+      context: .
+      dockerfile: OrchivisteAnalyse/Dockerfile
+    container_name: orchiviste-analyse
+    environment:
+      ORCHIVISTE_ANALYSE_PORT: "28781"
+    ports:
+      - "28781:28781"
+
+  api:
+    build:
+      context: .
+      dockerfile: OrchivisteAPI/Dockerfile
+    container_name: orchiviste-api
+    depends_on:
+      - analyse
+    environment:
+      ORCHIVISTE_API_PORT: "28780"
+      ORCHIVISTE_ANALYSE_URL: "http://analyse:28781"
+      ORCHIVISTE_SQLITE_PATH: "/data/orchiviste.sqlite"
+      ORCHIVISTE_AUTO_MIGRATE: "1"
+    ports:
+      - "28780:28780"
+    volumes:
+      - orchiviste_sqlite_data:/data
+
+volumes:
+  orchiviste_sqlite_data:
