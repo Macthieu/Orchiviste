@@ -52,7 +52,7 @@ enum RedisQueueService {
                 dead_letter_depth: Int(truncatingIfNeeded: dead)
             )
         } catch {
-            logger.warning("Unable to fetch Redis queue stats.", metadata: [
+            logger.warning("Impossible de recuperer les statistiques de file Redis.", metadata: [
                 "error": .string(error.localizedDescription)
             ])
             return QueueStatsResponse(ingest_depth: 0, dead_letter_depth: 0)
@@ -79,7 +79,7 @@ enum RedisQueueService {
             _ = try await connection.rpush([value], into: key).get()
             return QueueEnqueueResult(enqueued: true, queue: key.description)
         } catch {
-            logger.warning("Unable to push payload to Redis queue.", metadata: [
+            logger.warning("Impossible d'empiler la charge dans la file Redis.", metadata: [
                 "queue": .string(key.description),
                 "error": .string(error.localizedDescription)
             ])
@@ -91,7 +91,7 @@ enum RedisQueueService {
         guard let redisURL = Environment.get("ORCHIVISTE_REDIS_URL"),
               let url = URL(string: redisURL),
               let host = url.host else {
-            throw Abort(.serviceUnavailable, reason: "ORCHIVISTE_REDIS_URL not configured.")
+            throw Abort(.serviceUnavailable, reason: "ORCHIVISTE_REDIS_URL n'est pas configure.")
         }
         let port = url.port ?? 6379
         let config = try RedisConnection.Configuration(hostname: host, port: port)

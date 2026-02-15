@@ -130,14 +130,14 @@ enum JobPersistenceRepository {
     private static func encodeJSONString<T: Encodable>(_ value: T) throws -> String {
         let data = try JSONEncoder().encode(value)
         guard let text = String(data: data, encoding: .utf8) else {
-            throw Abort(.internalServerError, reason: "Encoding failure.")
+            throw Abort(.internalServerError, reason: "Echec de l'encodage JSON.")
         }
         return text
     }
 
     private static func decodeJSONValue<T: Decodable>(_ string: String) throws -> T {
         guard let data = string.data(using: .utf8) else {
-            throw Abort(.internalServerError, reason: "Invalid JSON payload.")
+            throw Abort(.internalServerError, reason: "Charge JSON invalide.")
         }
         return try JSONDecoder().decode(T.self, from: data)
     }

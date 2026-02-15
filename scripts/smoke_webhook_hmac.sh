@@ -16,7 +16,7 @@ RECEIVER_LOG="$TMP_DIR/receiver.log"
 need_cmd() {
   local cmd="$1"
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Missing required command: $cmd" >&2
+    echo "Commande requise manquante : $cmd" >&2
     exit 1
   fi
 }
@@ -35,8 +35,8 @@ trap cleanup EXIT
 need_cmd python3
 need_cmd curl
 
-echo "== Orchiviste webhook HMAC smoke test =="
-echo "API port: $API_PORT, Analyse port: $ANALYSE_PORT, Webhook port: $WEBHOOK_PORT"
+echo "== Test fumee webhook HMAC Orchiviste =="
+echo "Port API : $API_PORT, port Analyse : $ANALYSE_PORT, port Webhook : $WEBHOOK_PORT"
 
 python3 - "$WEBHOOK_PORT" "$CAPTURE_FILE" >"$RECEIVER_LOG" 2>&1 <<'PY' &
 import json
@@ -110,7 +110,7 @@ for _ in $(seq 1 40); do
 done
 
 if [[ ! -f "$CAPTURE_FILE" ]]; then
-  echo "FAIL: no webhook payload captured" >&2
+  echo "ECHEC : aucune charge webhook capturee" >&2
   tail -n 80 "$API_LOG" >&2 || true
   tail -n 80 "$ANALYSE_LOG" >&2 || true
   exit 1
@@ -137,23 +137,23 @@ event_type = headers.get("x-orchiviste-event-type", "")
 event_id = headers.get("x-orchiviste-event-id", "")
 
 if not ts or not sig:
-    print("FAIL: missing HMAC headers")
+    print("ECHEC : en-tetes HMAC manquants")
     sys.exit(1)
 if not sig.startswith("sha256="):
-    print("FAIL: signature prefix mismatch")
+    print("ECHEC : prefixe de signature invalide")
     sys.exit(1)
 if not event_type or not event_id:
-    print("FAIL: missing event metadata headers")
+    print("ECHEC : en-tetes de metadonnees d'evenement manquants")
     sys.exit(1)
 
 expected = hmac.new(secret, ts.encode("utf-8") + b"." + body, hashlib.sha256).hexdigest()
 actual = sig.split("=", 1)[1]
 if not hmac.compare_digest(expected, actual):
-    print("FAIL: invalid signature")
+    print("ECHEC : signature invalide")
     sys.exit(1)
 
-print("OK  webhook signature valid")
-print(f"OK  event metadata type={event_type} id={event_id}")
+print("OK  signature webhook valide")
+print(f"OK  metadonnees evenement type={event_type} id={event_id}")
 PY
 
-echo "Webhook HMAC smoke test passed."
+echo "Test fumee webhook HMAC reussi."

@@ -1,88 +1,84 @@
 # Orchiviste — MVP
 
-SwiftPM + Vapor monorepo containing:
-- OrchivisteAPI (server API + SSR Leaf UI)
-- OrchivisteAnalyse (separate analysis service)
-- OrchivisteWorker (Redis worker CLI)
-- OrchivisteSharedKit (shared DTOs)
+Monorepo SwiftPM + Vapor comprenant :
+- `OrchivisteAPI` (API serveur + UI SSR Leaf)
+- `OrchivisteAnalyse` (service d'analyse separe)
+- `OrchivisteWorker` (CLI worker Redis)
+- `OrchivisteSharedKit` (DTO partages)
 
-## Quick start
+## Demarrage rapide
 
-Prerequisites:
+Prerequis :
 - Swift 5.9+
-- Redis (for worker queue) optional for MVP
+- Redis (optionnel pour le MVP, requis pour la file worker)
 
-Build products:
+Compilation :
 - `cd OrchivisteAPI && swift build -c debug --product OrchivisteAPI`
 - `cd OrchivisteAnalyse && swift build -c debug --product OrchivisteAnalyse`
 - `cd OrchivisteWorker && swift build -c debug --product OrchivisteWorker`
 
-Run:
-- API: `cd OrchivisteAPI && swift run OrchivisteAPI`
-- Analyse: `cd OrchivisteAnalyse && swift run OrchivisteAnalyse` (default 127.0.0.1:28781; override `ORCHIVISTE_ANALYSE_PORT`)
-- Worker: `cd OrchivisteWorker && ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379 WORKER_MAX_PARALLEL_PAGES=12 WORKER_TOTAL_PAGES=12 swift run OrchivisteWorker`
+Execution :
+- API : `cd OrchivisteAPI && swift run OrchivisteAPI`
+- Analyse : `cd OrchivisteAnalyse && swift run OrchivisteAnalyse` (defaut `127.0.0.1:28781`, surcharge via `ORCHIVISTE_ANALYSE_PORT`)
+- Worker : `cd OrchivisteWorker && ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379 WORKER_MAX_PARALLEL_PAGES=12 WORKER_TOTAL_PAGES=12 swift run OrchivisteWorker`
 
-UI (SSR Leaf):
+UI (SSR Leaf) :
 - http://127.0.0.1:28780/ui
-- alias: http://127.0.0.1:28780/u
-- workers: http://127.0.0.1:28780/ui/workers
-- presets: http://127.0.0.1:28780/ui/presets
-- viewer uses lazy preview (`/v1/preview/...`) and only downloads on explicit button
+- alias : http://127.0.0.1:28780/u
+- agents : http://127.0.0.1:28780/ui/workers
+- prereglages : http://127.0.0.1:28780/ui/presets
+- la visionneuse utilise l'apercu lazy-load (`/v1/preview/...`) et ne telecharge que sur action explicite
 
-Docker compose:
+Docker Compose :
 - `docker compose up --build`
-- API: http://127.0.0.1:28780/u
-- Analyse: http://127.0.0.1:28781/v1/analyse
-- Redis: `redis://127.0.0.1:6379`
-- optional worker profile: `docker compose --profile worker up --build -d`
+- API : http://127.0.0.1:28780/u
+- Analyse : http://127.0.0.1:28781/v1/analyse
+- Redis : `redis://127.0.0.1:6379`
+- profil worker optionnel : `docker compose --profile worker up --build -d`
 
-Smoke test MVP:
+Tests fumee MVP :
 - `docker compose up --build -d`
 - `./scripts/smoke_mvp.sh`
-- optional override: `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
-- webhook HMAC end-to-end: `./scripts/smoke_webhook_hmac.sh`
+- surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
+- test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
 
-## Environment variables
+## Variables d'environnement
 
-Database:
-- `ORCHIVISTE_DB_PROVIDER` = postgres|sqlite (optional)
-- `ORCHIVISTE_POSTGRES_URL` (optional)
-- `ORCHIVISTE_SQLITE_PATH` (optional)
+Base de donnees :
+- `ORCHIVISTE_DB_PROVIDER` = `postgres|sqlite` (optionnel)
+- `ORCHIVISTE_POSTGRES_URL` (optionnel)
+- `ORCHIVISTE_SQLITE_PATH` (optionnel)
 
-API:
-- `ORCHIVISTE_API_HOST` (default 127.0.0.1; use 0.0.0.0 in Docker)
-- `ORCHIVISTE_API_PORT` (default 28780)
+API :
+- `ORCHIVISTE_API_HOST` (defaut `127.0.0.1`, utiliser `0.0.0.0` en Docker)
+- `ORCHIVISTE_API_PORT` (defaut `28780`)
 
-Redis / Dispatcher:
-- `ORCHIVISTE_REDIS_URL` (e.g. redis://127.0.0.1:6379)
-- `ORCHIVISTE_DISPATCHER_ENABLED` = 1 to enable scheduler (MVP logs only)
-- `ORCHIVISTE_DISPATCHER_INTERVAL` seconds (default 5)
+Redis / ordonnanceur :
+- `ORCHIVISTE_REDIS_URL` (ex. `redis://127.0.0.1:6379`)
+- `ORCHIVISTE_DISPATCHER_ENABLED` = `1` pour activer l'ordonnanceur (MVP : logs uniquement)
+- `ORCHIVISTE_DISPATCHER_INTERVAL` en secondes (defaut `5`)
 
-Analysis:
-- `ORCHIVISTE_ANALYSE_HOST` (default 127.0.0.1; use 0.0.0.0 in Docker)
-- `ORCHIVISTE_ANALYSE_URL` (API proxies to this URL if set)
-- `ORCHIVISTE_ANALYSE_PORT` (service port, default 28781)
+Analyse :
+- `ORCHIVISTE_ANALYSE_HOST` (defaut `127.0.0.1`, utiliser `0.0.0.0` en Docker)
+- `ORCHIVISTE_ANALYSE_URL` (URL cible de proxy pour l'API)
+- `ORCHIVISTE_ANALYSE_PORT` (defaut `28781`)
 
-SharePoint Graph routing (optional):
-- `ORCHIVISTE_GRAPH_ENABLED` = 1
+Routage SharePoint Graph (optionnel) :
+- `ORCHIVISTE_GRAPH_ENABLED` = `1`
 - `ORCHIVISTE_GRAPH_TENANT_ID`
 - `ORCHIVISTE_GRAPH_CLIENT_ID`
 - `ORCHIVISTE_GRAPH_CLIENT_SECRET`
 
-Webhooks HMAC:
-- `ORCHIVISTE_WEBHOOK_URL` (receiver URL)
-- `ORCHIVISTE_WEBHOOK_SECRET` (shared secret)
+Webhooks HMAC :
+- `ORCHIVISTE_WEBHOOK_URL` (URL recepteur)
+- `ORCHIVISTE_WEBHOOK_SECRET` (secret partage)
 
-Configs (optional, read from ./configs):
-- Presets: `configs/presets/*.json`
-- Taxonomy: `configs/analysis/taxonomy/*.json`
-- Routing map: `configs/analysis/routing/routing.map.json`
+Configurations (optionnel, lues depuis `./configs`) :
+- Prereglages : `configs/presets/*.json`
+- Taxonomie : `configs/analysis/taxonomy/*.json`
+- Table de routage : `configs/analysis/routing/routing.map.json`
 
-
-DAL (hybrid):
-- `ORCHIVISTE_DAL_READ` = memory|fluent (default: memory)
-- `ORCHIVISTE_DAL_WRITE` = memory|fluent|both (default: both)
-- `ORCHIVISTE_AUTO_MIGRATE` = 1 to run migrations at boot (dev convenience)
-
-Examples (dev):
-- SQLite (dev) with auto-migrate and hybrid read/write:
+DAL (hybride) :
+- `ORCHIVISTE_DAL_READ` = `memory|fluent` (defaut : `memory`)
+- `ORCHIVISTE_DAL_WRITE` = `memory|fluent|both` (defaut : `both`)
+- `ORCHIVISTE_AUTO_MIGRATE` = `1` pour executer les migrations au demarrage

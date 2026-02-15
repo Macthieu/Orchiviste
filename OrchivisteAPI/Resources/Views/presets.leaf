@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Presets</title>
+    <title>Orchiviste Prereglages</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -52,12 +52,12 @@
 </head>
 <body>
 <header>
-    <strong>Orchiviste Presets</strong>
+    <strong>Orchiviste Prereglages</strong>
     <nav>
-        <a href="/ui">Dashboard</a>
-        <a href="/ui/jobs">Jobs</a>
-        <a href="/ui/workers">Workers</a>
-        <a href="/ui/presets">Presets</a>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Prereglages</a>
     </nav>
 </header>
 <main class="wrap">
@@ -65,10 +65,10 @@
         <thead>
         <tr>
             <th>ID</th>
-            <th>Name</th>
-            <th>Name Format</th>
-            <th>Class Code</th>
-            <th>Postprocess</th>
+            <th>Nom</th>
+            <th>Format de nom</th>
+            <th>Code de classement</th>
+            <th>Post-traitement</th>
         </tr>
         </thead>
         <tbody>

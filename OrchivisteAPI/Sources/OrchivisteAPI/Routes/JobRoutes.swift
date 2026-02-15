@@ -5,7 +5,7 @@ func registerJobRoutes(_ app: Application) {
     app.group("v1") { v1 in
         v1.get("jobs", ":id") { req async throws -> JobRecord in
             guard let id = jobID(from: req) else {
-                throw Abort(.badRequest, reason: "Invalid job id.")
+                throw Abort(.badRequest, reason: "Identifiant de tache invalide.")
             }
             if let inMemory = await req.application.appState.job(id: id) {
                 return inMemory
@@ -14,12 +14,12 @@ func registerJobRoutes(_ app: Application) {
                 await req.application.appState.cacheJob(persisted)
                 return persisted
             }
-            throw Abort(.notFound, reason: "Job not found.")
+            throw Abort(.notFound, reason: "Tache introuvable.")
         }
 
         v1.post("jobs", ":id", "cancel") { req async throws -> JobCancelResponse in
             guard let id = jobID(from: req) else {
-                throw Abort(.badRequest, reason: "Invalid job id.")
+                throw Abort(.badRequest, reason: "Identifiant de tache invalide.")
             }
 
             if await req.application.appState.job(id: id) == nil,
@@ -28,13 +28,13 @@ func registerJobRoutes(_ app: Application) {
             }
 
             guard let current = await req.application.appState.job(id: id) else {
-                throw Abort(.notFound, reason: "Job not found.")
+                throw Abort(.notFound, reason: "Tache introuvable.")
             }
             if current.status == .completed || current.status == .failed || current.status == .cancelled {
-                throw Abort(.conflict, reason: "Job can no longer be cancelled.")
+                throw Abort(.conflict, reason: "La tache ne peut plus etre annulee.")
             }
             guard let job = await req.application.appState.cancelJob(id: id) else {
-                throw Abort(.notFound, reason: "Job not found.")
+                throw Abort(.notFound, reason: "Tache introuvable.")
             }
             try await JobPersistenceRepository.upsert(job: job, on: req.db)
             await EventPublisher.publish(
@@ -49,7 +49,7 @@ func registerJobRoutes(_ app: Application) {
 
         v1.post("jobs", ":id", "review") { req async throws -> JobRecord in
             guard let id = jobID(from: req) else {
-                throw Abort(.badRequest, reason: "Invalid job id.")
+                throw Abort(.badRequest, reason: "Identifiant de tache invalide.")
             }
             let review = try req.content.decode(JobReviewRequest.self)
 
@@ -59,13 +59,13 @@ func registerJobRoutes(_ app: Application) {
             }
 
             guard let current = await req.application.appState.job(id: id) else {
-                throw Abort(.notFound, reason: "Job not found.")
+                throw Abort(.notFound, reason: "Tache introuvable.")
             }
             guard current.status == .needs_review else {
-                throw Abort(.conflict, reason: "Job is not in needs_review state.")
+                throw Abort(.conflict, reason: "La tache n'est pas en etat de revue requise.")
             }
             guard let reviewed = await req.application.appState.applyReview(jobId: id, request: review) else {
-                throw Abort(.notFound, reason: "Job not found.")
+                throw Abort(.notFound, reason: "Tache introuvable.")
             }
             try await JobPersistenceRepository.upsert(job: reviewed, on: req.db)
             await EventPublisher.publish(
@@ -90,7 +90,7 @@ func registerJobRoutes(_ app: Application) {
 
         v1.get("jobs", ":id", "download") { req async throws -> Response in
             guard let id = jobID(from: req) else {
-                throw Abort(.badRequest, reason: "Invalid job id.")
+                throw Abort(.badRequest, reason: "Identifiant de tache invalide.")
             }
             let job = try await resolveJob(id: id, req: req)
 
@@ -102,7 +102,7 @@ func registerJobRoutes(_ app: Application) {
 
             guard let localFile = resolveLocalFileURL(raw: job.fileURL),
                   FileManager.default.fileExists(atPath: localFile.path) else {
-                throw Abort(.notFound, reason: "Local source file is unavailable.")
+                throw Abort(.notFound, reason: "Le fichier source local est indisponible.")
             }
 
             var response = req.fileio.streamFile(at: localFile.path)
@@ -123,7 +123,7 @@ private func resolveJob(id: UUID, req: Request) async throws -> JobRecord {
         await req.application.appState.cacheJob(persisted)
         return persisted
     }
-    throw Abort(.notFound, reason: "Job not found.")
+    throw Abort(.notFound, reason: "Tache introuvable.")
 }
 
 private func jobID(from req: Request) -> UUID? {

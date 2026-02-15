@@ -11,7 +11,7 @@ func registerAgendaRoutes(_ app: Application) {
 
         v1.get("agenda", ":session_id") { req async throws -> AgendaRecord in
             guard let sessionId = req.parameters.get("session_id") else {
-                throw Abort(.badRequest, reason: "session_id is required.")
+                throw Abort(.badRequest, reason: "session_id est requis.")
             }
             if let stored = await req.application.appState.agenda(sessionId: sessionId) {
                 return stored
@@ -19,7 +19,7 @@ func registerAgendaRoutes(_ app: Application) {
             if let disk = ConfigLoader.loadAgenda(sessionId: sessionId) {
                 return disk
             }
-            throw Abort(.notFound, reason: "Agenda not found.")
+            throw Abort(.notFound, reason: "Ordre du jour introuvable.")
         }
     }
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Viewer #(id)</title>
+    <title>Orchiviste Visionneuse #(id)</title>
     <style>
         :root {
             --bg: #f2efe8;
@@ -73,7 +73,7 @@
             position: relative;
         }
         .page::before {
-            content: "Loading page";
+            content: "Chargement page";
             position: absolute;
             top: 10px;
             left: 10px;
@@ -105,44 +105,44 @@
 </head>
 <body>
 <header>
-    <strong>Viewer Job <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
+    <strong>Visionneuse tache <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
     <nav>
-        <a href="/ui">Dashboard</a>
-        <a href="/ui/jobs">Jobs</a>
-        <a href="/ui/workers">Workers</a>
-        <a href="/ui/presets">Presets</a>
-        <a class="btn" href="#(download_url)">Download explicit</a>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Prereglages</a>
+        <a class="btn" href="#(download_url)">Telecharger (action explicite)</a>
     </nav>
 </header>
 
 <main class="wrap">
     <section class="panel">
-        <h3>Preview pages (lazy-load)</h3>
+        <h3>Apercu des pages (chargement paresseux)</h3>
         <div id="pages"></div>
     </section>
 
     <aside class="panel meta">
-        <h3>Analyse & review</h3>
+        <h3>Analyse et revue</h3>
         <dl>
-            <dt>Status</dt><dd>#(status)</dd>
+            <dt>Statut</dt><dd>#(status)</dd>
             <dt>Source</dt><dd>#(source_kind)</dd>
-            <dt>File</dt><dd>#(file_url)</dd>
-            <dt>Preset</dt><dd>#(suggested_preset)</dd>
-            <dt>Class code</dt><dd>#(suggested_class_code)</dd>
-            <dt>Confidence</dt><dd>#(confidence)</dd>
+            <dt>Fichier</dt><dd>#(file_url)</dd>
+            <dt>Prereglage</dt><dd>#(suggested_preset)</dd>
+            <dt>Code de classement</dt><dd>#(suggested_class_code)</dd>
+            <dt>Confiance</dt><dd>#(confidence)</dd>
         </dl>
 
-        <h4>Preview text</h4>
+        <h4>Texte d'apercu</h4>
         <label>Page <input id="textPage" type="number" min="1" value="1"></label>
-        <button class="btn" type="button" onclick="loadText()">Load text</button>
+        <button class="btn" type="button" onclick="loadText()">Charger le texte</button>
         <textarea id="textArea" rows="10" readonly></textarea>
 
         #if(can_review):
-        <p class="notice">Needs review: correction required before routing.</p>
-        <label>Corrected class code <input id="reviewClass" type="text"></label>
-        <label>Corrected preset <input id="reviewPreset" type="text"></label>
-        <label>Comment <textarea id="reviewComment" rows="3"></textarea></label>
-        <button class="btn" type="button" onclick="submitReview()">Submit review</button>
+        <p class="notice">Revue requise : correction obligatoire avant routage.</p>
+        <label>Code de classement corrige <input id="reviewClass" type="text"></label>
+        <label>Prereglage corrige <input id="reviewPreset" type="text"></label>
+        <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
+        <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
         #endif
     </aside>
 </main>
@@ -179,7 +179,7 @@ async function loadText() {
     const res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
     const area = document.getElementById("textArea");
     if (!res.ok) {
-        area.value = `Error loading text (${res.status})`;
+        area.value = `Erreur de chargement du texte (${res.status})`;
         return;
     }
     const json = await res.json();
@@ -202,7 +202,7 @@ async function submitReview() {
         return;
     }
     const msg = await res.text();
-    alert(`Review failed (${res.status}): ${msg}`);
+    alert(`Echec de la revue (${res.status}) : ${msg}`);
 }
 </script>
 </body>

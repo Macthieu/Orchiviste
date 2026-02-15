@@ -15,7 +15,7 @@ enum AnalysisProxyClient {
                 using: client
             )
         } catch {
-            logger.warning("Analyse service unavailable, using local fallback.", metadata: [
+            logger.warning("Service d'analyse indisponible, utilisation du fallback local.", metadata: [
                 "error": .string(error.localizedDescription),
                 "file_id": .string(body.file_id)
             ])
@@ -42,7 +42,7 @@ enum AnalysisProxyClient {
         guard response.status == .ok else {
             throw Abort(
                 .badGateway,
-                reason: "Analyse service returned status \(response.status.code)."
+                reason: "Le service d'analyse a retourne le statut \(response.status.code)."
             )
         }
         return try response.content.decode(AnalysisResponse.self)

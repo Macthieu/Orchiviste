@@ -21,17 +21,17 @@ func registerPresetRoutes(_ app: Application) {
 
 private func validatePreset(_ preset: Preset) throws {
     guard !preset.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-        throw Abort(.badRequest, reason: "Preset id is required.")
+        throw Abort(.badRequest, reason: "L'identifiant du prereglage est requis.")
     }
     guard !preset.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-        throw Abort(.badRequest, reason: "Preset name is required.")
+        throw Abort(.badRequest, reason: "Le nom du prereglage est requis.")
     }
     guard !preset.name_format.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-        throw Abort(.badRequest, reason: "Preset name_format is required.")
+        throw Abort(.badRequest, reason: "Le champ name_format est requis.")
     }
 
     let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
     if preset.id.rangeOfCharacter(from: allowed.inverted) != nil {
-        throw Abort(.badRequest, reason: "Preset id may only contain letters, numbers, '-' and '_'.")
+        throw Abort(.badRequest, reason: "L'identifiant du prereglage n'accepte que lettres, chiffres, '-' et '_'.")
     }
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Dashboard</title>
+    <title>Orchiviste Tableau de bord</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -81,41 +81,41 @@
 <header>
     <strong>Orchiviste MVP</strong>
     <nav>
-        <a href="/ui">Dashboard</a>
-        <a href="/ui/jobs">Jobs</a>
-        <a href="/ui/workers">Workers</a>
-        <a href="/ui/presets">Presets</a>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Prereglages</a>
     </nav>
 </header>
 <main class="wrap">
     <section class="grid">
-        <article class="card"><div>Total jobs</div><div class="kpi">#(total_jobs)</div></article>
-        <article class="card"><div>Pending</div><div class="kpi">#(pending_jobs)</div></article>
-        <article class="card"><div>Running</div><div class="kpi">#(running_jobs)</div></article>
-        <article class="card"><div>Needs review</div><div class="kpi">#(needs_review_jobs)</div></article>
-        <article class="card"><div>Completed</div><div class="kpi">#(completed_jobs)</div></article>
-        <article class="card"><div>Workers</div><div class="kpi">#(worker_count)</div></article>
-        <article class="card"><div>Queue ingest</div><div class="kpi">#(queue_ingest_depth)</div></article>
-        <article class="card"><div>Queue dead-letter</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
+        <article class="card"><div>Total des taches</div><div class="kpi">#(total_jobs)</div></article>
+        <article class="card"><div>En attente</div><div class="kpi">#(pending_jobs)</div></article>
+        <article class="card"><div>En cours</div><div class="kpi">#(running_jobs)</div></article>
+        <article class="card"><div>Revue requise</div><div class="kpi">#(needs_review_jobs)</div></article>
+        <article class="card"><div>Terminees</div><div class="kpi">#(completed_jobs)</div></article>
+        <article class="card"><div>Agents</div><div class="kpi">#(worker_count)</div></article>
+        <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
+        <article class="card"><div>File de rejet</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
     </section>
 
-    <h2>Recent Jobs</h2>
+    <h2>Taches recentes</h2>
     <table>
         <thead>
         <tr>
             <th>ID</th>
-            <th>Status</th>
+            <th>Statut</th>
             <th>Source</th>
-            <th>Class</th>
-            <th>Confidence</th>
-            <th>Updated</th>
+            <th>Code</th>
+            <th>Confiance</th>
+            <th>Mise a jour</th>
         </tr>
         </thead>
         <tbody>
         #for(job in recent_jobs):
         <tr>
             <td class="mono"><a href="/ui/jobs/#(job.id)">#(job.id)</a></td>
-            <td class="status-#(job.status)">#(job.status)</td>
+            <td class="status-#(job.status)">#(job.status_label)</td>
             <td>#(job.source_kind)</td>
             <td>#(job.suggested_class_code)</td>
             <td>#(job.confidence)</td>

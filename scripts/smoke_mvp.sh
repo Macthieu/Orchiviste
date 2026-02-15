@@ -14,7 +14,7 @@ trap cleanup EXIT
 need_cmd() {
   local cmd="$1"
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Missing required command: $cmd" >&2
+    echo "Commande requise manquante : $cmd" >&2
     exit 1
   fi
 }
@@ -159,7 +159,7 @@ assert_code() {
   local label="$3"
   local body_file="$4"
   if [[ "$actual" != "$expected" ]]; then
-    echo "FAIL [$label] expected HTTP $expected, got $actual" >&2
+    echo "ECHEC [$label] HTTP attendu $expected, recu $actual" >&2
     if [[ -f "$body_file" ]]; then
       cat "$body_file" >&2
     fi
@@ -170,23 +170,23 @@ assert_code() {
 need_cmd curl
 need_cmd python3
 
-echo "== Orchiviste MVP smoke test =="
-echo "API: $API_BASE"
+echo "== Test fumee MVP Orchiviste =="
+echo "API : $API_BASE"
 
 health_file="$TMP_DIR/health.json"
 health_code="$(http_raw GET "$API_BASE/v1/health" "$health_file")"
 assert_code "$health_code" "200" "health" "$health_file"
-echo "OK  health"
+echo "OK  sante"
 
 ui_redirect_headers="$TMP_DIR/ui_redirect_headers.txt"
 ui_redirect_code="$(curl -sS -D "$ui_redirect_headers" -o /dev/null -w "%{http_code}" "$API_BASE/u")"
 assert_code "$ui_redirect_code" "303" "ui.alias.redirect" "$ui_redirect_headers"
 if ! tr -d '\r' < "$ui_redirect_headers" | grep -qi '^location: /ui$'; then
-  echo "FAIL [ui.alias.redirect] expected Location: /ui" >&2
+  echo "ECHEC [ui.alias.redirect] Location attendue : /ui" >&2
   cat "$ui_redirect_headers" >&2
   exit 1
 fi
-echo "OK  ui alias redirect (/u -> /ui)"
+echo "OK  redirection alias UI (/u -> /ui)"
 
 ingest_payload="$TMP_DIR/ingest.json"
 idem_key="smoke-$(date +%s)"
@@ -203,22 +203,22 @@ ingest_code="$(http_json POST "$API_BASE/v1/ingest" "$ingest_payload" "$ingest_f
 assert_code "$ingest_code" "202" "ingest" "$ingest_file"
 job_id="$(json_get "$ingest_file" "taskId")"
 if [[ -z "$job_id" ]]; then
-  echo "FAIL [ingest] missing taskId in response" >&2
+  echo "ECHEC [ingest] taskId manquant dans la reponse" >&2
   cat "$ingest_file" >&2
   exit 1
 fi
-echo "OK  ingest (job_id=$job_id)"
+echo "OK  ingestion (job_id=$job_id)"
 
 ingest_repeat_file="$TMP_DIR/ingest_repeat.json"
 ingest_repeat_code="$(http_json POST "$API_BASE/v1/ingest" "$ingest_payload" "$ingest_repeat_file" -H "Idempotency-Key: $idem_key")"
 assert_code "$ingest_repeat_code" "202" "ingest.idempotent_repeat" "$ingest_repeat_file"
 repeat_job_id="$(json_get "$ingest_repeat_file" "taskId")"
 if [[ "$repeat_job_id" != "$job_id" ]]; then
-  echo "FAIL [ingest.idempotent_repeat] expected same taskId, got $repeat_job_id vs $job_id" >&2
+  echo "ECHEC [ingest.idempotent_repeat] taskId identique attendu, recu $repeat_job_id vs $job_id" >&2
   cat "$ingest_repeat_file" >&2
   exit 1
 fi
-echo "OK  ingest idempotent replay"
+echo "OK  rejeu idempotent d'ingestion"
 
 ingest_conflict_payload="$TMP_DIR/ingest_conflict.json"
 cat >"$ingest_conflict_payload" <<JSON
@@ -231,7 +231,7 @@ JSON
 ingest_conflict_file="$TMP_DIR/ingest_conflict_response.json"
 ingest_conflict_code="$(http_json POST "$API_BASE/v1/ingest" "$ingest_conflict_payload" "$ingest_conflict_file" -H "Idempotency-Key: $idem_key")"
 assert_code "$ingest_conflict_code" "409" "ingest.idempotent_conflict" "$ingest_conflict_file"
-echo "OK  ingest idempotent conflict"
+echo "OK  conflit idempotent d'ingestion"
 
 job_file="$TMP_DIR/job.json"
 job_status=""
@@ -248,11 +248,11 @@ while (( SECONDS < deadline )); do
 done
 
 if [[ -z "$job_status" ]]; then
-  echo "FAIL [jobs] unable to resolve job status before timeout" >&2
+  echo "ECHEC [jobs] statut de tache introuvable avant expiration" >&2
   cat "$job_file" >&2
   exit 1
 fi
-echo "OK  job status reached: $job_status"
+echo "OK  statut de tache atteint : $job_status"
 
 thumbnail_file="$TMP_DIR/thumbnail.jpg"
 thumbnail_code=""
@@ -265,23 +265,23 @@ while (( SECONDS < deadline )); do
   sleep 1
 done
 assert_code "$thumbnail_code" "200" "preview.thumbnail" "$thumbnail_file"
-echo "OK  preview thumbnail"
+echo "OK  vignette d'apercu"
 
 page_file="$TMP_DIR/page1.jpg"
 page_code="$(http_raw GET "$API_BASE/v1/preview/$job_id/page/1.jpg" "$page_file")"
 assert_code "$page_code" "200" "preview.page1" "$page_file"
-echo "OK  preview page 1 (.jpg)"
+echo "OK  page d'apercu 1 (.jpg)"
 
 text_file="$TMP_DIR/text.json"
 text_code="$(http_raw GET "$API_BASE/v1/preview/$job_id/text?page=1" "$text_file")"
 assert_code "$text_code" "200" "preview.text" "$text_file"
 page_text="$(json_get "$text_file" "text")"
 if [[ -z "$page_text" ]]; then
-  echo "FAIL [preview.text] empty text response" >&2
+  echo "ECHEC [preview.text] reponse texte vide" >&2
   cat "$text_file" >&2
   exit 1
 fi
-echo "OK  preview text"
+echo "OK  texte d'apercu"
 
 analyse_payload="$TMP_DIR/analyse.json"
 cat >"$analyse_payload" <<JSON
@@ -296,12 +296,12 @@ analyse_code="$(http_json POST "$API_BASE/v1/analyse" "$analyse_payload" "$analy
 assert_code "$analyse_code" "200" "analyse" "$analyse_file"
 analysis_confidence="$(json_get "$analyse_file" "confidence")"
 analysis_type="$(json_get "$analyse_file" "type_doc")"
-echo "OK  analyse (type=$analysis_type confidence=$analysis_confidence)"
+echo "OK  analyse (type=$analysis_type confiance=$analysis_confidence)"
 
 route_file="$TMP_DIR/route.json"
 route_code="$(http_raw POST "$API_BASE/v1/route/$job_id" "$route_file")"
 if [[ "$job_status" == "needs_review" && "$route_code" == "409" ]]; then
-  echo "OK  route blocked before review (expected 409)"
+  echo "OK  routage bloque avant revue (409 attendu)"
 
   review_payload="$TMP_DIR/review.json"
   cat >"$review_payload" <<JSON
@@ -309,39 +309,39 @@ if [[ "$job_status" == "needs_review" && "$route_code" == "409" ]]; then
   "corrected_fields": {"numero": "SMOKE-001"},
   "corrected_class_code": "$REVIEW_CLASS_CODE",
   "corrected_preset": "preset_pv",
-  "comment": "automated smoke review"
+  "comment": "revue automatique test fumee"
 }
 JSON
   review_file="$TMP_DIR/review_response.json"
   review_code="$(http_json POST "$API_BASE/v1/jobs/$job_id/review" "$review_payload" "$review_file")"
   assert_code "$review_code" "200" "jobs.review" "$review_file"
-  echo "OK  review applied"
+  echo "OK  revue appliquee"
 
   route_code="$(http_raw POST "$API_BASE/v1/route/$job_id" "$route_file")"
 fi
 
 assert_code "$route_code" "200" "route" "$route_file"
 resolved_folder="$(json_get "$route_file" "resolved_folder")"
-echo "OK  route (folder=$resolved_folder)"
+echo "OK  routage (dossier=$resolved_folder)"
 
 events_file="$TMP_DIR/events.json"
 events_code="$(http_raw GET "$API_BASE/v1/events?cursor=0" "$events_file")"
 assert_code "$events_code" "200" "events" "$events_file"
 events_count="$(json_len "$events_file" "events")"
 events_cursor="$(json_get "$events_file" "cursor")"
-echo "OK  events (count=$events_count cursor=$events_cursor)"
+echo "OK  evenements (nombre=$events_count curseur=$events_cursor)"
 
 events_delta_file="$TMP_DIR/events_delta.json"
 events_delta_code="$(http_raw GET "$API_BASE/v1/events?cursor=$events_cursor" "$events_delta_file")"
 assert_code "$events_delta_code" "200" "events.cursor" "$events_delta_file"
 ids_check="$(json_all_event_ids_gt "$events_delta_file" "$events_cursor")"
 if [[ "$ids_check" != "yes" ]]; then
-  echo "FAIL [events.cursor] expected all event ids to be greater than cursor=$events_cursor" >&2
+  echo "ECHEC [events.cursor] tous les ids d'evenement doivent etre > curseur=$events_cursor" >&2
   cat "$events_delta_file" >&2
   exit 1
 fi
-echo "OK  events cursor filtering"
+echo "OK  filtrage des evenements par curseur"
 
 echo
-echo "Smoke test passed."
+echo "Test fumee reussi."
 echo "job_id=$job_id"

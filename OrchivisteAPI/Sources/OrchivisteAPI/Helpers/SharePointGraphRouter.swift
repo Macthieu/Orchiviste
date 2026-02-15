@@ -77,17 +77,17 @@ enum SharePointGraphRouter {
         let config = try loadConfig()
         guard let sourceItemID = job.source.itemId?.trimmingCharacters(in: .whitespacesAndNewlines),
               !sourceItemID.isEmpty else {
-            throw Abort(.badRequest, reason: "SharePoint source is missing itemId.")
+            throw Abort(.badRequest, reason: "La source SharePoint ne contient pas itemId.")
         }
 
         let siteID = (job.source.site ?? target.site).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !siteID.isEmpty else {
-            throw Abort(.badRequest, reason: "SharePoint site identifier is missing.")
+            throw Abort(.badRequest, reason: "L'identifiant de site SharePoint est manquant.")
         }
 
         let library = (job.source.library ?? target.library).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !library.isEmpty else {
-            throw Abort(.badRequest, reason: "SharePoint library identifier is missing.")
+            throw Abort(.badRequest, reason: "L'identifiant de bibliotheque SharePoint est manquant.")
         }
 
         let correlationID = req.headers.first(name: "x-correlation-id")
@@ -137,7 +137,7 @@ enum SharePointGraphRouter {
               !clientID.isEmpty,
               let clientSecret = Environment.get("ORCHIVISTE_GRAPH_CLIENT_SECRET"),
               !clientSecret.isEmpty else {
-            throw Abort(.internalServerError, reason: "Graph routing is enabled but Graph credentials are not fully configured.")
+            throw Abort(.internalServerError, reason: "Le routage Graph est active mais les identifiants Graph sont incomplets.")
         }
         return GraphConfig(tenantID: tenantID, clientID: clientID, clientSecret: clientSecret)
     }
@@ -168,14 +168,14 @@ enum SharePointGraphRouter {
         guard response.status == .ok else {
             throw graphError(
                 status: .internalServerError,
-                reason: "Unable to acquire Microsoft Graph access token.",
+                reason: "Impossible d'obtenir un jeton d'acces Microsoft Graph.",
                 response: response
             )
         }
 
         let payload = try response.content.decode(GraphTokenResponse.self)
         guard !payload.access_token.isEmpty else {
-            throw Abort(.internalServerError, reason: "Received empty Graph access token.")
+            throw Abort(.internalServerError, reason: "Jeton d'acces Graph vide recu.")
         }
         return payload.access_token
     }
@@ -196,14 +196,14 @@ enum SharePointGraphRouter {
         guard response.status == .ok else {
             throw graphError(
                 status: .badGateway,
-                reason: "Unable to resolve SharePoint drive.",
+                reason: "Impossible de resoudre le lecteur SharePoint.",
                 response: response
             )
         }
 
         let payload = try response.content.decode(GraphDriveListResponse.self)
         guard let drive = payload.value.first(where: { $0.name.caseInsensitiveCompare(library) == .orderedSame }) else {
-            throw Abort(.notFound, reason: "SharePoint library '\(library)' not found on site '\(siteID)'.")
+            throw Abort(.notFound, reason: "Bibliotheque SharePoint '\(library)' introuvable sur le site '\(siteID)'.")
         }
         return drive.id
     }
@@ -240,14 +240,14 @@ enum SharePointGraphRouter {
             guard response.status.code >= 200, response.status.code < 300 else {
                 throw graphError(
                     status: .badGateway,
-                    reason: "Unable to create or resolve destination folder '\(segment)'.",
+                    reason: "Impossible de creer ou resoudre le dossier de destination '\(segment)'.",
                     response: response
                 )
             }
 
             let created = try response.content.decode(GraphItem.self)
             guard let id = created.id, !id.isEmpty else {
-                throw Abort(.badGateway, reason: "Graph returned an invalid folder payload for '\(segment)'.")
+                throw Abort(.badGateway, reason: "Graph a retourne une charge dossier invalide pour '\(segment)'.")
             }
             parentID = id
         }
@@ -276,7 +276,7 @@ enum SharePointGraphRouter {
         guard response.status == .ok else {
             throw graphError(
                 status: .badGateway,
-                reason: "Unable to move SharePoint file to destination folder.",
+                reason: "Impossible de deplacer le fichier SharePoint vers le dossier cible.",
                 response: response
             )
         }
@@ -359,7 +359,7 @@ enum SharePointGraphRouter {
         if detail.count > 300 {
             detail = String(detail.prefix(300))
         }
-        let suffix = detail.isEmpty ? "" : " Graph said: \(detail)"
+        let suffix = detail.isEmpty ? "" : " Reponse Graph: \(detail)"
         return Abort(status, reason: "\(reason) (status \(response.status.code)).\(suffix)")
     }
 }

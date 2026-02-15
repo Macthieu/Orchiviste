@@ -11,7 +11,7 @@ func registerTaxonomyRoutes(_ app: Application) {
 
         v1.get("taxonomy", ":taxonomy_id") { req async throws -> TaxonomyRecord in
             guard let id = req.parameters.get("taxonomy_id") else {
-                throw Abort(.badRequest, reason: "taxonomy_id is required.")
+                throw Abort(.badRequest, reason: "taxonomy_id est requis.")
             }
             if let stored = await req.application.appState.taxonomy(id: id) {
                 return stored
@@ -19,7 +19,7 @@ func registerTaxonomyRoutes(_ app: Application) {
             if let disk = ConfigLoader.loadTaxonomy(id: id) {
                 return disk
             }
-            throw Abort(.notFound, reason: "Taxonomy not found.")
+            throw Abort(.notFound, reason: "Taxonomie introuvable.")
         }
     }
 }

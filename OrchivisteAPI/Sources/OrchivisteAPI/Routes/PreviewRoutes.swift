@@ -5,11 +5,11 @@ func registerPreviewRoutes(_ app: Application) {
         preview.get(":id", "thumbnail") { req async throws -> Response in
             guard let id = req.parameters.get("id"),
                   let jobId = UUID(uuidString: id) else {
-                throw Abort(.badRequest, reason: "Invalid preview id.")
+                throw Abort(.badRequest, reason: "Identifiant d'apercu invalide.")
             }
             guard let record = await req.application.appState.preview(jobId: jobId),
                   let image = record.imagesByPage[1] else {
-                throw Abort(.notFound, reason: "Preview not ready.")
+                throw Abort(.notFound, reason: "Apercu non disponible.")
             }
             return RangeResponse.make(req: req, data: image, contentType: .jpeg)
         }
@@ -17,7 +17,7 @@ func registerPreviewRoutes(_ app: Application) {
         let pageHandler: (Request) async throws -> Response = { req in
             guard let id = req.parameters.get("id"),
                   let jobId = UUID(uuidString: id) else {
-                throw Abort(.badRequest, reason: "Invalid preview id.")
+                throw Abort(.badRequest, reason: "Identifiant d'apercu invalide.")
             }
             let rawPage = req.parameters.get("n") ?? req.parameters.get("n.jpg") ?? ""
             let normalizedPage = rawPage.hasSuffix(".jpg")
@@ -25,11 +25,11 @@ func registerPreviewRoutes(_ app: Application) {
                 : rawPage
             guard let page = Int(normalizedPage),
                   page > 0 else {
-                throw Abort(.badRequest, reason: "Invalid preview page number.")
+                throw Abort(.badRequest, reason: "Numero de page d'apercu invalide.")
             }
             guard let record = await req.application.appState.preview(jobId: jobId),
                   let image = record.imagesByPage[page] else {
-                throw Abort(.notFound, reason: "Preview page not found.")
+                throw Abort(.notFound, reason: "Page d'apercu introuvable.")
             }
             return RangeResponse.make(req: req, data: image, contentType: .jpeg)
         }
@@ -39,17 +39,17 @@ func registerPreviewRoutes(_ app: Application) {
         preview.get(":id", "text") { req async throws -> PreviewTextResponse in
             guard let id = req.parameters.get("id"),
                   let jobId = UUID(uuidString: id) else {
-                throw Abort(.badRequest, reason: "Invalid preview id.")
+                throw Abort(.badRequest, reason: "Identifiant d'apercu invalide.")
             }
             guard let record = await req.application.appState.preview(jobId: jobId) else {
-                throw Abort(.notFound, reason: "Preview not ready.")
+                throw Abort(.notFound, reason: "Apercu non disponible.")
             }
             let page = (try? req.query.get(Int.self, at: "page")) ?? 1
             guard page > 0 else {
-                throw Abort(.badRequest, reason: "Invalid page query parameter.")
+                throw Abort(.badRequest, reason: "Parametre page invalide.")
             }
             guard let text = record.textPages[page] else {
-                throw Abort(.notFound, reason: "Preview text page not found.")
+                throw Abort(.notFound, reason: "Texte d'apercu introuvable pour cette page.")
             }
             return PreviewTextResponse(page: page, text: text)
         }
@@ -57,16 +57,16 @@ func registerPreviewRoutes(_ app: Application) {
         preview.get(":id", "office") { req async throws -> Response in
             guard let id = req.parameters.get("id"),
                   let jobId = UUID(uuidString: id) else {
-                throw Abort(.badRequest, reason: "Invalid preview id.")
+                throw Abort(.badRequest, reason: "Identifiant d'apercu invalide.")
             }
             let inMemory = await req.application.appState.job(id: jobId)
             let persisted = try await JobPersistenceRepository.fetchJob(id: jobId, on: req.db)
             guard let job = inMemory ?? persisted else {
-                throw Abort(.notFound, reason: "Job not found.")
+                throw Abort(.notFound, reason: "Tache introuvable.")
             }
             guard job.source.kind.lowercased() == "sharepoint",
                   let url = job.source.url else {
-                throw Abort(.notFound, reason: "Office Online preview is only available for SharePoint sources.")
+                throw Abort(.notFound, reason: "L'apercu Office Online est disponible uniquement pour les sources SharePoint.")
             }
             return req.redirect(to: url)
         }

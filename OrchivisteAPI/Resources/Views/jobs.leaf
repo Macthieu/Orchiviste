@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Jobs</title>
+    <title>Orchiviste Taches</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -53,12 +53,12 @@
 </head>
 <body>
 <header>
-    <strong>Orchiviste Jobs</strong>
+    <strong>Orchiviste Taches</strong>
     <nav>
-        <a href="/ui">Dashboard</a>
-        <a href="/ui/jobs">Jobs</a>
-        <a href="/ui/workers">Workers</a>
-        <a href="/ui/presets">Presets</a>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Prereglages</a>
     </nav>
 </header>
 <main class="wrap">
@@ -66,19 +66,19 @@
         <thead>
         <tr>
             <th>ID</th>
-            <th>Status</th>
+            <th>Statut</th>
             <th>Source</th>
-            <th>File</th>
-            <th>Class</th>
-            <th>Confidence</th>
-            <th>Updated</th>
+            <th>Fichier</th>
+            <th>Code</th>
+            <th>Confiance</th>
+            <th>Mise a jour</th>
         </tr>
         </thead>
         <tbody>
         #for(job in jobs):
         <tr>
             <td class="mono"><a href="/ui/jobs/#(job.id)">#(job.id)</a></td>
-            <td class="status-#(job.status)">#(job.status)</td>
+            <td class="status-#(job.status)">#(job.status_label)</td>
             <td>#(job.source_kind)</td>
             <td>#(job.file_url)</td>
             <td>#(job.suggested_class_code)</td>

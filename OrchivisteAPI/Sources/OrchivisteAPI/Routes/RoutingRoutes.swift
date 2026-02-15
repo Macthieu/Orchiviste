@@ -4,10 +4,10 @@ func registerRoutingRoutes(_ app: Application) {
     app.group("v1") { v1 in
         v1.post("route", ":file_id") { req async throws -> RoutingResponse in
             guard let fileId = req.parameters.get("file_id") else {
-                throw Abort(.badRequest, reason: "file_id is required.")
+                throw Abort(.badRequest, reason: "file_id est requis.")
             }
             guard let routing = ConfigLoader.loadRoutingMap() else {
-                throw Abort(.notFound, reason: "routing map not found.")
+                throw Abort(.notFound, reason: "Table de routage introuvable.")
             }
 
             var suggestedCode: String?
@@ -19,10 +19,10 @@ func registerRoutingRoutes(_ app: Application) {
                 if let job = inMemory ?? persisted {
                     await req.application.appState.cacheJob(job)
                     if job.status == .needs_review {
-                        throw Abort(.conflict, reason: "Job requires human review before routing.")
+                        throw Abort(.conflict, reason: "La tache exige une revue humaine avant le routage.")
                     }
                     if job.status == .pending || job.status == .running {
-                        throw Abort(.conflict, reason: "Job analysis is not completed yet.")
+                        throw Abort(.conflict, reason: "L'analyse de la tache n'est pas terminee.")
                     }
                     suggestedCode = job.suggestedClassCode
                     resolvedJobID = jobId
@@ -33,7 +33,7 @@ func registerRoutingRoutes(_ app: Application) {
             let classCode = suggestedCode ?? routing.mappings.keys.first ?? "UNCLASSIFIED"
 
             guard let target = routing.mappings[classCode] ?? routing.mappings.values.first else {
-                throw Abort(.notFound, reason: "No routing target for class code.")
+                throw Abort(.notFound, reason: "Aucune cible de routage pour ce code de classement.")
             }
 
             let year = String(Calendar.current.component(.year, from: Date()))

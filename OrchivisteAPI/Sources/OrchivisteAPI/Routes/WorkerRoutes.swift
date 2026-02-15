@@ -6,7 +6,7 @@ func registerWorkerRoutes(_ app: Application) {
         workers.post("enroll") { req async throws -> WorkerRecord in
             let body = try req.content.decode(WorkerEnrollRequest.self)
             guard !body.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw Abort(.badRequest, reason: "Worker name is required.")
+                throw Abort(.badRequest, reason: "Le nom de l'agent est requis.")
             }
             let worker = await req.application.appState.enrollWorker(
                 name: body.name,
@@ -29,10 +29,10 @@ func registerWorkerRoutes(_ app: Application) {
         workers.post(":id", "approve") { req async throws -> WorkerRecord in
             guard let idStr = req.parameters.get("id"),
                   let id = UUID(uuidString: idStr) else {
-                throw Abort(.badRequest, reason: "Invalid worker id.")
+                throw Abort(.badRequest, reason: "Identifiant d'agent invalide.")
             }
             guard let worker = await req.application.appState.approveWorker(id: id) else {
-                throw Abort(.notFound, reason: "Worker not found.")
+                throw Abort(.notFound, reason: "Agent introuvable.")
             }
             await EventPublisher.publish(
                 type: "worker.approved",
@@ -47,22 +47,22 @@ func registerWorkerRoutes(_ app: Application) {
         workers.post(":id", "heartbeat") { req async throws -> WorkerRecord in
             guard let idStr = req.parameters.get("id"),
                   let id = UUID(uuidString: idStr) else {
-                throw Abort(.badRequest, reason: "Invalid worker id.")
+                throw Abort(.badRequest, reason: "Identifiant d'agent invalide.")
             }
             let body = try req.content.decode(WorkerHeartbeatRequest.self)
             guard let existing = await req.application.appState.worker(id: id) else {
-                throw Abort(.notFound, reason: "Worker not found.")
+                throw Abort(.notFound, reason: "Agent introuvable.")
             }
             guard existing.status == .approved else {
-                throw Abort(.conflict, reason: "Worker is not approved.")
+                throw Abort(.conflict, reason: "L'agent n'est pas approuve.")
             }
             if let token = existing.token, !token.isEmpty {
                 guard req.headers.bearerAuthorization?.token == token else {
-                    throw Abort(.unauthorized, reason: "Invalid worker token.")
+                    throw Abort(.unauthorized, reason: "Jeton agent invalide.")
                 }
             }
             guard let worker = await req.application.appState.heartbeatWorker(id: id, payload: body) else {
-                throw Abort(.notFound, reason: "Worker not found.")
+                throw Abort(.notFound, reason: "Agent introuvable.")
             }
             await EventPublisher.publish(
                 type: "worker.heartbeat",

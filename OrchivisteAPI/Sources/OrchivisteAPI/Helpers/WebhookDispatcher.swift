@@ -13,7 +13,7 @@ enum WebhookDispatcher {
         let retries = max(1, Environment.get("ORCHIVISTE_WEBHOOK_MAX_RETRIES").flatMap(Int.init) ?? 3)
         let timestamp = String(Int(Date().timeIntervalSince1970))
         guard let body = try? JSONEncoder().encode(event) else {
-            logger.warning("Unable to encode webhook payload.", metadata: [
+            logger.warning("Impossible d'encoder la charge webhook.", metadata: [
                 "event_type": .string(event.type),
                 "event_id": .string("\(event.id)")
             ])
@@ -36,10 +36,10 @@ enum WebhookDispatcher {
                 if response.status.code >= 200, response.status.code < 300 {
                     return
                 }
-                throw Abort(.badGateway, reason: "Webhook receiver returned \(response.status.code).")
+                throw Abort(.badGateway, reason: "Le recepteur webhook a retourne \(response.status.code).")
             } catch {
                 if attempt == retries {
-                    logger.error("Webhook delivery failed.", metadata: [
+                    logger.error("Echec de livraison du webhook.", metadata: [
                         "event_id": .string("\(event.id)"),
                         "event_type": .string(event.type),
                         "error": .string(error.localizedDescription)

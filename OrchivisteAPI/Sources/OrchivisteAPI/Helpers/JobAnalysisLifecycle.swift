@@ -52,7 +52,7 @@ enum JobAnalysisLifecycle {
         )
 
         if needsReview {
-            logger.info("Job flagged as needs_review.", metadata: [
+            logger.info("Tache marquee en revue requise.", metadata: [
                 "job_id": .string(jobId.uuidString),
                 "confidence": .string("\(analysis.confidence)"),
                 "threshold": .string("\(confidenceThreshold)")

@@ -48,7 +48,7 @@ struct Boot {
 
         try configure(app)
 
-        app.logger.info("OrchivisteAPI listening on \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
+        app.logger.info("OrchivisteAPI en ecoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
         try app.run()
     }
 }
@@ -87,14 +87,14 @@ private func makeCORSConfiguration() -> CORSMiddleware.Configuration {
 private func configureDatabase(_ app: Application) throws {
     let provider = Environment.get("ORCHIVISTE_DB_PROVIDER")?.lowercased()
     if provider == "postgres", let url = Environment.get("ORCHIVISTE_POSTGRES_URL") {
-        app.logger.info("Connecting to Postgres.")
+        app.logger.info("Connexion a Postgres.")
         try app.databases.use(.postgres(url: url), as: .psql)
         app.databases.default(to: .psql)
         return
     }
 
     let path = Environment.get("ORCHIVISTE_SQLITE_PATH") ?? "orchiviste.sqlite"
-    app.logger.info("Connecting to SQLite at \(path)")
+    app.logger.info("Connexion a SQLite : \(path)")
     app.databases.use(.sqlite(.file(path)), as: .sqlite)
     app.databases.default(to: .sqlite)
 }

@@ -5,7 +5,7 @@ struct CoreMLProvider: AnalysisProvider {
     let weight: Double = 0.9
 
     func analyze(request: AnalysisRequest, logger: Logger) async throws -> ProviderCandidate? {
-        logger.debug("CoreML provider disabled in MVP.")
+        logger.debug("Fournisseur CoreML desactive pour le MVP.")
         return nil
     }
 }
@@ -15,7 +15,7 @@ struct CoginovAPIProvider: AnalysisProvider {
     let weight: Double = 0.8
 
     func analyze(request: AnalysisRequest, logger: Logger) async throws -> ProviderCandidate? {
-        logger.debug("Coginov provider disabled in MVP.")
+        logger.debug("Fournisseur Coginov desactive pour le MVP.")
         return nil
     }
 }
@@ -25,7 +25,7 @@ struct LLMFallbackProvider: AnalysisProvider {
     let weight: Double = 0.6
 
     func analyze(request: AnalysisRequest, logger: Logger) async throws -> ProviderCandidate? {
-        logger.debug("LLM fallback provider disabled in MVP.")
+        logger.debug("Fournisseur LLM de secours desactive pour le MVP.")
         return nil
     }
 }

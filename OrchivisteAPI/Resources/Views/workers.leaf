@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Workers</title>
+    <title>Orchiviste Agents</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -70,31 +70,31 @@
 </head>
 <body>
 <header>
-    <strong>Orchiviste Workers</strong>
+    <strong>Orchiviste Agents</strong>
     <nav>
-        <a href="/ui">Dashboard</a>
-        <a href="/ui/jobs">Jobs</a>
-        <a href="/ui/workers">Workers</a>
-        <a href="/ui/presets">Presets</a>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/jobs">Taches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Prereglages</a>
     </nav>
 </header>
 <main class="wrap">
     <section class="cards">
-        <article class="card"><div>Workers</div><div class="kpi">#(workers.count)</div></article>
-        <article class="card"><div>Queue ingest</div><div class="kpi">#(queue_ingest_depth)</div></article>
-        <article class="card"><div>Queue dead-letter</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
+        <article class="card"><div>Agents</div><div class="kpi">#(workers.count)</div></article>
+        <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
+        <article class="card"><div>File de rejet</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
     </section>
 
     <table>
         <thead>
         <tr>
             <th>ID</th>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Capabilities</th>
-            <th>Last Seen</th>
+            <th>Nom</th>
+            <th>Statut</th>
+            <th>Capacites</th>
+            <th>Dernier signalement</th>
             <th>Version</th>
-            <th>Load</th>
+            <th>Charge</th>
             <th>RAM MB</th>
         </tr>
         </thead>

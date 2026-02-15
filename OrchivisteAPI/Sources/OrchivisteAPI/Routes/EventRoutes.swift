@@ -5,12 +5,12 @@ func registerEventRoutes(_ app: Application) {
         v1.get("events") { req async throws -> EventsResponse in
             let cursor = (try? req.query.get(Int.self, at: "cursor")) ?? 0
             guard cursor >= 0 else {
-                throw Abort(.badRequest, reason: "cursor must be >= 0.")
+                throw Abort(.badRequest, reason: "cursor doit etre superieur ou egal a 0.")
             }
             do {
                 return try await JobPersistenceRepository.listEvents(after: cursor, on: req.db)
             } catch {
-                req.logger.warning("Falling back to in-memory events: \(error.localizedDescription)")
+                req.logger.warning("Bascule vers les evenements en memoire: \(error.localizedDescription)")
                 return await req.application.appState.events(after: cursor)
             }
         }

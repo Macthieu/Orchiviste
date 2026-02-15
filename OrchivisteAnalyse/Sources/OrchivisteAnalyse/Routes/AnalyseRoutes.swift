@@ -14,7 +14,7 @@ func registerAnalyseRoutes(_ app: Application) {
 
         let threshold = body.policy?.min_confidence ?? 0.7
         if result.confidence < threshold {
-            req.logger.info("Analysis below confidence threshold.", metadata: [
+            req.logger.info("Analyse sous le seuil de confiance.", metadata: [
                 "file_id": .string(body.file_id),
                 "confidence": .string("\(result.confidence)"),
                 "threshold": .string("\(threshold)")

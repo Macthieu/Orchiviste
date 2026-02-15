@@ -17,7 +17,7 @@ enum EventPublisher {
             )
             await WebhookDispatcher.dispatch(event: event, application: application, logger: logger)
         } catch {
-            logger.warning("Unable to persist event.", metadata: [
+            logger.warning("Impossible de persister l'evenement.", metadata: [
                 "event_type": .string(type),
                 "error": .string(error.localizedDescription)
             ])

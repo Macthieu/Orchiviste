@@ -28,7 +28,7 @@ struct Worker {
         pool.activate()
 
         let key = RedisKey("orchiviste:ingest")
-        print("🧰 Worker démarré. En attente de tâches sur \(host):\(port)…")
+        print("🧰 Agent demarre. En attente de taches sur \(host):\(port)…")
 
         while true {
             do {

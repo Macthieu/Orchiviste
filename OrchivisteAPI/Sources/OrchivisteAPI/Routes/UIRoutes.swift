@@ -32,6 +32,7 @@ private struct UIPresetsContext: Encodable {
 private struct UIJobSummary: Encodable {
     let id: String
     let status: String
+    let status_label: String
     let file_url: String
     let source_kind: String
     let confidence: String
@@ -142,17 +143,17 @@ func registerUIRoutes(_ app: Application) {
     app.get("ui", "jobs", ":id") { req async throws -> View in
         guard let id = req.parameters.get("id"),
               let jobID = UUID(uuidString: id) else {
-            throw Abort(.badRequest, reason: "Invalid job id.")
+            throw Abort(.badRequest, reason: "Identifiant de tache invalide.")
         }
         let job = try await resolveUIJob(jobID: jobID, req: req)
         let preview = await req.application.appState.preview(jobId: jobID)
         let context = UIJobViewerContext(
             id: job.id.uuidString,
-            status: job.status.rawValue,
+            status: localizedJobStatus(job.status.rawValue),
             file_url: job.fileURL,
-            source_kind: job.source.kind,
-            suggested_preset: job.suggestedPreset ?? "N/A",
-            suggested_class_code: job.suggestedClassCode ?? "N/A",
+            source_kind: localizedSourceKind(job.source.kind),
+            suggested_preset: job.suggestedPreset ?? "N/D",
+            suggested_class_code: job.suggestedClassCode ?? "N/D",
             confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
             needs_review: job.needsReview,
             can_review: job.status == .needs_review,
@@ -172,7 +173,7 @@ private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
         UIWorkerSummary(
             id: worker.id.uuidString,
             name: worker.name,
-            status: worker.status.rawValue,
+            status: localizedWorkerStatus(worker.status.rawValue),
             capabilities: worker.capabilities.joined(separator: ", "),
             last_seen: worker.lastSeen.map(formatTimestamp) ?? "-",
             version: worker.version ?? "-",
@@ -213,10 +214,11 @@ private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
         UIJobSummary(
             id: job.id.uuidString,
             status: job.status.rawValue,
+            status_label: localizedJobStatus(job.status.rawValue),
             file_url: job.fileURL,
-            source_kind: job.source.kind,
+            source_kind: localizedSourceKind(job.source.kind),
             confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
-            suggested_class_code: job.suggestedClassCode ?? "N/A",
+            suggested_class_code: job.suggestedClassCode ?? "N/D",
             updated_at: formatTimestamp(job.updatedAt)
         )
     }
@@ -230,11 +232,39 @@ private func resolveUIJob(jobID: UUID, req: Request) async throws -> JobRecord {
         await req.application.appState.cacheJob(persisted)
         return persisted
     }
-    throw Abort(.notFound, reason: "Job not found.")
+    throw Abort(.notFound, reason: "Tache introuvable.")
 }
 
 private func formatTimestamp(_ date: Date) -> String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime]
     return formatter.string(from: date)
+}
+
+private func localizedJobStatus(_ raw: String) -> String {
+    switch raw {
+    case "pending": return "En attente"
+    case "running": return "En cours"
+    case "needs_review": return "Revue requise"
+    case "completed": return "Terminee"
+    case "failed": return "En echec"
+    case "cancelled": return "Annulee"
+    default: return raw
+    }
+}
+
+private func localizedWorkerStatus(_ raw: String) -> String {
+    switch raw {
+    case "pending": return "En attente"
+    case "approved": return "Approuve"
+    default: return raw
+    }
+}
+
+private func localizedSourceKind(_ raw: String) -> String {
+    switch raw.lowercased() {
+    case "local": return "Local"
+    case "sharepoint": return "SharePoint"
+    default: return raw
+    }
 }
