@@ -95,7 +95,9 @@ func registerIngestRoutes(_ app: Application) {
                 let queueKey = RedisKey("orchiviste:ingest")
 
                 // RPUSH
-                _ = try await connection.rpush([value], into: queueKey)
+                _ = try await pool.withConnection { redis in
+    redis.rpush([RESPValue.bulkString(value)], into: queueKey)
+}.get()
 
             } else {
                 req.logger.warning("ORCHIVISTE_REDIS_URL non défini → la tâche \(job.id) n’a PAS été envoyée dans Redis.")
