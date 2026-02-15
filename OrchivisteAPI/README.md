@@ -32,6 +32,11 @@ Docker compose:
 - API: http://127.0.0.1:28780/u
 - Analyse: http://127.0.0.1:28781/v1/analyse
 
+Smoke test MVP:
+- `docker compose up --build -d`
+- `./scripts/smoke_mvp.sh`
+- optional override: `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
+
 ## Environment variables
 
 Database:

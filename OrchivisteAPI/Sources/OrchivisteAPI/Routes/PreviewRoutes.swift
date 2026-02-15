@@ -19,8 +19,11 @@ func registerPreviewRoutes(_ app: Application) {
                   let jobId = UUID(uuidString: id) else {
                 throw Abort(.badRequest, reason: "Invalid preview id.")
             }
-            guard let pageStr = req.parameters.get("n") ?? req.parameters.get("n.jpg"),
-                  let page = Int(pageStr),
+            let rawPage = req.parameters.get("n") ?? req.parameters.get("n.jpg") ?? ""
+            let normalizedPage = rawPage.hasSuffix(".jpg")
+                ? String(rawPage.dropLast(4))
+                : rawPage
+            guard let page = Int(normalizedPage),
                   page > 0 else {
                 throw Abort(.badRequest, reason: "Invalid preview page number.")
             }
