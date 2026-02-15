@@ -44,6 +44,19 @@ private struct UIJobViewerContext: Encodable {
 }
 
 func registerUIRoutes(_ app: Application) {
+    app.get("u") { req async throws -> Response in
+        req.redirect(to: "/ui")
+    }
+    app.get("u", "jobs") { req async throws -> Response in
+        req.redirect(to: "/ui/jobs")
+    }
+    app.get("u", "jobs", ":id") { req async throws -> Response in
+        guard let id = req.parameters.get("id") else {
+            return req.redirect(to: "/ui/jobs")
+        }
+        return req.redirect(to: "/ui/jobs/\(id)")
+    }
+
     app.get("ui") { req async throws -> View in
         let jobs = try await loadJobs(req: req, limit: 100)
         let workerCount = await req.application.appState.listWorkers().count

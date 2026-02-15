@@ -19,11 +19,12 @@ Build products:
 
 Run:
 - API: `cd OrchivisteAPI && swift run OrchivisteAPI`
-- Analyse: `cd OrchivisteAnalyse && swift run OrchivisteAnalyse` (default 127.0.0.1:18081; override `ORCHIVISTE_ANALYSE_PORT`)
+- Analyse: `cd OrchivisteAnalyse && swift run OrchivisteAnalyse` (default 127.0.0.1:28781; override `ORCHIVISTE_ANALYSE_PORT`)
 - Worker: `cd OrchivisteWorker && ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379 WORKER_MAX_PARALLEL_PAGES=12 WORKER_TOTAL_PAGES=12 swift run OrchivisteWorker`
 
 UI (SSR Leaf):
-- http://127.0.0.1:8080/ui
+- http://127.0.0.1:28780/ui
+- alias: http://127.0.0.1:28780/u
 - viewer uses lazy preview (`/v1/preview/...`) and only downloads on explicit button
 
 ## Environment variables
@@ -40,7 +41,7 @@ Redis / Dispatcher:
 
 Analysis:
 - `ORCHIVISTE_ANALYSE_URL` (API proxies to this URL if set)
-- `ORCHIVISTE_ANALYSE_PORT` (service port, default 18081)
+- `ORCHIVISTE_ANALYSE_PORT` (service port, default 28781)
 
 Webhooks HMAC:
 - `ORCHIVISTE_WEBHOOK_URL` (receiver URL)

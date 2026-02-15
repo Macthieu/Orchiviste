@@ -10,7 +10,7 @@ func registerOpenAPIRoutes(_ app: Application) {
                 "description": "MVP ingest -> preview -> analyse -> review -> routing -> events"
             ],
             "servers": [
-                ["url": "http://127.0.0.1:8080"]
+                ["url": "http://127.0.0.1:28780"]
             ],
             "paths": [
                 "/v1/openapi.json": [

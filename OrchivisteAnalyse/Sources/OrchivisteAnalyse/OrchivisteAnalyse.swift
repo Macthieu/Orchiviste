@@ -12,7 +12,7 @@ struct Boot {
         app.logger.logLevel = .info
         app.http.server.configuration.hostname = "127.0.0.1"
         app.http.server.configuration.port = Environment.get("ORCHIVISTE_ANALYSE_PORT")
-            .flatMap(Int.init) ?? 18081
+            .flatMap(Int.init) ?? 28781
 
         app.middleware.use(AnalyseCorrelationIDMiddleware())
         app.middleware.use(RouteLoggingMiddleware(logLevel: .info))

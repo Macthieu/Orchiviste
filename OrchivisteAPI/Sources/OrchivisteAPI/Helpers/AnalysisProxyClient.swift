@@ -63,7 +63,7 @@ enum AnalysisProxyClient {
 
     private static func analysisEndpoint() -> URI {
         let base = Environment.get("ORCHIVISTE_ANALYSE_URL")
-            ?? "http://127.0.0.1:\(Environment.get("ORCHIVISTE_ANALYSE_PORT") ?? "18081")"
+            ?? "http://127.0.0.1:\(Environment.get("ORCHIVISTE_ANALYSE_PORT") ?? "28781")"
         let sanitizedBase = base.hasSuffix("/") ? String(base.dropLast()) : base
         return URI(string: "\(sanitizedBase)/v1/analyse")
     }

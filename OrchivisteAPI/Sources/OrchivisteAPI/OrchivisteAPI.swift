@@ -9,7 +9,7 @@ func configure(_ app: Application) throws {
     app.logger.logLevel = .info
     app.http.server.configuration.hostname = "127.0.0.1"
     app.http.server.configuration.port = Environment.get("ORCHIVISTE_API_PORT")
-        .flatMap(Int.init) ?? 8080
+        .flatMap(Int.init) ?? 28780
 
     app.middleware.use(CorrelationIDMiddleware())
     app.middleware.use(CORSMiddleware(configuration: makeCORSConfiguration()))
