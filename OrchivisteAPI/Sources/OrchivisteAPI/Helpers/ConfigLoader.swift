@@ -6,8 +6,19 @@ enum ConfigLoader {
         if let env = Environment.get("ORCHIVISTE_CONFIG_DIR") {
             return URL(fileURLWithPath: env, isDirectory: true)
         }
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let cwdCandidate = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
             .appendingPathComponent("configs", isDirectory: true)
+        if FileManager.default.fileExists(atPath: cwdCandidate.path) {
+            return cwdCandidate
+        }
+
+        let sourceURL = URL(fileURLWithPath: #filePath)
+        let packageRoot = sourceURL
+            .deletingLastPathComponent() // ConfigLoader.swift
+            .deletingLastPathComponent() // Helpers
+            .deletingLastPathComponent() // OrchivisteAPI
+            .deletingLastPathComponent() // Sources
+        return packageRoot.appendingPathComponent("configs", isDirectory: true)
     }
 
     static func ensureDir(_ url: URL) throws {
