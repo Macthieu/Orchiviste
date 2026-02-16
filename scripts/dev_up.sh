@@ -5,6 +5,51 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_BASE="${ORCHIVISTE_API_BASE:-http://127.0.0.1:28780}"
 ANALYSE_BASE="${ORCHIVISTE_ANALYSE_BASE:-http://127.0.0.1:28781}"
 START_TIMEOUT="${ORCHIVISTE_DEV_START_TIMEOUT:-120}"
+BUILD_ON_START="${ORCHIVISTE_DEV_BUILD_ON_START:-0}"
+USE_CLASSIC_BUILDER="${ORCHIVISTE_DEV_CLASSIC_BUILDER:-0}"
+FALLBACK_CLASSIC_BUILDER="${ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER:-1}"
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/dev_up.sh [options]
+
+Options:
+  --build            force un build des images avant démarrage
+  --no-build         n'effectue pas de build (défaut)
+  --classic-builder  utilise le builder classique (BuildKit désactivé)
+  --help             affiche cette aide
+
+Variables d'environnement:
+  ORCHIVISTE_DEV_BUILD_ON_START=1
+  ORCHIVISTE_DEV_CLASSIC_BUILDER=1
+  ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER=0|1
+  ORCHIVISTE_DEV_START_TIMEOUT=120
+EOF
+}
+
+while (($# > 0)); do
+  case "$1" in
+    --build)
+      BUILD_ON_START="1"
+      ;;
+    --no-build)
+      BUILD_ON_START="0"
+      ;;
+    --classic-builder)
+      USE_CLASSIC_BUILDER="1"
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Option inconnue : $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 need_cmd() {
   local cmd="$1"
@@ -55,6 +100,47 @@ wait_http_ok() {
   exit 1
 }
 
+compose_cmd() {
+  if [[ "$USE_CLASSIC_BUILDER" == "1" ]]; then
+    DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0 docker compose "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
+compose_up_with_optional_build() {
+  local with_build="$1"
+  if [[ "$with_build" == "1" ]]; then
+    compose_cmd up --build -d
+  else
+    compose_cmd up -d
+  fi
+}
+
+start_stack() {
+  if compose_up_with_optional_build "$BUILD_ON_START"; then
+    return 0
+  fi
+
+  if [[ "$BUILD_ON_START" == "0" ]]; then
+    echo "Échec du démarrage sans build, nouvelle tentative avec build..."
+    BUILD_ON_START="1"
+    if compose_up_with_optional_build "1"; then
+      return 0
+    fi
+  fi
+
+  if [[ "$USE_CLASSIC_BUILDER" == "0" && "$FALLBACK_CLASSIC_BUILDER" == "1" ]]; then
+    echo "Échec avec BuildKit, nouvelle tentative en builder classique..."
+    USE_CLASSIC_BUILDER="1"
+    compose_up_with_optional_build "1"
+    return 0
+  fi
+
+  echo "ÉCHEC : impossible de démarrer la stack Orchiviste." >&2
+  exit 1
+}
+
 need_cmd docker
 need_cmd curl
 
@@ -62,7 +148,7 @@ echo "== Orchiviste démarrage local =="
 wait_for_docker_daemon
 
 cd "$ROOT_DIR"
-docker compose up --build -d
+start_stack
 
 wait_http_ok "$API_BASE/v1/health" "API"
 wait_http_ok "$ANALYSE_BASE/v1/health" "Analyse"
@@ -74,4 +160,4 @@ echo "- API health: ${API_BASE}/v1/health"
 echo "- Analyse health: ${ANALYSE_BASE}/v1/health"
 echo
 echo "État compose :"
-docker compose ps
+compose_cmd ps

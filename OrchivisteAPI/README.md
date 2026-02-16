@@ -30,7 +30,8 @@ UI (SSR Leaf) :
 - la visionneuse utilise l'aperçu lazy-load (`/v1/preview/...`) et ne télécharge que sur action explicite
 
 Docker Compose :
-- `docker compose up --build`
+- démarrage standard : `docker compose up -d`
+- rebuild forcé : `docker compose up --build -d`
 - API : http://127.0.0.1:28780/u
 - Analyse : http://127.0.0.1:28781/v1/analyse
 - Redis : `redis://127.0.0.1:6379`
@@ -38,12 +39,14 @@ Docker Compose :
 
 Scripts d'exploitation locale recommandés :
 - démarrage robuste (daemon Docker + stack + vérification santé) : `./scripts/dev_up.sh`
+- démarrage avec rebuild forcé : `./scripts/dev_up.sh --build`
+- fallback builder classique (si BuildKit instable) : `./scripts/dev_up.sh --build --classic-builder`
 - arrêt propre : `./scripts/dev_down.sh`
 - statut : `docker compose ps`
 - logs API : `docker compose logs -f api`
 
 Tests fumée MVP :
-- `docker compose up --build -d`
+- `docker compose up -d`
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
