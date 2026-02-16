@@ -2,6 +2,15 @@ FROM swift:5.9-jammy AS builder
 
 WORKDIR /app
 
+# 1) Copy only manifests first to maximize dependency-cache reuse.
+COPY OrchivisteSharedKit/Package.swift ./OrchivisteSharedKit/Package.swift
+COPY OrchivisteAPI/Package.swift OrchivisteAPI/Package.resolved ./OrchivisteAPI/
+
+WORKDIR /app/OrchivisteAPI
+RUN swift package resolve
+
+# 2) Copy full sources after dependency resolution.
+WORKDIR /app
 COPY OrchivisteSharedKit ./OrchivisteSharedKit
 COPY OrchivisteAPI ./OrchivisteAPI
 

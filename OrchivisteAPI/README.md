@@ -41,6 +41,7 @@ Scripts d'exploitation locale recommandés :
 - démarrage robuste (daemon Docker + stack + vérification santé) : `./scripts/dev_up.sh`
 - démarrage avec rebuild forcé : `./scripts/dev_up.sh --build`
 - fallback builder classique (si BuildKit instable) : `./scripts/dev_up.sh --build --classic-builder`
+- rebuild ciblé plus rapide : `docker compose build api` (ou `analyse`, `worker`)
 - arrêt propre : `./scripts/dev_down.sh`
 - statut : `docker compose ps`
 - logs API : `docker compose logs -f api`
