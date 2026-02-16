@@ -36,6 +36,12 @@ Docker Compose :
 - Redis : `redis://127.0.0.1:6379`
 - profil worker optionnel : `docker compose --profile worker up --build -d`
 
+Scripts d'exploitation locale recommandés :
+- démarrage robuste (daemon Docker + stack + vérification santé) : `./scripts/dev_up.sh`
+- arrêt propre : `./scripts/dev_down.sh`
+- statut : `docker compose ps`
+- logs API : `docker compose logs -f api`
+
 Tests fumée MVP :
 - `docker compose up --build -d`
 - `./scripts/smoke_mvp.sh`
