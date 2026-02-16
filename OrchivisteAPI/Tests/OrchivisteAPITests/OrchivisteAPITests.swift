@@ -2,7 +2,8 @@ import Foundation
 @testable import OrchivisteAPI
 
 enum OrchivisteAPITestsPlaceholder {
-    // XCTest is unavailable in this environment; functional checks are run via scripts/smoke_mvp.sh.
+    // XCTest est indisponible dans cet environnement; la validation fonctionnelle
+    // est portée par scripts/smoke_mvp.sh et scripts/smoke_webhook_hmac.sh.
     static let migrations: [Any] = [
         CreateJobsMigration(),
         CreateEventsMigration(),

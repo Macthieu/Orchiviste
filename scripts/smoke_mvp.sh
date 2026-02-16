@@ -167,6 +167,26 @@ assert_code() {
   fi
 }
 
+header_get() {
+  local file="$1"
+  local header_name="$2"
+  python3 - "$file" "$header_name" <<'PY'
+import sys
+
+file_path = sys.argv[1]
+header_name = sys.argv[2].strip().lower()
+
+with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    for line in f:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if key.strip().lower() == header_name:
+            print(value.strip())
+            break
+PY
+}
+
 need_cmd curl
 need_cmd python3
 
@@ -178,6 +198,32 @@ health_code="$(http_raw GET "$API_BASE/v1/health" "$health_file")"
 assert_code "$health_code" "200" "health" "$health_file"
 echo "OK  santé"
 
+forced_correlation_id="smoke-corr-$(date +%s)"
+correlation_headers="$TMP_DIR/correlation_headers.txt"
+correlation_body="$TMP_DIR/correlation_body.json"
+correlation_code="$(curl -sS -D "$correlation_headers" -o "$correlation_body" -w "%{http_code}" \
+  -H "x-correlation-id: $forced_correlation_id" \
+  "$API_BASE/v1/health")"
+assert_code "$correlation_code" "200" "health.correlation.propagation" "$correlation_body"
+returned_correlation_id="$(header_get "$correlation_headers" "x-correlation-id")"
+if [[ "$returned_correlation_id" != "$forced_correlation_id" ]]; then
+  echo "ECHEC [health.correlation.propagation] x-correlation-id attendu=$forced_correlation_id reçu=$returned_correlation_id" >&2
+  cat "$correlation_headers" >&2
+  exit 1
+fi
+
+generated_headers="$TMP_DIR/generated_headers.txt"
+generated_body="$TMP_DIR/generated_body.json"
+generated_code="$(curl -sS -D "$generated_headers" -o "$generated_body" -w "%{http_code}" "$API_BASE/v1/health")"
+assert_code "$generated_code" "200" "health.correlation.generation" "$generated_body"
+generated_correlation_id="$(header_get "$generated_headers" "x-correlation-id")"
+if [[ -z "$generated_correlation_id" ]]; then
+  echo "ECHEC [health.correlation.generation] x-correlation-id absent" >&2
+  cat "$generated_headers" >&2
+  exit 1
+fi
+echo "OK  propagation et génération correlation-id"
+
 ui_redirect_headers="$TMP_DIR/ui_redirect_headers.txt"
 ui_redirect_code="$(curl -sS -D "$ui_redirect_headers" -o /dev/null -w "%{http_code}" "$API_BASE/u")"
 assert_code "$ui_redirect_code" "303" "ui.alias.redirect" "$ui_redirect_headers"
@@ -187,6 +233,23 @@ if ! tr -d '\r' < "$ui_redirect_headers" | grep -qi '^location: /ui$'; then
   exit 1
 fi
 echo "OK  redirection alias UI (/u -> /ui)"
+
+jobs_bad_request_file="$TMP_DIR/jobs_bad_request.json"
+jobs_bad_request_code="$(http_raw GET "$API_BASE/v1/jobs/not-a-uuid" "$jobs_bad_request_file")"
+assert_code "$jobs_bad_request_code" "400" "jobs.bad_request" "$jobs_bad_request_file"
+
+jobs_not_found_file="$TMP_DIR/jobs_not_found.json"
+jobs_not_found_code="$(http_raw GET "$API_BASE/v1/jobs/00000000-0000-0000-0000-000000000000" "$jobs_not_found_file")"
+assert_code "$jobs_not_found_code" "404" "jobs.not_found" "$jobs_not_found_file"
+
+preview_bad_request_file="$TMP_DIR/preview_bad_request.json"
+preview_bad_request_code="$(http_raw GET "$API_BASE/v1/preview/not-a-uuid/thumbnail" "$preview_bad_request_file")"
+assert_code "$preview_bad_request_code" "400" "preview.bad_request" "$preview_bad_request_file"
+
+preview_not_found_file="$TMP_DIR/preview_not_found.json"
+preview_not_found_code="$(http_raw GET "$API_BASE/v1/preview/00000000-0000-0000-0000-000000000000/thumbnail" "$preview_not_found_file")"
+assert_code "$preview_not_found_code" "404" "preview.not_found" "$preview_not_found_file"
+echo "OK  erreurs HTTP 400/404 sur jobs et preview"
 
 ingest_payload="$TMP_DIR/ingest.json"
 idem_key="smoke-$(date +%s)"
@@ -282,6 +345,39 @@ if [[ -z "$page_text" ]]; then
   exit 1
 fi
 echo "OK  texte d'aperçu"
+
+text_page_invalid_file="$TMP_DIR/text_page_invalid.json"
+text_page_invalid_code="$(http_raw GET "$API_BASE/v1/preview/$job_id/text?page=0" "$text_page_invalid_file")"
+assert_code "$text_page_invalid_code" "400" "preview.text.bad_page" "$text_page_invalid_file"
+echo "OK  validation page texte (400)"
+
+ui_job_file="$TMP_DIR/ui_job.html"
+ui_job_code="$(http_raw GET "$API_BASE/ui/jobs/$job_id" "$ui_job_file")"
+assert_code "$ui_job_code" "200" "ui.job.viewer" "$ui_job_file"
+python3 - "$ui_job_file" "$job_id" <<'PY'
+import sys
+
+file_path = sys.argv[1]
+job_id = sys.argv[2]
+download_path = f"/v1/jobs/{job_id}/download"
+
+with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    html = f.read()
+
+if "Télécharger (action explicite)" not in html:
+    print("ECHEC [ui.job.viewer] libellé de téléchargement explicite absent", file=sys.stderr)
+    sys.exit(1)
+if f'href="{download_path}"' not in html:
+    print("ECHEC [ui.job.viewer] lien explicite de téléchargement absent", file=sys.stderr)
+    sys.exit(1)
+if html.count(download_path) != 1:
+    print("ECHEC [ui.job.viewer] le chemin de téléchargement doit apparaître une seule fois (pas d'auto-download)", file=sys.stderr)
+    sys.exit(1)
+if "fetch(`/v1/jobs/${jobId}/download`" in html:
+    print("ECHEC [ui.job.viewer] téléchargement automatique détecté", file=sys.stderr)
+    sys.exit(1)
+PY
+echo "OK  UI preview sans téléchargement automatique"
 
 analyse_payload="$TMP_DIR/analyse.json"
 cat >"$analyse_payload" <<JSON
