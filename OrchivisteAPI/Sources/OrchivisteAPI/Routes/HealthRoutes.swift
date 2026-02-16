@@ -9,6 +9,6 @@ struct Health: Content {
 
 func registerHealthRoutes(_ app: Application) {
     app.get("v1", "health") { _ -> Health in
-        Health(status: "ok", uptime_s: Date().timeIntervalSince(appStart))
+        Health(status: "ok", uptime_s: max(0, Date().timeIntervalSince(appStart)))
     }
 }

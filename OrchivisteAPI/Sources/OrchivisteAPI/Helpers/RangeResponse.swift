@@ -2,7 +2,7 @@ import Vapor
 
 enum RangeResponse {
     static func make(req: Request, data: Data, contentType: HTTPMediaType) -> Response {
-        var res = Response(status: .ok)
+        let res = Response(status: .ok)
         res.headers.replaceOrAdd(name: .contentType, value: contentType.serialize())
         res.headers.replaceOrAdd(name: "Accept-Ranges", value: "bytes")
 

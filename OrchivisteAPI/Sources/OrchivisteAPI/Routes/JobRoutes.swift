@@ -105,7 +105,7 @@ func registerJobRoutes(_ app: Application) {
                 throw Abort(.notFound, reason: "Le fichier source local est indisponible.")
             }
 
-            var response = req.fileio.streamFile(at: localFile.path)
+            let response = try await req.fileio.asyncStreamFile(at: localFile.path)
             response.headers.replaceOrAdd(
                 name: .contentDisposition,
                 value: "attachment; filename=\"\(localFile.lastPathComponent)\""

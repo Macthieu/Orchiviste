@@ -3,24 +3,28 @@ import Vapor
 
 @main
 struct Boot {
-    static func main() throws {
+    static func main() async throws {
         var env = try Environment.detect()
         try LoggingSystem.bootstrap(from: &env)
-        let app = Application(env)
-        defer { app.shutdown() }
+        let app = try await Application.make(env)
+        do {
+            app.logger.logLevel = .info
+            app.http.server.configuration.hostname = Environment.get("ORCHIVISTE_ANALYSE_HOST") ?? "127.0.0.1"
+            app.http.server.configuration.port = Environment.get("ORCHIVISTE_ANALYSE_PORT")
+                .flatMap(Int.init) ?? 28781
 
-        app.logger.logLevel = .info
-        app.http.server.configuration.hostname = Environment.get("ORCHIVISTE_ANALYSE_HOST") ?? "127.0.0.1"
-        app.http.server.configuration.port = Environment.get("ORCHIVISTE_ANALYSE_PORT")
-            .flatMap(Int.init) ?? 28781
+            app.middleware.use(AnalyseCorrelationIDMiddleware())
+            app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
 
-        app.middleware.use(AnalyseCorrelationIDMiddleware())
-        app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
+            registerAnalyseRoutes(app)
 
-        registerAnalyseRoutes(app)
-
-        app.logger.info("OrchivisteAnalyse en écoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
-        try app.run()
+            app.logger.info("OrchivisteAnalyse en écoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
+            try await app.execute()
+            try await app.asyncShutdown()
+        } catch {
+            try? await app.asyncShutdown()
+            throw error
+        }
     }
 }
 

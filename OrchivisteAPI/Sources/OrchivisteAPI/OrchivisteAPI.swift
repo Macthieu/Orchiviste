@@ -40,16 +40,19 @@ func configure(_ app: Application) throws {
 
 @main
 struct Boot {
-    static func main() throws {
+    static func main() async throws {
         var env = try Environment.detect()
         try LoggingSystem.bootstrap(from: &env)
-        let app = Application(env)
-        defer { app.shutdown() }
-
-        try configure(app)
-
-        app.logger.info("OrchivisteAPI en écoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
-        try app.run()
+        let app = try await Application.make(env)
+        do {
+            try configure(app)
+            app.logger.info("OrchivisteAPI en écoute sur \(app.http.server.configuration.hostname):\(app.http.server.configuration.port)")
+            try await app.execute()
+            try await app.asyncShutdown()
+        } catch {
+            try? await app.asyncShutdown()
+            throw error
+        }
     }
 }
 
