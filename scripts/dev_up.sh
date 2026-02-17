@@ -8,6 +8,9 @@ START_TIMEOUT="${ORCHIVISTE_DEV_START_TIMEOUT:-120}"
 BUILD_ON_START="${ORCHIVISTE_DEV_BUILD_ON_START:-0}"
 USE_CLASSIC_BUILDER="${ORCHIVISTE_DEV_CLASSIC_BUILDER:-0}"
 FALLBACK_CLASSIC_BUILDER="${ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER:-1}"
+ANON_AUTH="${ORCHIVISTE_DOCKER_ANON_AUTH:-0}"
+DOCKER_CONFIG_ORIGINAL="${DOCKER_CONFIG:-}"
+DOCKER_CONFIG_OVERRIDE=""
 
 usage() {
   cat <<'EOF'
@@ -17,6 +20,7 @@ Options:
   --build            force un build des images avant démarrage
   --no-build         n'effectue pas de build (défaut)
   --classic-builder  utilise le builder classique (BuildKit désactivé)
+  --anon-auth        contourne docker-credential-desktop (auth registre anonyme)
   --help             affiche cette aide
 
 Variables d'environnement:
@@ -24,6 +28,7 @@ Variables d'environnement:
   ORCHIVISTE_DEV_CLASSIC_BUILDER=1
   ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER=0|1
   ORCHIVISTE_DEV_START_TIMEOUT=120
+  ORCHIVISTE_DOCKER_ANON_AUTH=1
 EOF
 }
 
@@ -37,6 +42,9 @@ while (($# > 0)); do
       ;;
     --classic-builder)
       USE_CLASSIC_BUILDER="1"
+      ;;
+    --anon-auth)
+      ANON_AUTH="1"
       ;;
     --help|-h)
       usage
@@ -108,6 +116,44 @@ compose_cmd() {
   fi
 }
 
+setup_auth_mode() {
+  if [[ "$ANON_AUTH" != "1" ]]; then
+    return
+  fi
+
+  DOCKER_CONFIG_OVERRIDE="$(mktemp -d)"
+  cat >"$DOCKER_CONFIG_OVERRIDE/config.json" <<'EOF'
+{"auths":{"https://index.docker.io/v1/":{}}}
+EOF
+
+  if [[ -d "$HOME/.docker/cli-plugins" ]]; then
+    mkdir -p "$DOCKER_CONFIG_OVERRIDE/cli-plugins"
+    for plugin in "$HOME/.docker/cli-plugins/"*; do
+      [[ -e "$plugin" ]] || continue
+      ln -s "$plugin" "$DOCKER_CONFIG_OVERRIDE/cli-plugins/$(basename "$plugin")"
+    done
+  fi
+
+  export DOCKER_CONFIG="$DOCKER_CONFIG_OVERRIDE"
+  echo "Mode auth registre anonyme activé (contournement docker-credential-desktop)."
+}
+
+cleanup_auth_mode() {
+  if [[ "$ANON_AUTH" != "1" ]]; then
+    return
+  fi
+
+  if [[ -n "$DOCKER_CONFIG_ORIGINAL" ]]; then
+    export DOCKER_CONFIG="$DOCKER_CONFIG_ORIGINAL"
+  else
+    unset DOCKER_CONFIG
+  fi
+
+  if [[ -n "$DOCKER_CONFIG_OVERRIDE" && -d "$DOCKER_CONFIG_OVERRIDE" ]]; then
+    rm -rf "$DOCKER_CONFIG_OVERRIDE"
+  fi
+}
+
 compose_up_with_optional_build() {
   local with_build="$1"
   if [[ "$with_build" == "1" ]]; then
@@ -143,6 +189,9 @@ start_stack() {
 
 need_cmd docker
 need_cmd curl
+
+setup_auth_mode
+trap cleanup_auth_mode EXIT
 
 echo "== Orchiviste démarrage local =="
 wait_for_docker_daemon
