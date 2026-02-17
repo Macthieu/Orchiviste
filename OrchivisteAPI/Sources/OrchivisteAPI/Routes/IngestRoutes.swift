@@ -21,6 +21,13 @@ struct IngestRequest: Content {
         case hints
     }
 
+    init(fileURL: String, source: JobSource, tags: [String]? = nil, hints: AnalysisHints? = nil) {
+        self.fileURL = fileURL
+        self.source = source
+        self.tags = tags
+        self.hints = hints
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         fileURL = try container.decode(String.self, forKey: .fileURL)
@@ -67,165 +74,175 @@ extension IngestRequest {
 func registerIngestRoutes(_ app: Application) {
     app.group("v1") { v1 in
         v1.post("ingest") { req async throws -> Response in
-            // 1) Parse du body + préparation du job
             let body = try req.content.decode(IngestRequest.self)
-            guard !body.fileURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw Abort(.badRequest, reason: "fileURL est requis.")
-            }
-            let requestHash = body.idempotencyFingerprint()
             let idempotencyKey = req.headers.first(name: "Idempotency-Key")
-
-            if let idempotencyKey, !idempotencyKey.isEmpty {
-                if let inMemory = await req.application.appState.idempotencyEntry(for: idempotencyKey) {
-                    guard inMemory.requestHash == requestHash else {
-                        throw Abort(.conflict, reason: "Idempotency-Key est déjà utilise avec une charge differente.")
-                    }
-                    if let cached = await req.application.appState.job(id: inMemory.jobId) {
-                        return try queuedResponse(taskId: cached.id)
-                    }
-                    if let existing = try await JobPersistenceRepository.fetchJob(id: inMemory.jobId, on: req.db) {
-                        await req.application.appState.cacheJob(existing)
-                        return try queuedResponse(taskId: existing.id)
-                    }
-                    throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tâche inconnue.")
-                }
-
-                if let persisted = try await JobPersistenceRepository.fetchIdempotency(key: idempotencyKey, on: req.db) {
-                    await req.application.appState.rememberIdempotency(
-                        idempotencyKey,
-                        requestHash: persisted.requestHash,
-                        jobId: persisted.jobId
-                    )
-                    guard persisted.requestHash == requestHash else {
-                        throw Abort(.conflict, reason: "Idempotency-Key est déjà utilise avec une charge differente.")
-                    }
-                    if let existing = try await JobPersistenceRepository.fetchJob(id: persisted.jobId, on: req.db) {
-                        await req.application.appState.cacheJob(existing)
-                        return try queuedResponse(taskId: existing.id)
-                    }
-                    throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tâche inconnue.")
-                }
-            }
-
-            let job = await req.application.appState.createJob(
-                fileURL: body.fileURL,
-                source: body.source,
-                tags: body.tags ?? []
+            let taskId = try await enqueueIngest(
+                body: body,
+                idempotencyKey: idempotencyKey,
+                req: req
             )
-
-            try await JobPersistenceRepository.upsert(job: job, on: req.db)
-            await EventPublisher.publish(
-                type: "job.ingest_received",
-                payload: ["job_id": job.id.uuidString],
-                application: req.application,
-                database: req.db,
-                logger: req.logger
-            )
-
-            if let idempotencyKey, !idempotencyKey.isEmpty {
-                await req.application.appState.rememberIdempotency(
-                    idempotencyKey,
-                    requestHash: requestHash,
-                    jobId: job.id
-                )
-                try await JobPersistenceRepository.saveIdempotency(
-                    key: idempotencyKey,
-                    requestHash: requestHash,
-                    jobId: job.id,
-                    on: req.db
-                )
-            }
-
-            let enqueue = IngestJob(
-                taskId: job.id,
-                fileURL: body.fileURL,
-                source: body.source.kind,
-                tags: body.tags,
-                enqueuedAt: Date()
-            )
-
-            let data = try JSONEncoder().encode(enqueue)
-
-            // 2) Queue Redis (squelette MVP)
-            let queueResult = await RedisQueueService.enqueueIngest(
-                payload: data,
-                application: req.application,
-                logger: req.logger
-            )
-            if queueResult.enqueued {
-                await EventPublisher.publish(
-                    type: "queue.ingest_enqueued",
-                    payload: ["job_id": job.id.uuidString, "queue": queueResult.queue],
-                    application: req.application,
-                    database: req.db,
-                    logger: req.logger
-                )
-            } else {
-                await RedisQueueService.enqueueDeadLetter(
-                    payload: data,
-                    reason: "redis_enqueue_failed",
-                    application: req.application,
-                    logger: req.logger
-                )
-                await EventPublisher.publish(
-                    type: "queue.ingest_dead_lettered",
-                    payload: ["job_id": job.id.uuidString],
-                    application: req.application,
-                    database: req.db,
-                    logger: req.logger
-                )
-                req.logger.warning("Ingestion placee en file rejet suite a un échec d'enfilement Redis.", metadata: [
-                    "job_id": .string(job.id.uuidString)
-                ])
-            }
-
-            if Environment.get("ORCHIVISTE_DISABLE_INGEST_PIPELINE") != "1" {
-                let app = req.application
-                Task.detached(priority: .background) {
-                    try? await Task.sleep(nanoseconds: 350_000_000)
-                    let preview = PreviewRenderer.makePreview(for: job, logger: app.logger)
-                    if let updatedJob = await app.appState.markPreviewReady(jobId: job.id, preview: preview) {
-                        try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
-                        await EventPublisher.publish(
-                            type: "job.preview_ready",
-                            payload: ["job_id": job.id.uuidString],
-                            application: app,
-                            database: app.db,
-                            logger: app.logger
-                        )
-                    }
-
-                    try? await Task.sleep(nanoseconds: 350_000_000)
-                    let analysisRequest = AnalysisRequest(
-                        file_id: job.id.uuidString,
-                        text: preview.textPages[1],
-                        source: job.source,
-                        lang: nil,
-                        hints: nil,
-                        preset_id: nil,
-                        policy: nil
-                    )
-                    let analysis = await AnalysisProxyClient.analyzeWithFallback(
-                        request: analysisRequest,
-                        correlationId: nil,
-                        using: app.client,
-                        logger: app.logger
-                    )
-                    _ = try? await JobAnalysisLifecycle.apply(
-                        analysis: analysis,
-                        forFileID: job.id.uuidString,
-                        policy: Optional<AnalysisPolicy>.none,
-                        application: app,
-                        database: app.db,
-                        logger: app.logger
-                    )
-                }
-            }
-
-            // 3) Toujours répondre 202/queued (asynchrone)
-            return try queuedResponse(taskId: job.id)
+            return try queuedResponse(taskId: taskId)
         }
     }
+}
+
+func enqueueIngest(
+    body: IngestRequest,
+    idempotencyKey: String?,
+    req: Request
+) async throws -> UUID {
+    guard !body.fileURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        throw Abort(.badRequest, reason: "fileURL est requis.")
+    }
+    let requestHash = body.idempotencyFingerprint()
+
+    if let idempotencyKey, !idempotencyKey.isEmpty {
+        if let inMemory = await req.application.appState.idempotencyEntry(for: idempotencyKey) {
+            guard inMemory.requestHash == requestHash else {
+                throw Abort(.conflict, reason: "Idempotency-Key est déjà utilise avec une charge differente.")
+            }
+            if let cached = await req.application.appState.job(id: inMemory.jobId) {
+                return cached.id
+            }
+            if let existing = try await JobPersistenceRepository.fetchJob(id: inMemory.jobId, on: req.db) {
+                await req.application.appState.cacheJob(existing)
+                return existing.id
+            }
+            throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tâche inconnue.")
+        }
+
+        if let persisted = try await JobPersistenceRepository.fetchIdempotency(key: idempotencyKey, on: req.db) {
+            await req.application.appState.rememberIdempotency(
+                idempotencyKey,
+                requestHash: persisted.requestHash,
+                jobId: persisted.jobId
+            )
+            guard persisted.requestHash == requestHash else {
+                throw Abort(.conflict, reason: "Idempotency-Key est déjà utilise avec une charge differente.")
+            }
+            if let existing = try await JobPersistenceRepository.fetchJob(id: persisted.jobId, on: req.db) {
+                await req.application.appState.cacheJob(existing)
+                return existing.id
+            }
+            throw Abort(.conflict, reason: "Idempotency-Key pointe vers une tâche inconnue.")
+        }
+    }
+
+    let job = await req.application.appState.createJob(
+        fileURL: body.fileURL,
+        source: body.source,
+        tags: body.tags ?? []
+    )
+
+    try await JobPersistenceRepository.upsert(job: job, on: req.db)
+    await EventPublisher.publish(
+        type: "job.ingest_received",
+        payload: ["job_id": job.id.uuidString],
+        application: req.application,
+        database: req.db,
+        logger: req.logger
+    )
+
+    if let idempotencyKey, !idempotencyKey.isEmpty {
+        await req.application.appState.rememberIdempotency(
+            idempotencyKey,
+            requestHash: requestHash,
+            jobId: job.id
+        )
+        try await JobPersistenceRepository.saveIdempotency(
+            key: idempotencyKey,
+            requestHash: requestHash,
+            jobId: job.id,
+            on: req.db
+        )
+    }
+
+    let enqueue = IngestJob(
+        taskId: job.id,
+        fileURL: body.fileURL,
+        source: body.source.kind,
+        tags: body.tags,
+        enqueuedAt: Date()
+    )
+    let data = try JSONEncoder().encode(enqueue)
+
+    // 2) Queue Redis (squelette MVP)
+    let queueResult = await RedisQueueService.enqueueIngest(
+        payload: data,
+        application: req.application,
+        logger: req.logger
+    )
+    if queueResult.enqueued {
+        await EventPublisher.publish(
+            type: "queue.ingest_enqueued",
+            payload: ["job_id": job.id.uuidString, "queue": queueResult.queue],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+    } else {
+        await RedisQueueService.enqueueDeadLetter(
+            payload: data,
+            reason: "redis_enqueue_failed",
+            application: req.application,
+            logger: req.logger
+        )
+        await EventPublisher.publish(
+            type: "queue.ingest_dead_lettered",
+            payload: ["job_id": job.id.uuidString],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+        req.logger.warning("Ingestion placee en file rejet suite a un échec d'enfilement Redis.", metadata: [
+            "job_id": .string(job.id.uuidString)
+        ])
+    }
+
+    if Environment.get("ORCHIVISTE_DISABLE_INGEST_PIPELINE") != "1" {
+        let app = req.application
+        Task.detached(priority: .background) {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            let preview = PreviewRenderer.makePreview(for: job, logger: app.logger)
+            if let updatedJob = await app.appState.markPreviewReady(jobId: job.id, preview: preview) {
+                try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
+                await EventPublisher.publish(
+                    type: "job.preview_ready",
+                    payload: ["job_id": job.id.uuidString],
+                    application: app,
+                    database: app.db,
+                    logger: app.logger
+                )
+            }
+
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            let analysisRequest = AnalysisRequest(
+                file_id: job.id.uuidString,
+                text: preview.textPages[1],
+                source: job.source,
+                lang: nil,
+                hints: nil,
+                preset_id: nil,
+                policy: nil
+            )
+            let analysis = await AnalysisProxyClient.analyzeWithFallback(
+                request: analysisRequest,
+                correlationId: nil,
+                using: app.client,
+                logger: app.logger
+            )
+            _ = try? await JobAnalysisLifecycle.apply(
+                analysis: analysis,
+                forFileID: job.id.uuidString,
+                policy: Optional<AnalysisPolicy>.none,
+                application: app,
+                database: app.db,
+                logger: app.logger
+            )
+        }
+    }
+
+    return job.id
 }
 
 private func queuedResponse(taskId: UUID) throws -> Response {

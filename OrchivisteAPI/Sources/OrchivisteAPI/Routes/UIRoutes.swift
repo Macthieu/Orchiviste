@@ -13,6 +13,7 @@ private struct UIDashboardContext: Encodable {
     let queue_ingest_depth: Int
     let queue_dead_letter_depth: Int
     let recent_jobs: [UIJobSummary]
+    let upload_error: String?
 }
 
 private struct UIJobsContext: Encodable {
@@ -76,6 +77,11 @@ private struct UIJobViewerContext: Encodable {
     let download_url: String
 }
 
+private struct UILocalIngestForm: Content {
+    let pdf: File
+    let tags: String?
+}
+
 func registerUIRoutes(_ app: Application) {
     app.get { req async throws -> Response in
         req.redirect(to: "/ui")
@@ -100,10 +106,64 @@ func registerUIRoutes(_ app: Application) {
         return req.redirect(to: "/ui/jobs/\(id)")
     }
 
+    app.on(.POST, "ui", "ingest", "local", body: .collect(maxSize: "48mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UILocalIngestForm.self)
+            let filename = form.pdf.filename.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !filename.isEmpty else {
+                throw Abort(.badRequest, reason: "Aucun fichier fourni.")
+            }
+            guard filename.lowercased().hasSuffix(".pdf") else {
+                throw Abort(.badRequest, reason: "Seuls les fichiers PDF sont acceptés.")
+            }
+            guard form.pdf.data.readableBytes > 0 else {
+                throw Abort(.badRequest, reason: "Le fichier PDF est vide.")
+            }
+
+            let inboxDirectory = resolveUILocalIngestInboxDirectory()
+            try FileManager.default.createDirectory(
+                at: inboxDirectory,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+
+            let safeName = sanitizeUploadFileName(filename)
+            let timestamp = formatUploadTimestamp(Date())
+            let destination = inboxDirectory.appendingPathComponent("\(timestamp)-\(safeName)")
+            try Data(buffer: form.pdf.data).write(to: destination, options: .atomic)
+
+            let parsedTags = parseUploadTags(raw: form.tags)
+            let requestBody = IngestRequest(
+                fileURL: destination.path,
+                source: JobSource(kind: "local", url: nil, site: nil, library: nil, itemId: nil),
+                tags: parsedTags.isEmpty ? nil : parsedTags,
+                hints: nil
+            )
+            let taskId = try await enqueueIngest(
+                body: requestBody,
+                idempotencyKey: "ui-upload-\(UUID().uuidString)",
+                req: req
+            )
+            return req.redirect(to: "/ui/jobs/\(taskId.uuidString)")
+        } catch let abort as AbortError {
+            let reason = abort.reason.isEmpty ? "Échec de l'import PDF." : abort.reason
+            req.logger.warning("Échec ingestion UI.", metadata: [
+                "reason": .string(reason)
+            ])
+            return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded(reason))")
+        } catch {
+            req.logger.error("Échec ingestion UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded("Erreur interne pendant l'import PDF."))")
+        }
+    }
+
     app.get("ui") { req async throws -> View in
         let jobs = try await loadJobs(req: req, limit: 100)
         let workerCount = await req.application.appState.listWorkers().count
         let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
+        let uploadError = req.query[String.self, at: "upload_error"]
 
         let counts = Dictionary(grouping: jobs, by: \.status)
         let context = UIDashboardContext(
@@ -117,7 +177,8 @@ func registerUIRoutes(_ app: Application) {
             worker_count: workerCount,
             queue_ingest_depth: queueStats.ingest_depth,
             queue_dead_letter_depth: queueStats.dead_letter_depth,
-            recent_jobs: Array(jobs.prefix(15))
+            recent_jobs: Array(jobs.prefix(15)),
+            upload_error: uploadError
         )
         return try await req.view.render("dashboard", context)
     }
@@ -291,4 +352,59 @@ private func localizedSourceKind(_ raw: String) -> String {
     case "sharepoint": return "SharePoint"
     default: return raw
     }
+}
+
+private func parseUploadTags(raw: String?) -> [String] {
+    guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        return []
+    }
+    return raw
+        .split(whereSeparator: { $0 == "," || $0 == ";" })
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+}
+
+private func resolveUILocalIngestInboxDirectory() -> URL {
+    if let configured = Environment.get("ORCHIVISTE_LOCAL_INGEST_ROOT")?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+       !configured.isEmpty {
+        return URL(fileURLWithPath: configured, isDirectory: true)
+    }
+
+    if let sqlitePath = Environment.get("ORCHIVISTE_SQLITE_PATH"),
+       sqlitePath.hasPrefix("/") {
+        return URL(fileURLWithPath: sqlitePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("inbox", isDirectory: true)
+    }
+
+    return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        .appendingPathComponent(".orchiviste-inbox", isDirectory: true)
+}
+
+private func sanitizeUploadFileName(_ raw: String) -> String {
+    let filename = (raw as NSString).lastPathComponent
+    let allowed = CharacterSet.alphanumerics
+        .union(CharacterSet(charactersIn: "._-"))
+    let sanitized = filename.unicodeScalars
+        .map { allowed.contains($0) ? Character($0) : "_" }
+        .reduce(into: "") { partialResult, next in
+            partialResult.append(next)
+        }
+    let fallback = sanitized.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+    if fallback.isEmpty {
+        return "document.pdf"
+    }
+    return fallback
+}
+
+private func formatUploadTimestamp(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyyMMdd-HHmmss"
+    return formatter.string(from: date)
+}
+
+private func urlQueryEncoded(_ raw: String) -> String {
+    raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
 }

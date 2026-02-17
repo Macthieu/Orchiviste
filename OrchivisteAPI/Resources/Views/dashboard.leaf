@@ -51,6 +51,44 @@
             border-radius: 10px;
             padding: 12px;
         }
+        .upload-card {
+            margin-top: 12px;
+        }
+        .upload-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+        .upload-form label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+        }
+        .upload-form input {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            background: #fff;
+            color: var(--ink);
+        }
+        .upload-form button {
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .error {
+            color: var(--warning);
+            font-weight: 700;
+            margin-top: 10px;
+        }
         .kpi {
             font-size: 28px;
             font-weight: 800;
@@ -75,6 +113,11 @@
         .status-needs_review { color: var(--warning); font-weight: 700; }
         .status-completed { color: var(--accent); font-weight: 700; }
         .mono { font-family: "SF Mono", Menlo, monospace; font-size: 12px; }
+        @media (max-width: 980px) {
+            .upload-form {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -97,6 +140,23 @@
         <article class="card"><div>Agents</div><div class="kpi">#(worker_count)</div></article>
         <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
         <article class="card"><div>File de rejet</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
+    </section>
+
+    <section class="card upload-card">
+        <h2>Importer un PDF local</h2>
+        <p>L'import est explicite: le fichier est copié côté serveur puis injecté dans la file d'ingestion.</p>
+        <form class="upload-form" action="/ui/ingest/local" method="post" enctype="multipart/form-data">
+            <label>Fichier PDF
+                <input type="file" name="pdf" accept="application/pdf" required>
+            </label>
+            <label>Étiquettes (optionnel)
+                <input type="text" name="tags" placeholder="pv, comité, facture">
+            </label>
+            <button type="submit">Importer et analyser</button>
+        </form>
+        #if(upload_error):
+        <p class="error">#(upload_error)</p>
+        #endif
     </section>
 
     <h2>Tâches récentes</h2>
