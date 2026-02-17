@@ -19,13 +19,30 @@ WORKDIR /app/OrchivisteAPI
 RUN cp /tmp/OrchivisteAPI.Package.resolved Package.resolved
 RUN swift build -c release --disable-automatic-resolution --product OrchivisteAPI
 
-FROM swift:5.9-jammy
+FROM ubuntu:22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 
 WORKDIR /app/OrchivisteAPI
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libcurl4 \
+    libsqlite3-0 \
+    libstdc++6 \
+    libxml2 \
+    tzdata \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/lib/swift/linux /usr/lib/swift/linux
 
 COPY --from=builder /app/OrchivisteAPI/.build/release/OrchivisteAPI /usr/local/bin/OrchivisteAPI
 COPY --from=builder /app/OrchivisteAPI/Resources ./Resources
 COPY --from=builder /app/OrchivisteAPI/configs ./configs
+
+ENV LD_LIBRARY_PATH=/usr/lib/swift/linux
 
 ENV ORCHIVISTE_API_PORT=28780
 ENV ORCHIVISTE_API_HOST=0.0.0.0
