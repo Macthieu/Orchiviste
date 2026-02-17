@@ -23,7 +23,7 @@ let package = Package(
         // Other deps
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.20.0"),
-        .package(url: "https://github.com/Mordil/RediStack.git", branch: "main"),
+        .package(url: "https://github.com/Mordil/RediStack.git", revision: "a05d4bcf578430e8c5dbdae56cb6ac395cd806a0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
     ],
     targets: [

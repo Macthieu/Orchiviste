@@ -7,13 +7,15 @@ COPY OrchivisteAnalyse/Package.swift OrchivisteAnalyse/Package.resolved ./Orchiv
 
 WORKDIR /app/OrchivisteAnalyse
 RUN swift package resolve
+RUN cp Package.resolved /tmp/OrchivisteAnalyse.Package.resolved
 
 # 2) Copy full sources after dependency resolution.
 WORKDIR /app
 COPY OrchivisteAnalyse ./OrchivisteAnalyse
 
 WORKDIR /app/OrchivisteAnalyse
-RUN swift build -c release --product OrchivisteAnalyse
+RUN cp /tmp/OrchivisteAnalyse.Package.resolved Package.resolved
+RUN swift build -c release --disable-automatic-resolution --product OrchivisteAnalyse
 
 FROM swift:5.9-jammy
 

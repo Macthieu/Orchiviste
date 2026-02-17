@@ -8,6 +8,7 @@ COPY OrchivisteAPI/Package.swift OrchivisteAPI/Package.resolved ./OrchivisteAPI/
 
 WORKDIR /app/OrchivisteAPI
 RUN swift package resolve
+RUN cp Package.resolved /tmp/OrchivisteAPI.Package.resolved
 
 # 2) Copy full sources after dependency resolution.
 WORKDIR /app
@@ -15,7 +16,8 @@ COPY OrchivisteSharedKit ./OrchivisteSharedKit
 COPY OrchivisteAPI ./OrchivisteAPI
 
 WORKDIR /app/OrchivisteAPI
-RUN swift build -c release --product OrchivisteAPI
+RUN cp /tmp/OrchivisteAPI.Package.resolved Package.resolved
+RUN swift build -c release --disable-automatic-resolution --product OrchivisteAPI
 
 FROM swift:5.9-jammy
 

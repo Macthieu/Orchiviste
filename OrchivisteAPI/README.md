@@ -42,6 +42,7 @@ Scripts d'exploitation locale recommandés :
 - démarrage avec rebuild forcé : `./scripts/dev_up.sh --build`
 - fallback builder classique (si BuildKit instable) : `./scripts/dev_up.sh --build --classic-builder`
 - rebuild ciblé plus rapide : `docker compose build api` (ou `analyse`, `worker`)
+- validation release en une commande : `./scripts/validate_release.sh`
 - arrêt propre : `./scripts/dev_down.sh`
 - statut : `docker compose ps`
 - logs API : `docker compose logs -f api`
@@ -51,6 +52,7 @@ Tests fumée MVP :
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
+- exécution groupée recommandée : `./scripts/validate_release.sh`
 
 ## Variables d'environnement
 
