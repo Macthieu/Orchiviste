@@ -19,4 +19,5 @@ struct RoutingResponse: Content {
     let mode: String
     let destination_url: String?
     let moved_item_id: String?
+    let destination_local_path: String?
 }

@@ -144,6 +144,21 @@
         <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
         <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
         #endif
+
+        <h4>Routage et renommage</h4>
+        #if(routed_at):
+        <p>Déjà routée le <strong>#(routed_at)</strong>.</p>
+        #endif
+        #if(can_route):
+        <button class="btn" type="button" onclick="submitRoute()">Appliquer le routage</button>
+        #else:
+        #if(route_disabled_reason):
+        <p class="notice">#(route_disabled_reason)</p>
+        #else:
+        <p class="notice">Routage indisponible.</p>
+        #endif
+        #endif
+        <textarea id="routeResult" rows="4" readonly placeholder="Résultat du routage"></textarea>
     </aside>
 </main>
 
@@ -203,6 +218,22 @@ async function submitReview() {
     }
     const msg = await res.text();
     alert(`Échec de la revue (${res.status}) : ${msg}`);
+}
+
+async function submitRoute() {
+    const output = document.getElementById("routeResult");
+    output.value = "Routage en cours...";
+    const res = await fetch(`/v1/route/${jobId}`, { method: "POST" });
+    if (!res.ok) {
+        const msg = await res.text();
+        output.value = `Échec du routage (${res.status}) : ${msg}`;
+        return;
+    }
+
+    const json = await res.json();
+    const destination = json.destination_local_path || json.destination_url || json.resolved_folder || "N/D";
+    output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nDestination: ${destination}`;
+    setTimeout(() => window.location.reload(), 700);
 }
 </script>
 </body>

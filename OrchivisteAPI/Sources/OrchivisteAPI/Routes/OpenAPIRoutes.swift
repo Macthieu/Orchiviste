@@ -419,9 +419,10 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "class_code": ["type": "string"],
                             "target": ["$ref": "#/components/schemas/RoutingTarget"],
                             "resolved_folder": ["type": "string"],
-                            "mode": ["type": "string", "enum": ["stub", "graph"]],
+                            "mode": ["type": "string", "enum": ["stub", "graph", "local"]],
                             "destination_url": ["type": "string"],
-                            "moved_item_id": ["type": "string"]
+                            "moved_item_id": ["type": "string"],
+                            "destination_local_path": ["type": "string"]
                         ]
                     ],
                     "EventRecord": [

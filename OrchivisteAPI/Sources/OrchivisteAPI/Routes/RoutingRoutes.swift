@@ -1,4 +1,9 @@
+import Foundation
 import Vapor
+
+private struct LocalRouteResult {
+    let destinationPath: String
+}
 
 func registerRoutingRoutes(_ app: Application) {
     app.group("v1") { v1 in
@@ -44,6 +49,7 @@ func registerRoutingRoutes(_ app: Application) {
             var routeMode = "stub"
             var destinationURL: String?
             var movedItemID: String?
+            var destinationLocalPath: String?
 
             if let resolvedJob {
                 do {
@@ -63,6 +69,26 @@ func registerRoutingRoutes(_ app: Application) {
                                 "job_id": resolvedJob.id.uuidString,
                                 "class_code": classCode,
                                 "mode": routeMode
+                            ],
+                            application: req.application,
+                            database: req.db,
+                            logger: req.logger
+                        )
+                    } else if let localRoute = try routeLocalFileIfPossible(
+                        job: resolvedJob,
+                        resolvedFolder: resolved,
+                        classCode: classCode,
+                        logger: req.logger
+                    ) {
+                        routeMode = "local"
+                        destinationLocalPath = localRoute.destinationPath
+                        await EventPublisher.publish(
+                            type: "route.local_applied",
+                            payload: [
+                                "job_id": resolvedJob.id.uuidString,
+                                "class_code": classCode,
+                                "mode": routeMode,
+                                "destination_path": localRoute.destinationPath
                             ],
                             application: req.application,
                             database: req.db,
@@ -119,8 +145,144 @@ func registerRoutingRoutes(_ app: Application) {
                 resolved_folder: resolved,
                 mode: routeMode,
                 destination_url: destinationURL,
-                moved_item_id: movedItemID
+                moved_item_id: movedItemID,
+                destination_local_path: destinationLocalPath
             )
         }
     }
+}
+
+private func routeLocalFileIfPossible(
+    job: JobRecord,
+    resolvedFolder: String,
+    classCode: String,
+    logger: Logger
+) throws -> LocalRouteResult? {
+    guard job.source.kind.lowercased() == "local" else {
+        return nil
+    }
+
+    guard let sourceURL = resolveLocalFileURL(raw: job.fileURL) else {
+        logger.warning("Routage local ignoré: chemin source non valide.", metadata: [
+            "job_id": .string(job.id.uuidString)
+        ])
+        return nil
+    }
+
+    guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+        logger.warning("Routage local ignoré: fichier source introuvable.", metadata: [
+            "job_id": .string(job.id.uuidString),
+            "path": .string(sourceURL.path)
+        ])
+        return nil
+    }
+
+    let rootDirectory = localRoutingRootDirectory()
+    let safeResolvedFolder = sanitizeRelativeFolder(resolvedFolder)
+    let destinationDirectory: URL
+    if safeResolvedFolder.isEmpty {
+        destinationDirectory = rootDirectory
+    } else {
+        destinationDirectory = rootDirectory.appendingPathComponent(safeResolvedFolder, isDirectory: true)
+    }
+    try FileManager.default.createDirectory(
+        at: destinationDirectory,
+        withIntermediateDirectories: true,
+        attributes: nil
+    )
+
+    let destinationName = routedLocalFileName(
+        classCode: classCode,
+        originalName: sourceURL.lastPathComponent
+    )
+    let destinationURL = uniqueDestinationURL(
+        in: destinationDirectory,
+        proposedFileName: destinationName
+    )
+
+    do {
+        try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+    } catch {
+        // cross-device move can fail on rename; fallback to copy+delete
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            try FileManager.default.removeItem(at: sourceURL)
+        } catch {
+            throw Abort(
+                .internalServerError,
+                reason: "Échec du routage local du fichier: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    return LocalRouteResult(destinationPath: destinationURL.path)
+}
+
+private func resolveLocalFileURL(raw: String) -> URL? {
+    if let parsed = URL(string: raw), parsed.isFileURL {
+        return parsed
+    }
+    if raw.hasPrefix("/") {
+        return URL(fileURLWithPath: raw)
+    }
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    return cwd.appendingPathComponent(raw)
+}
+
+private func localRoutingRootDirectory() -> URL {
+    if let configured = Environment.get("ORCHIVISTE_LOCAL_ROUTE_ROOT")?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+       !configured.isEmpty {
+        return URL(fileURLWithPath: configured, isDirectory: true)
+    }
+
+    if let sqlitePath = Environment.get("ORCHIVISTE_SQLITE_PATH"),
+       sqlitePath.hasPrefix("/") {
+        return URL(fileURLWithPath: sqlitePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("routed", isDirectory: true)
+    }
+
+    return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        .appendingPathComponent(".orchiviste-routed", isDirectory: true)
+}
+
+private func sanitizeRelativeFolder(_ raw: String) -> String {
+    raw
+        .replacingOccurrences(of: "\\", with: "/")
+        .split(separator: "/")
+        .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+        .joined(separator: "/")
+}
+
+private func routedLocalFileName(classCode: String, originalName: String) -> String {
+    let ext = URL(fileURLWithPath: originalName).pathExtension
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyyMMdd-HHmmss"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    let stamp = formatter.string(from: Date())
+    if ext.isEmpty {
+        return "\(classCode)-\(stamp)"
+    }
+    return "\(classCode)-\(stamp).\(ext)"
+}
+
+private func uniqueDestinationURL(in directory: URL, proposedFileName: String) -> URL {
+    let ext = URL(fileURLWithPath: proposedFileName).pathExtension
+    let stem = URL(fileURLWithPath: proposedFileName).deletingPathExtension().lastPathComponent
+    var candidate = directory.appendingPathComponent(proposedFileName)
+    var suffix = 1
+
+    while FileManager.default.fileExists(atPath: candidate.path) {
+        let nextName: String
+        if ext.isEmpty {
+            nextName = "\(stem)-\(suffix)"
+        } else {
+            nextName = "\(stem)-\(suffix).\(ext)"
+        }
+        candidate = directory.appendingPathComponent(nextName)
+        suffix += 1
+    }
+    return candidate
 }

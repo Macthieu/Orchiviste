@@ -69,6 +69,9 @@ private struct UIJobViewerContext: Encodable {
     let confidence: String
     let needs_review: Bool
     let can_review: Bool
+    let can_route: Bool
+    let route_disabled_reason: String?
+    let routed_at: String?
     let preview_pages: Int
     let download_url: String
 }
@@ -147,6 +150,24 @@ func registerUIRoutes(_ app: Application) {
         }
         let job = try await resolveUIJob(jobID: jobID, req: req)
         let preview = await req.application.appState.preview(jobId: jobID)
+        let canRoute: Bool
+        let routeDisabledReason: String?
+        if job.status == .needs_review {
+            canRoute = false
+            routeDisabledReason = "Revue requise avant routage."
+        } else if job.status == .pending || job.status == .running {
+            canRoute = false
+            routeDisabledReason = "Analyse en cours."
+        } else if job.status == .failed || job.status == .cancelled {
+            canRoute = false
+            routeDisabledReason = "Statut non routable."
+        } else if job.steps.routed != nil {
+            canRoute = false
+            routeDisabledReason = "Cette tâche est déjà routée."
+        } else {
+            canRoute = true
+            routeDisabledReason = nil
+        }
         let context = UIJobViewerContext(
             id: job.id.uuidString,
             status: localizedJobStatus(job.status.rawValue),
@@ -157,6 +178,9 @@ func registerUIRoutes(_ app: Application) {
             confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
             needs_review: job.needsReview,
             can_review: job.status == .needs_review,
+            can_route: canRoute,
+            route_disabled_reason: routeDisabledReason,
+            routed_at: job.steps.routed.map(formatTimestamp),
             preview_pages: max(1, preview?.pages ?? 1),
             download_url: "/v1/jobs/\(job.id.uuidString)/download"
         )
