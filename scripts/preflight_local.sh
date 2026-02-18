@@ -78,7 +78,11 @@ fi
 if [[ "$SKIP_UP" == "1" ]]; then
   echo "INFO: démarrage stack ignoré (--skip-up)."
 else
-  ./scripts/dev_up.sh "${dev_up_args[@]}"
+  if ((${#dev_up_args[@]} > 0)); then
+    ./scripts/dev_up.sh "${dev_up_args[@]}"
+  else
+    ./scripts/dev_up.sh
+  fi
 fi
 
 ./scripts/check_openapi_mvp.sh
