@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Configuration</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: var(--bg);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap { max-width: 1200px; margin: 20px auto 40px; padding: 0 16px; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        label { display: block; font-size: 13px; color: var(--muted); }
+        input, textarea {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            background: #fff;
+        }
+        .path-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .path-row input {
+            flex: 1;
+        }
+        .btn {
+            margin-top: 10px;
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-soft {
+            border: 1px solid var(--accent);
+            background: #ebf8f4;
+            color: var(--accent);
+            border-radius: 8px;
+            font-weight: 700;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+        }
+        .picker-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(25, 25, 25, 0.3);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .picker {
+            width: min(900px, 94vw);
+            max-height: 80vh;
+            overflow: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .picker-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .picker-toolbar button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 9px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .picker-list button {
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 6px;
+            background: #fff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Configuration</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+<main class="wrap">
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h2>1) Dossiers d'entrée/sortie</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Choisis tes dossiers montés (Docker) pour ingérer et classer les PDF.
+        </p>
+        <form action="/ui/ingest/folder" method="post">
+            <div class="form-grid">
+                <label>Dossier d'entrée
+                    <div class="path-row">
+                        <input id="setupInputFolder" type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox">
+                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupInputFolder')">Choisir</button>
+                    </div>
+                </label>
+                <label>Dossier de sortie
+                    <div class="path-row">
+                        <input id="setupOutputFolder" type="text" name="output_root" value="#(routing_local_route_root)" placeholder="/data/routed">
+                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupOutputFolder')">Choisir</button>
+                    </div>
+                </label>
+                <label>Étiquettes (optionnel)
+                    <input type="text" name="tags" placeholder="ville, résolution, conseil">
+                </label>
+                <label>Maximum de fichiers
+                    <input type="number" name="max_files" min="1" max="500" value="50">
+                </label>
+                <label>Récursif
+                    <input type="checkbox" name="recursive" value="1" checked>
+                </label>
+            </div>
+            <button class="btn" type="submit">Importer le dossier</button>
+        </form>
+        <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+        <form action="/ui/routing/settings" method="post">
+            <div class="form-grid">
+                <label>Racine locale de destination
+                    <input type="text" name="local_route_root" value="#(routing_local_route_root)">
+                </label>
+                <label>Modèle dossier par défaut
+                    <input type="text" name="default_destination_template" value="#(routing_default_destination_template)">
+                </label>
+                <label>Modèle nom par défaut
+                    <input type="text" name="default_name_format" value="#(routing_default_name_format)">
+                </label>
+            </div>
+            <button class="btn" type="submit">Enregistrer la configuration de routage</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>2) Plan de classification</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Tu peux importer soit le JSON, soit directement le PDF officiel du plan.
+        </p>
+        <form action="/ui/taxonomy/import-pdf" method="post" enctype="multipart/form-data">
+            <div class="form-grid">
+                <label>ID du plan
+                    <input type="text" name="taxonomy_id" value="syged_2026">
+                </label>
+                <label>PDF du plan
+                    <input type="file" name="pdf" accept="application/pdf" required>
+                </label>
+            </div>
+            <button class="btn" type="submit">Importer le plan depuis PDF</button>
+        </form>
+        <p style="margin: 10px 0 0; color: var(--muted);">
+            Plans disponibles:
+            #for(id in taxonomy_ids):
+            <span class="mono">#(id)</span>
+            #endfor
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>3) Règles de renommage et classement</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Génère une règle automatiquement à partir d'un dossier déjà renommé (même type/sujet).
+        </p>
+        <form action="/ui/routing/rules/suggest" method="post">
+            <div class="form-grid">
+                <label>Dossier source de référence
+                    <div class="path-row">
+                        <input id="setupRuleFolder" type="text" name="input_folder" placeholder="/data/routed/pv-finance" required>
+                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupRuleFolder')">Choisir</button>
+                    </div>
+                </label>
+                <label>Type document
+                    <input type="text" name="when_type_doc" placeholder="ProcesVerbal">
+                </label>
+                <label>Sujet
+                    <input type="text" name="when_sujet" placeholder="Finance">
+                </label>
+                <label>Préréglage cible
+                    <input type="text" name="preset_id" placeholder="preset_pv">
+                </label>
+                <label>Nombre max de fichiers
+                    <input type="number" name="max_files" min="5" max="500" value="80">
+                </label>
+            </div>
+            <button class="btn" type="submit">Créer une règle suggérée</button>
+        </form>
+        <p style="margin: 10px 0 0;">
+            Réglages avancés: <a href="/ui/presets">ouvrir l'éditeur complet des préréglages</a>.
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>4) Guide de renommage interne</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Colle ici ton guide métier (règles rédactionnelles, exceptions, nomenclature) pour garder une référence centralisée.
+        </p>
+        <form action="/ui/routing/guide" method="post">
+            <label>Guide (Markdown texte)
+                <textarea name="guide_text" rows="14" spellcheck="false">#(renaming_guide)</textarea>
+            </label>
+            <button class="btn" type="submit">Enregistrer le guide</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>5) Agents de traitement</h2>
+        <p style="margin: 0;">
+            Pour activer/pause/configurer les agents (capacités `coreml`, `ocr`, etc.), utilise la page
+            <a href="/ui/workers">Agents</a>.
+        </p>
+    </section>
+</main>
+<div id="folderPickerOverlay" class="picker-overlay" onclick="closeFolderPicker(event)">
+    <div class="picker" onclick="event.stopPropagation()">
+        <h3>Sélectionner un dossier</h3>
+        <div class="picker-toolbar">
+            <button type="button" onclick="pickerGoParent()">Parent</button>
+            <span id="pickerCurrent" class="mono"></span>
+        </div>
+        <div id="pickerRoots" class="picker-toolbar"></div>
+        <div id="pickerList" class="picker-list"></div>
+        <div class="picker-toolbar">
+            <button type="button" onclick="applyPickedFolder()">Utiliser ce dossier</button>
+            <button type="button" onclick="closeFolderPicker()">Fermer</button>
+        </div>
+    </div>
+</div>
+<script>
+let pickerTargetInputId = null;
+let pickerCurrentPath = null;
+let pickerParentPath = null;
+let pickerRoots = [];
+
+function openFolderPicker(inputId) {
+    pickerTargetInputId = inputId;
+    const input = document.getElementById(inputId);
+    const startPath = input && input.value ? input.value : "";
+    document.getElementById("folderPickerOverlay").style.display = "flex";
+    loadFolderList(startPath);
+}
+
+function closeFolderPicker(event) {
+    if (event && event.target && event.target.id !== "folderPickerOverlay") {
+        return;
+    }
+    document.getElementById("folderPickerOverlay").style.display = "none";
+}
+
+async function loadFolderList(path) {
+    const query = path ? `?path=${encodeURIComponent(path)}` : "";
+    const res = await fetch(`/ui/fs/list${query}`);
+    if (!res.ok) {
+        alert(`Impossible de lister les dossiers (${res.status}).`);
+        return;
+    }
+    const data = await res.json();
+    pickerCurrentPath = data.current;
+    pickerParentPath = data.parent || null;
+    pickerRoots = data.roots || [];
+    document.getElementById("pickerCurrent").textContent = pickerCurrentPath;
+    renderPickerRoots();
+    renderPickerList(data.directories || []);
+}
+
+function renderPickerRoots() {
+    const rootContainer = document.getElementById("pickerRoots");
+    rootContainer.innerHTML = "";
+    for (const root of pickerRoots) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `Racine: ${root}`;
+        btn.onclick = () => loadFolderList(root);
+        rootContainer.appendChild(btn);
+    }
+}
+
+function renderPickerList(entries) {
+    const list = document.getElementById("pickerList");
+    list.innerHTML = "";
+    for (const entry of entries) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `${entry.name} (${entry.path})`;
+        btn.onclick = () => loadFolderList(entry.path);
+        list.appendChild(btn);
+    }
+}
+
+function pickerGoParent() {
+    if (pickerParentPath) {
+        loadFolderList(pickerParentPath);
+    }
+}
+
+function applyPickedFolder() {
+    if (!pickerTargetInputId || !pickerCurrentPath) {
+        return;
+    }
+    const input = document.getElementById(pickerTargetInputId);
+    if (input) {
+        input.value = pickerCurrentPath;
+    }
+    closeFolderPicker();
+}
+</script>
+</body>
+</html>

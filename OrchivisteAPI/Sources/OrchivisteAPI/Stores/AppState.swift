@@ -270,6 +270,36 @@ actor AppState {
         return worker
     }
 
+    func pauseWorker(id: UUID) -> WorkerRecord? {
+        guard var worker = workers[id] else { return nil }
+        worker.status = .paused
+        workers[id] = worker
+        addEvent(type: "worker.paused", payload: ["worker_id": id.uuidString])
+        return worker
+    }
+
+    func resumeWorker(id: UUID) -> WorkerRecord? {
+        guard var worker = workers[id] else { return nil }
+        worker.status = .approved
+        workers[id] = worker
+        addEvent(type: "worker.resumed", payload: ["worker_id": id.uuidString])
+        return worker
+    }
+
+    func configureWorker(id: UUID, payload: WorkerConfigUpdateRequest) -> WorkerRecord? {
+        guard var worker = workers[id] else { return nil }
+        if let capabilities = payload.capabilities {
+            worker.capabilities = capabilities
+        }
+        if let version = payload.version?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !version.isEmpty {
+            worker.version = version
+        }
+        workers[id] = worker
+        addEvent(type: "worker.configured", payload: ["worker_id": id.uuidString])
+        return worker
+    }
+
     func worker(id: UUID) -> WorkerRecord? {
         workers[id]
     }
@@ -286,6 +316,7 @@ actor AppState {
 
     func heartbeatWorker(id: UUID, payload: WorkerHeartbeatRequest) -> WorkerRecord? {
         guard var worker = workers[id] else { return nil }
+        guard worker.status == .approved else { return nil }
         worker.lastSeen = Date()
         worker.version = payload.version ?? worker.version
         worker.load = payload.load ?? worker.load

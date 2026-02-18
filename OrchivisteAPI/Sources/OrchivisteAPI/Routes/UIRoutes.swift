@@ -23,6 +23,17 @@ private struct UIJobsContext: Encodable {
     let jobs: [UIJobSummary]
 }
 
+private struct UISetupContext: Encodable {
+    let ingest_default_input_folder: String
+    let routing_local_route_root: String
+    let routing_default_destination_template: String
+    let routing_default_name_format: String
+    let renaming_guide: String
+    let taxonomy_ids: [String]
+    let notice: String?
+    let error: String?
+}
+
 private struct UIWorkersContext: Encodable {
     let workers: [UIWorkerSummary]
     let queue_ingest_depth: Int
@@ -74,12 +85,15 @@ private struct UIWorkerSummary: Encodable {
     let status_raw: String
     let status: String
     let capabilities: String
+    let has_coreml: Bool
     let last_seen: String
     let version: String
     let load: String
     let ram_mb: String
     let can_approve: Bool
     let can_heartbeat: Bool
+    let can_pause: Bool
+    let can_resume: Bool
 }
 
 private struct UIPresetSummary: Encodable {
@@ -121,6 +135,10 @@ private struct UIJobViewerContext: Encodable {
     let analysis_sujets: String
     let analysis_champs_json: String
     let analysis_validation_flags: String
+    let class_code_options: [String]
+    let preset_options: [String]
+    let suggested_class_code_raw: String?
+    let suggested_preset_raw: String?
 }
 
 private struct UILocalIngestForm: Content {
@@ -154,6 +172,10 @@ private struct UIRoutingRulesForm: Content {
     let rules_json: String
 }
 
+private struct UIRoutingGuideForm: Content {
+    let guide_text: String
+}
+
 private struct UIRoutingRuleCreateForm: Content {
     let id: String?
     let when_type_doc: String?
@@ -165,9 +187,34 @@ private struct UIRoutingRuleCreateForm: Content {
     let name_format: String?
 }
 
+private struct UIRoutingRuleSuggestForm: Content {
+    let input_folder: String
+    let when_type_doc: String?
+    let when_sujet: String?
+    let preset_id: String?
+    let max_files: String?
+}
+
 private struct UITaxonomyImportForm: Content {
     let taxonomy_id: String?
     let taxonomy_json: String
+}
+
+private struct UITaxonomyImportPDFForm: Content {
+    let taxonomy_id: String?
+    let pdf: File
+}
+
+private struct UIFolderListEntry: Content {
+    let name: String
+    let path: String
+}
+
+private struct UIFolderListResponse: Content {
+    let current: String
+    let parent: String?
+    let roots: [String]
+    let directories: [UIFolderListEntry]
 }
 
 private struct UIWorkerEnrollForm: Content {
@@ -179,6 +226,11 @@ private struct UIWorkerHeartbeatForm: Content {
     let version: String?
     let load: String?
     let ram_mb: String?
+    let capabilities: String?
+}
+
+private struct UIWorkerConfigForm: Content {
+    let version: String?
     let capabilities: String?
 }
 
@@ -196,6 +248,9 @@ func registerUIRoutes(_ app: Application) {
     app.get("u", "workers") { req async throws -> Response in
         req.redirect(to: "/ui/workers")
     }
+    app.get("u", "setup") { req async throws -> Response in
+        req.redirect(to: "/ui/setup")
+    }
     app.get("u", "presets") { req async throws -> Response in
         req.redirect(to: "/ui/presets")
     }
@@ -207,6 +262,42 @@ func registerUIRoutes(_ app: Application) {
             return req.redirect(to: "/ui/jobs")
         }
         return req.redirect(to: "/ui/jobs/\(id)")
+    }
+
+    app.get("ui", "fs", "list") { req async throws -> UIFolderListResponse in
+        let roots = uiFolderPickerRoots()
+        let requestedPath = req.query[String.self, at: "path"]
+        let current = try resolveFolderPickerPath(requestedPath, roots: roots)
+        let manager = FileManager.default
+
+        let directories: [UIFolderListEntry]
+        do {
+            let items = try manager.contentsOfDirectory(
+                at: current,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            directories = items
+                .compactMap { url -> UIFolderListEntry? in
+                    let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                    guard isDirectory else { return nil }
+                    return UIFolderListEntry(name: url.lastPathComponent, path: url.path)
+                }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                .prefix(250)
+                .map { $0 }
+        } catch {
+            throw Abort(.badRequest, reason: "Impossible de lire ce dossier: \(error.localizedDescription)")
+        }
+
+        let parentURL = current.deletingLastPathComponent()
+        let parentPath = roots.contains(where: { current.path == $0.path }) ? nil : parentURL.path
+        return UIFolderListResponse(
+            current: current.path,
+            parent: parentPath,
+            roots: roots.map(\.path),
+            directories: directories
+        )
     }
 
     app.on(.POST, "ui", "ingest", "local", body: .collect(maxSize: "48mb")) { req async throws -> Response in
@@ -389,6 +480,25 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
+    app.on(.POST, "ui", "routing", "guide", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIRoutingGuideForm.self)
+            let guide = form.guide_text.trimmingCharacters(in: .newlines)
+            guard !guide.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw Abort(.badRequest, reason: "Le guide de renommage ne peut pas être vide.")
+            }
+            try ConfigLoader.saveRenamingGuide(guide + "\n")
+            return req.redirect(to: "/ui/setup?notice=\(urlQueryEncoded("Guide de renommage enregistré."))")
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui/setup?error=\(urlQueryEncoded(abort.reason))")
+        } catch {
+            req.logger.error("Échec enregistrement guide renommage UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/setup?error=\(urlQueryEncoded("Erreur interne pendant l'enregistrement du guide."))")
+        }
+    }
+
     app.on(.POST, "ui", "routing", "rules", "create", body: .collect(maxSize: "1mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIRoutingRuleCreateForm.self)
@@ -446,6 +556,67 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
+    app.on(.POST, "ui", "routing", "rules", "suggest", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIRoutingRuleSuggestForm.self)
+            let folderRaw = form.input_folder.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !folderRaw.isEmpty else {
+                throw Abort(.badRequest, reason: "Le dossier source est requis.")
+            }
+            let folderURL = URL(fileURLWithPath: folderRaw, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                throw Abort(.badRequest, reason: "Le dossier source est introuvable.")
+            }
+
+            let maxFiles = parseMaxFiles(form.max_files)
+            let sampleNames = try collectPDFFiles(in: folderURL, recursive: false, maxFiles: maxFiles)
+                .map(\.lastPathComponent)
+            guard !sampleNames.isEmpty else {
+                throw Abort(.badRequest, reason: "Aucun PDF trouvé dans le dossier source.")
+            }
+
+            let inferredClassCode = inferClassCodeFromFileNames(sampleNames)
+            let ruleID = sanitizeRoutingRuleID("auto-\(folderURL.lastPathComponent)")
+            let whenTypeDoc = nonEmptyString(form.when_type_doc)
+            let whenSujet = nonEmptyString(form.when_sujet)
+            let presetID = nonEmptyString(form.preset_id)
+            let destinationTemplate = "Archives/{year}/{class_code}/\(sanitizeTemplateSegment(folderURL.lastPathComponent))"
+            let nameFormat = "{class_code}-{type_doc}-{sujet}-{date}-{numero}"
+
+            let rule = RoutingRule(
+                id: ruleID,
+                when_type_doc: whenTypeDoc,
+                when_sujet: whenSujet,
+                when_class_code: nil,
+                class_code: inferredClassCode,
+                preset_id: presetID,
+                destination_template: destinationTemplate,
+                name_format: nameFormat
+            )
+
+            var existing = ConfigLoader.loadRoutingRules()?.rules ?? []
+            if let index = existing.firstIndex(where: { nonEmptyString($0.id) == ruleID }) {
+                existing[index] = rule
+            } else {
+                existing.append(rule)
+            }
+            try ConfigLoader.saveRoutingRules(RoutingRuleSet(rules: existing))
+
+            return req.redirect(
+                to: "/ui/presets?notice=\(urlQueryEncoded("Règle suggérée créée (\(ruleID)). Vérifie puis ajuste si nécessaire."))"
+            )
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(abort.reason))")
+        } catch {
+            req.logger.error("Échec génération règle suggérée UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant la génération de règle suggérée."))")
+        }
+    }
+
     app.post("ui", "routing", "rules", ":id", "delete") { req async throws -> Response in
         guard let id = req.parameters.get("id"),
               let trimmedID = nonEmptyString(id) else {
@@ -499,6 +670,60 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
+    app.on(.POST, "ui", "taxonomy", "import-pdf", body: .collect(maxSize: "32mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UITaxonomyImportPDFForm.self)
+            let taxonomyID = nonEmptyString(form.taxonomy_id) ?? "taxonomy-from-pdf"
+            let fileName = form.pdf.filename.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !fileName.isEmpty, fileName.lowercased().hasSuffix(".pdf") else {
+                throw Abort(.badRequest, reason: "Le fichier fourni doit être un PDF.")
+            }
+            guard form.pdf.data.readableBytes > 0 else {
+                throw Abort(.badRequest, reason: "Le PDF est vide.")
+            }
+
+            let tempPDF = FileManager.default.temporaryDirectory
+                .appendingPathComponent("orchiviste-taxonomy-\(UUID().uuidString).pdf")
+            let textOutput = FileManager.default.temporaryDirectory
+                .appendingPathComponent("orchiviste-taxonomy-\(UUID().uuidString).txt")
+            defer {
+                try? FileManager.default.removeItem(at: tempPDF)
+                try? FileManager.default.removeItem(at: textOutput)
+            }
+
+            try Data(buffer: form.pdf.data).write(to: tempPDF, options: .atomic)
+            let convert = runEnvCommand(
+                executable: "pdftotext",
+                arguments: ["-enc", "UTF-8", "-layout", tempPDF.path, textOutput.path]
+            )
+            guard convert.exitCode == 0 else {
+                throw Abort(.badRequest, reason: "Impossible d'extraire le texte du PDF (pdftotext).")
+            }
+            guard let rawText = try? String(contentsOf: textOutput, encoding: .utf8),
+                  !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw Abort(.badRequest, reason: "Le PDF ne contient pas de texte exploitable.")
+            }
+
+            let taxonomy = buildTaxonomyFromPlanPDFText(rawText, taxonomyID: taxonomyID)
+            guard !taxonomy.root.isEmpty else {
+                throw Abort(.badRequest, reason: "Aucun code de classification détecté dans le PDF.")
+            }
+
+            await req.application.appState.saveTaxonomy(taxonomy)
+            try ConfigLoader.saveTaxonomy(taxonomy)
+            return req.redirect(
+                to: "/ui/presets?notice=\(urlQueryEncoded("Plan de classification importé depuis PDF."))&taxonomy_id=\(urlQueryEncoded(taxonomy.taxonomy_id))"
+            )
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(abort.reason))")
+        } catch {
+            req.logger.error("Échec import taxonomie PDF UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant l'import du plan PDF."))")
+        }
+    }
+
     app.on(.POST, "ui", "workers", "enroll", body: .collect(maxSize: "1mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIWorkerEnrollForm.self)
@@ -544,6 +769,86 @@ func registerUIRoutes(_ app: Application) {
             logger: req.logger
         )
         return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Agent approuvé."))")
+    }
+
+    app.post("ui", "workers", ":id", "pause") { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let workerID = UUID(uuidString: id) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
+        }
+        guard let existing = await uiResolveWorker(workerID, req: req) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
+        }
+        guard existing.status == .approved else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Seul un agent approuvé peut être mis en pause."))")
+        }
+
+        let worker = await uiPauseWorkerWithPersistence(id: workerID, fallback: existing, req: req)
+        await EventPublisher.publish(
+            type: "worker.paused",
+            payload: ["worker_id": worker.id.uuidString],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+        return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Agent mis en pause."))")
+    }
+
+    app.post("ui", "workers", ":id", "resume") { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let workerID = UUID(uuidString: id) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
+        }
+        guard let existing = await uiResolveWorker(workerID, req: req) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
+        }
+        guard existing.status == .paused else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Seul un agent en pause peut être réactivé."))")
+        }
+
+        let worker = await uiResumeWorkerWithPersistence(id: workerID, fallback: existing, req: req)
+        await EventPublisher.publish(
+            type: "worker.resumed",
+            payload: ["worker_id": worker.id.uuidString],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+        return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Agent réactivé."))")
+    }
+
+    app.on(.POST, "ui", "workers", ":id", "config", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let workerID = UUID(uuidString: id) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
+        }
+        guard let existing = await uiResolveWorker(workerID, req: req) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
+        }
+
+        let form = try req.content.decode(UIWorkerConfigForm.self)
+        let payload = WorkerConfigUpdateRequest(
+            capabilities: {
+                let parsed = parseUploadTags(raw: form.capabilities)
+                return parsed.isEmpty ? nil : parsed
+            }(),
+            version: nonEmptyString(form.version)
+        )
+
+        let worker = await uiConfigureWorkerWithPersistence(
+            id: workerID,
+            payload: payload,
+            fallback: existing,
+            req: req
+        )
+        await EventPublisher.publish(
+            type: "worker.configured",
+            payload: ["worker_id": worker.id.uuidString],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+        return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Configuration agent mise à jour."))")
     }
 
     app.on(.POST, "ui", "workers", ":id", "heartbeat", body: .collect(maxSize: "1mb")) { req async throws -> Response in
@@ -619,6 +924,21 @@ func registerUIRoutes(_ app: Application) {
         return try await req.view.render("jobs", UIJobsContext(jobs: jobs))
     }
 
+    app.get("ui", "setup") { req async throws -> View in
+        let routingSettings = ConfigLoader.loadRoutingLocalSettings()
+        let context = UISetupContext(
+            ingest_default_input_folder: resolveUILocalIngestInboxDirectory().path,
+            routing_local_route_root: routingSettings?.local_route_root ?? "/data/routed",
+            routing_default_destination_template: routingSettings?.default_destination_template ?? "Archives/{year}/{class_code}/{type_doc}/{sujet}",
+            routing_default_name_format: routingSettings?.default_name_format ?? "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
+            renaming_guide: ConfigLoader.loadRenamingGuide(),
+            taxonomy_ids: await loadTaxonomyIDs(req: req),
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"]
+        )
+        return try await req.view.render("setup", context)
+    }
+
     app.get("ui", "workers") { req async throws -> View in
         let workers = await loadWorkers(req: req)
         let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
@@ -692,6 +1012,8 @@ func registerUIRoutes(_ app: Application) {
         }
         let job = try await resolveUIJob(jobID: jobID, req: req)
         let preview = try await PreviewLoader.ensurePreview(jobId: jobID, req: req)
+        let classCodeOptions = await loadClassCodeOptions(req: req, include: job.suggestedClassCode)
+        let presetOptions = await loadPresetIDs(req: req, include: job.suggestedPreset)
         let canRoute: Bool
         let routeDisabledReason: String?
         if job.status == .needs_review {
@@ -729,7 +1051,11 @@ func registerUIRoutes(_ app: Application) {
             analysis_type_doc: job.analysisTypeDoc ?? "N/D",
             analysis_sujets: (job.analysisSujets ?? []).isEmpty ? "N/D" : (job.analysisSujets ?? []).joined(separator: ", "),
             analysis_champs_json: prettyPrintedJSON(job.analysisChamps),
-            analysis_validation_flags: extractValidationFlags(job.analysisChamps)
+            analysis_validation_flags: extractValidationFlags(job.analysisChamps),
+            class_code_options: classCodeOptions,
+            preset_options: presetOptions,
+            suggested_class_code_raw: nonEmptyString(job.suggestedClassCode),
+            suggested_preset_raw: nonEmptyString(job.suggestedPreset)
         )
         return try await req.view.render("job_viewer", context)
     }
@@ -742,18 +1068,26 @@ private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
         }
     return workers.map { worker in
         let rawStatus = worker.status.rawValue
+        let capabilities = worker.capabilities
         return UIWorkerSummary(
             id: worker.id.uuidString,
             name: worker.name,
             status_raw: rawStatus,
             status: localizedWorkerStatus(rawStatus),
-            capabilities: worker.capabilities.joined(separator: ", "),
+            capabilities: capabilities.joined(separator: ", "),
+            has_coreml: capabilities.contains(where: {
+                $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                    .lowercased()
+                    .contains("coreml")
+            }),
             last_seen: worker.lastSeen.map(formatTimestamp) ?? "-",
             version: worker.version ?? "-",
             load: worker.load.map { String(format: "%.2f", $0) } ?? "-",
             ram_mb: worker.ram_mb.map(String.init) ?? "-",
             can_approve: rawStatus == WorkerStatus.pending.rawValue,
-            can_heartbeat: rawStatus == WorkerStatus.approved.rawValue
+            can_heartbeat: rawStatus == WorkerStatus.approved.rawValue,
+            can_pause: rawStatus == WorkerStatus.approved.rawValue,
+            can_resume: rawStatus == WorkerStatus.paused.rawValue
         )
     }
 }
@@ -803,6 +1137,47 @@ private func uiApproveWorkerWithPersistence(
         return worker
     }
     return await req.application.appState.approveWorker(id: id) ?? fallback
+}
+
+private func uiPauseWorkerWithPersistence(
+    id: UUID,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.pauseWorker(id: id, on: req.db) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.pauseWorker(id: id) ?? fallback
+}
+
+private func uiResumeWorkerWithPersistence(
+    id: UUID,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.resumeWorker(id: id, on: req.db) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.resumeWorker(id: id) ?? fallback
+}
+
+private func uiConfigureWorkerWithPersistence(
+    id: UUID,
+    payload: WorkerConfigUpdateRequest,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.configureWorker(
+        id: id,
+        payload: payload,
+        on: req.db
+    ) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.configureWorker(id: id, payload: payload) ?? fallback
 }
 
 private func uiHeartbeatWorkerWithPersistence(
@@ -912,6 +1287,7 @@ private func localizedWorkerStatus(_ raw: String) -> String {
     switch raw {
     case "pending": return "En attente"
     case "approved": return "Approuvé"
+    case "paused": return "En pause"
     default: return raw
     }
 }
@@ -1036,6 +1412,57 @@ private func sanitizeUploadFileName(_ raw: String) -> String {
     return fallback
 }
 
+private func uiFolderPickerRoots() -> [URL] {
+    if let raw = Environment.get("ORCHIVISTE_UI_FOLDER_ROOTS"),
+       !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let parsed = raw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        if !parsed.isEmpty {
+            return parsed
+        }
+    }
+
+    let defaults = [
+        "/data",
+        "/Volumes/MAC_HDD"
+    ].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let existing = defaults.filter { FileManager.default.fileExists(atPath: $0.path) }
+    if !existing.isEmpty {
+        return existing
+    }
+    return [resolveUILocalIngestInboxDirectory().deletingLastPathComponent()]
+}
+
+private func resolveFolderPickerPath(_ requested: String?, roots: [URL]) throws -> URL {
+    guard !roots.isEmpty else {
+        throw Abort(.badRequest, reason: "Aucune racine de navigation configurée.")
+    }
+    guard let requested = requested?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !requested.isEmpty else {
+        return roots[0]
+    }
+
+    let resolved = URL(fileURLWithPath: requested, isDirectory: true)
+    let normalized = resolved.standardizedFileURL
+    let isWithinRoot = roots.contains { root in
+        let rootPath = root.standardizedFileURL.path
+        return normalized.path == rootPath || normalized.path.hasPrefix(rootPath + "/")
+    }
+    guard isWithinRoot else {
+        throw Abort(.forbidden, reason: "Accès hors des racines autorisées.")
+    }
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: normalized.path, isDirectory: &isDirectory),
+          isDirectory.boolValue else {
+        throw Abort(.notFound, reason: "Dossier introuvable.")
+    }
+    return normalized
+}
+
 private func formatUploadTimestamp(_ date: Date) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -1098,6 +1525,47 @@ private func collectPDFFiles(in root: URL, recursive: Bool, maxFiles: Int) throw
     return results.sorted(by: { $0.path < $1.path })
 }
 
+private func inferClassCodeFromFileNames(_ names: [String]) -> String? {
+    guard !names.isEmpty else {
+        return nil
+    }
+    let regex = try? NSRegularExpression(pattern: #"^([A-Za-z]{2,}(?:-[A-Za-z0-9]{1,6})?|[0-9]{3,4}(?:-[0-9]{2})?)"#)
+    var frequency: [String: Int] = [:]
+
+    for name in names {
+        let stem = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
+        let normalized = stem.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { continue }
+        if let regex {
+            let nsRange = NSRange(location: 0, length: (normalized as NSString).length)
+            if let match = regex.firstMatch(in: normalized, options: [], range: nsRange),
+               let range = Range(match.range(at: 1), in: normalized) {
+                let token = String(normalized[range]).uppercased()
+                frequency[token, default: 0] += 1
+                continue
+            }
+        }
+    }
+
+    guard let winner = frequency.max(by: { lhs, rhs in
+        if lhs.value == rhs.value {
+            return lhs.key > rhs.key
+        }
+        return lhs.value < rhs.value
+    })?.key else {
+        return nil
+    }
+    return winner
+}
+
+private func sanitizeTemplateSegment(_ raw: String) -> String {
+    let cleaned = raw
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .replacingOccurrences(of: #"[^\p{L}\p{N}._-]+"#, with: "-", options: .regularExpression)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "-._"))
+    return cleaned.isEmpty ? "documents" : cleaned
+}
+
 private func buildFolderIngestIdempotencyKey(fileURL: URL) -> String {
     let modificationDate = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
         ?? Date.distantPast
@@ -1126,6 +1594,53 @@ private func loadTaxonomyIDs(req: Request) async -> [String] {
     return ids.sorted()
 }
 
+private func loadPresetIDs(req: Request, include value: String?) async -> [String] {
+    var ids = Set<String>()
+    let disk = ConfigLoader.loadPresets()
+    let memory = await req.application.appState.listPresets()
+    for preset in mergePresets(disk: disk, memory: memory) {
+        if !preset.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ids.insert(preset.id)
+        }
+    }
+    if let value = nonEmptyString(value) {
+        ids.insert(value)
+    }
+    return ids.sorted()
+}
+
+private func loadClassCodeOptions(req: Request, include value: String?) async -> [String] {
+    var codes = Set<String>()
+    if let routingMap = ConfigLoader.loadRoutingMap() {
+        for code in routingMap.mappings.keys where !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            codes.insert(code)
+        }
+    }
+
+    let taxonomyIDs = await loadTaxonomyIDs(req: req)
+    for id in taxonomyIDs {
+        if let taxonomy = await req.application.appState.taxonomy(id: id) ?? ConfigLoader.loadTaxonomy(id: id) {
+            collectTaxonomyCodes(from: taxonomy.root, into: &codes)
+        }
+    }
+    if let value = nonEmptyString(value) {
+        codes.insert(value)
+    }
+    return codes.sorted()
+}
+
+private func collectTaxonomyCodes(from nodes: [TaxonomyNode], into codes: inout Set<String>) {
+    for node in nodes {
+        let code = node.code.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !code.isEmpty {
+            codes.insert(code)
+        }
+        if let children = node.children, !children.isEmpty {
+            collectTaxonomyCodes(from: children, into: &codes)
+        }
+    }
+}
+
 private func loadTaxonomyJSONPreview(id: String?, req: Request) async -> String {
     guard let id = id?.trimmingCharacters(in: .whitespacesAndNewlines),
           !id.isEmpty else {
@@ -1145,6 +1660,160 @@ private func loadTaxonomyJSONPreview(id: String?, req: Request) async -> String 
     }
 
     return "{\n  \"taxonomy_id\": \"\(id)\",\n  \"root\": []\n}\n"
+}
+
+private struct ParsedTaxonomyItem {
+    let code: String
+    let label: String
+    let notes: String?
+    let order: Int
+    let parentCode: String?
+}
+
+private func buildTaxonomyFromPlanPDFText(_ rawText: String, taxonomyID: String) -> TaxonomyRecord {
+    let regex = try? NSRegularExpression(pattern: #"^([0-9]{3,4}(?:-[0-9]{2})?)\s+(.+)$"#)
+    let lines = rawText.components(separatedBy: .newlines)
+
+    var labelsByCode: [String: String] = [:]
+    var notesByCode: [String: [String]] = [:]
+    var orderedCodes: [String] = []
+    var latestCode: String?
+
+    for rawLine in lines {
+        let line = rawLine
+            .replacingOccurrences(of: "\t", with: " ")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { continue }
+
+        if line.lowercased().hasPrefix("remarque"),
+           let latestCode {
+            notesByCode[latestCode, default: []].append(line)
+            continue
+        }
+
+        guard let regex else { continue }
+        let range = NSRange(location: 0, length: (line as NSString).length)
+        guard let match = regex.firstMatch(in: line, options: [], range: range),
+              match.numberOfRanges >= 3,
+              let codeRange = Range(match.range(at: 1), in: line),
+              let labelRange = Range(match.range(at: 2), in: line) else {
+            continue
+        }
+
+        let code = String(line[codeRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = String(line[labelRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty, !label.isEmpty else { continue }
+        if labelsByCode[code] == nil {
+            labelsByCode[code] = label
+            orderedCodes.append(code)
+        }
+        latestCode = code
+    }
+
+    var items: [ParsedTaxonomyItem] = []
+    items.reserveCapacity(orderedCodes.count)
+    for (index, code) in orderedCodes.enumerated() {
+        let label = labelsByCode[code] ?? code
+        let notes = notesByCode[code]?.joined(separator: "\n")
+        let parentCode = inferParentCode(for: code, among: Set(orderedCodes))
+        items.append(ParsedTaxonomyItem(
+            code: code,
+            label: label,
+            notes: notes,
+            order: index,
+            parentCode: parentCode
+        ))
+    }
+
+    let byCode = Dictionary(uniqueKeysWithValues: items.map { ($0.code, $0) })
+    var childrenMap: [String: [String]] = [:]
+    var roots: [String] = []
+    for item in items {
+        if let parent = item.parentCode, byCode[parent] != nil {
+            childrenMap[parent, default: []].append(item.code)
+        } else {
+            roots.append(item.code)
+        }
+    }
+
+    func buildNode(code: String) -> TaxonomyNode {
+        let item = byCode[code]!
+        let children = (childrenMap[code] ?? [])
+            .compactMap { byCode[$0] }
+            .sorted { $0.order < $1.order }
+            .map { buildNode(code: $0.code) }
+        return TaxonomyNode(
+            code: item.code,
+            label: item.label,
+            notes: item.notes,
+            keywords: nil,
+            synonyms: nil,
+            children: children.isEmpty ? nil : children
+        )
+    }
+
+    let rootNodes = roots
+        .compactMap { byCode[$0] }
+        .sorted { $0.order < $1.order }
+        .map { buildNode(code: $0.code) }
+
+    return TaxonomyRecord(
+        taxonomy_id: taxonomyID,
+        root: rootNodes
+    )
+}
+
+private func inferParentCode(for code: String, among existingCodes: Set<String>) -> String? {
+    if let hyphenIndex = code.firstIndex(of: "-") {
+        let base = String(code[..<hyphenIndex])
+        if existingCodes.contains(base) {
+            return base
+        }
+    }
+
+    let numeric = code.replacingOccurrences(of: "-", with: "")
+    guard numeric.allSatisfy({ $0.isNumber }), numeric.count >= 3 else {
+        return nil
+    }
+
+    var chars = Array(numeric)
+    for index in stride(from: chars.count - 1, through: 0, by: -1) {
+        if chars[index] == "0" { continue }
+        chars[index] = "0"
+        if index + 1 < chars.count {
+            for j in (index + 1)..<chars.count {
+                chars[j] = "0"
+            }
+        }
+        let candidate = String(chars)
+        if candidate != numeric, existingCodes.contains(candidate) {
+            return candidate
+        }
+    }
+
+    return nil
+}
+
+private func runEnvCommand(executable: String, arguments: [String]) -> (stdout: String, stderr: String, exitCode: Int32) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = [executable] + arguments
+
+    let outputPipe = Pipe()
+    let errorPipe = Pipe()
+    process.standardOutput = outputPipe
+    process.standardError = errorPipe
+
+    do {
+        try process.run()
+    } catch {
+        return ("", "\(error)", -1)
+    }
+    process.waitUntilExit()
+    let stdout = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    return (stdout, stderr, process.terminationStatus)
 }
 
 private extension JSONEncoder {

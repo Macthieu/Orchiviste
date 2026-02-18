@@ -141,6 +141,7 @@
     <strong>Orchiviste Agents</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
@@ -192,6 +193,7 @@
             <th>Nom</th>
             <th>Statut</th>
             <th>Capacités</th>
+            <th>Core ML</th>
             <th>Dernier signalement</th>
             <th>Version</th>
             <th>Charge</th>
@@ -206,6 +208,7 @@
             <td>#(worker.name)</td>
             <td>#(worker.status)</td>
             <td>#(worker.capabilities)</td>
+            <td>#if(worker.has_coreml):Oui#else:Non#endif</td>
             <td>#(worker.last_seen)</td>
             <td>#(worker.version)</td>
             <td>#(worker.load)</td>
@@ -226,6 +229,24 @@
                         <button class="btn" type="submit">Heartbeat test</button>
                     </form>
                     #endif
+
+                    #if(worker.can_pause):
+                    <form method="post" action="/ui/workers/#(worker.id)/pause">
+                        <button class="btn" type="submit">Pause</button>
+                    </form>
+                    #endif
+
+                    #if(worker.can_resume):
+                    <form method="post" action="/ui/workers/#(worker.id)/resume">
+                        <button class="btn" type="submit">Activer</button>
+                    </form>
+                    #endif
+
+                    <form class="mini-form" method="post" action="/ui/workers/#(worker.id)/config">
+                        <input type="text" name="version" placeholder="version">
+                        <input type="text" name="capabilities" placeholder="ocr,vision,pdf,coreml">
+                        <button class="btn" type="submit">Configurer</button>
+                    </form>
                 </div>
             </td>
         </tr>

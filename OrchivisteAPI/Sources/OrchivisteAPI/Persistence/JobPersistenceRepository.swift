@@ -173,6 +173,46 @@ enum JobPersistenceRepository {
         return approved
     }
 
+    static func pauseWorker(id: UUID, on db: Database) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var paused = existing
+        paused.status = .paused
+        try await upsertWorker(paused, on: db)
+        return paused
+    }
+
+    static func resumeWorker(id: UUID, on db: Database) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var resumed = existing
+        resumed.status = .approved
+        try await upsertWorker(resumed, on: db)
+        return resumed
+    }
+
+    static func configureWorker(
+        id: UUID,
+        payload: WorkerConfigUpdateRequest,
+        on db: Database
+    ) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var configured = existing
+        if let capabilities = payload.capabilities {
+            configured.capabilities = capabilities
+        }
+        if let version = payload.version?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !version.isEmpty {
+            configured.version = version
+        }
+        try await upsertWorker(configured, on: db)
+        return configured
+    }
+
     static func heartbeatWorker(
         id: UUID,
         payload: WorkerHeartbeatRequest,

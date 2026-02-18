@@ -56,6 +56,7 @@
     <strong>Orchiviste Tâches</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>

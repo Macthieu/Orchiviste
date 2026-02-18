@@ -87,7 +87,7 @@
             transition: opacity 220ms ease;
         }
         .page img.ready { opacity: 1; }
-        textarea, input {
+        textarea, input, select {
             width: 100%;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -98,6 +98,27 @@
         }
         label { display: block; margin-top: 10px; font-size: 13px; }
         .notice { color: var(--warning); font-weight: 700; }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin: 8px 0;
+        }
+        .tabs button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 7px 10px;
+            background: #fff;
+            color: var(--ink);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .tabs button.active {
+            border-color: var(--accent);
+            background: #ebf8f4;
+            color: var(--accent);
+        }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
         @media (max-width: 960px) {
             .wrap { grid-template-columns: 1fr; }
         }
@@ -108,6 +129,7 @@
     <strong>Visionneuse tâche <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
@@ -156,8 +178,34 @@
         <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
             Corrige le code/préréglage ci-dessous, ajoute un commentaire, puis clique sur "Soumettre la revue".
         </p>
-        <label>Code de classement corrigé <input id="reviewClass" type="text"></label>
-        <label>Préréglage corrigé <input id="reviewPreset" type="text"></label>
+        <div class="tabs">
+            <button id="tabSuggestionBtn" type="button" class="active" onclick="switchReviewTab('suggestion')">Proposition IA</button>
+            <button id="tabManualBtn" type="button" onclick="switchReviewTab('manual')">Correction manuelle</button>
+        </div>
+        <div id="tabSuggestion" class="tab-pane active">
+            <label>Code de classement (proposé / sélection)
+                <select id="reviewClassSelect">
+                    <option value="">-- Aucun --</option>
+                    #for(option in class_code_options):
+                    <option value="#(option)">#(option)</option>
+                    #endfor
+                </select>
+            </label>
+            <label>Préréglage (proposé / sélection)
+                <select id="reviewPresetSelect">
+                    <option value="">-- Aucun --</option>
+                    #for(option in preset_options):
+                    <option value="#(option)">#(option)</option>
+                    #endfor
+                </select>
+            </label>
+        </div>
+        <div id="tabManual" class="tab-pane">
+            <label>Code de classement corrigé <input id="reviewClass" type="text" placeholder="ADM-PV"></label>
+            <label>Préréglage corrigé <input id="reviewPreset" type="text" placeholder="preset_pv"></label>
+            <label>Type document corrigé <input id="reviewTypeDoc" type="text" placeholder="ProcesVerbal"></label>
+            <label>Sujets corrigés (csv) <input id="reviewSujets" type="text" placeholder="Comite, Session"></label>
+        </div>
         <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
         <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
         #else:
@@ -236,6 +284,39 @@ if (routePresetInput && routePresetInput.value === "N/D") {
     routePresetInput.value = "";
 }
 
+const suggestedClassCode = "#(suggested_class_code_raw)";
+const suggestedPreset = "#(suggested_preset_raw)";
+const reviewClassSelect = document.getElementById("reviewClassSelect");
+if (reviewClassSelect && suggestedClassCode && suggestedClassCode !== "N/D") {
+    reviewClassSelect.value = suggestedClassCode;
+}
+const reviewPresetSelect = document.getElementById("reviewPresetSelect");
+if (reviewPresetSelect && suggestedPreset && suggestedPreset !== "N/D") {
+    reviewPresetSelect.value = suggestedPreset;
+}
+const reviewClassManual = document.getElementById("reviewClass");
+if (reviewClassManual && suggestedClassCode && suggestedClassCode !== "N/D") {
+    reviewClassManual.value = suggestedClassCode;
+}
+const reviewPresetManual = document.getElementById("reviewPreset");
+if (reviewPresetManual && suggestedPreset && suggestedPreset !== "N/D") {
+    reviewPresetManual.value = suggestedPreset;
+}
+
+function switchReviewTab(tab) {
+    const suggestionBtn = document.getElementById("tabSuggestionBtn");
+    const manualBtn = document.getElementById("tabManualBtn");
+    const suggestionPane = document.getElementById("tabSuggestion");
+    const manualPane = document.getElementById("tabManual");
+    if (!suggestionBtn || !manualBtn || !suggestionPane || !manualPane) return;
+
+    const suggestionActive = tab === "suggestion";
+    suggestionBtn.classList.toggle("active", suggestionActive);
+    manualBtn.classList.toggle("active", !suggestionActive);
+    suggestionPane.classList.toggle("active", suggestionActive);
+    manualPane.classList.toggle("active", !suggestionActive);
+}
+
 async function loadText() {
     const page = document.getElementById("textPage").value || "1";
     const res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
@@ -249,9 +330,25 @@ async function loadText() {
 }
 
 async function submitReview() {
+    const selectedClass = document.getElementById("reviewClassSelect")?.value || null;
+    const selectedPreset = document.getElementById("reviewPresetSelect")?.value || null;
+    const manualClass = document.getElementById("reviewClass")?.value || null;
+    const manualPreset = document.getElementById("reviewPreset")?.value || null;
+    const correctedTypeDoc = document.getElementById("reviewTypeDoc")?.value || null;
+    const correctedSujets = document.getElementById("reviewSujets")?.value || null;
+
+    const correctedFields = {};
+    if (correctedTypeDoc && correctedTypeDoc.trim()) {
+        correctedFields.type_doc = correctedTypeDoc.trim();
+    }
+    if (correctedSujets && correctedSujets.trim()) {
+        correctedFields.sujets = correctedSujets.trim();
+    }
+
     const payload = {
-        corrected_class_code: document.getElementById("reviewClass").value || null,
-        corrected_preset: document.getElementById("reviewPreset").value || null,
+        corrected_class_code: (manualClass && manualClass.trim()) ? manualClass.trim() : selectedClass,
+        corrected_preset: (manualPreset && manualPreset.trim()) ? manualPreset.trim() : selectedPreset,
+        corrected_fields: Object.keys(correctedFields).length > 0 ? correctedFields : null,
         comment: document.getElementById("reviewComment").value || null
     };
     const res = await fetch(`/v1/jobs/${jobId}/review`, {

@@ -3,6 +3,7 @@ import Vapor
 enum WorkerStatus: String, Content, Codable {
     case pending
     case approved
+    case paused
 }
 
 struct WorkerEnrollRequest: Content {
@@ -27,4 +28,9 @@ struct WorkerHeartbeatRequest: Content {
     let load: Double?
     let ram_mb: Int?
     let capabilities: [String]?
+}
+
+struct WorkerConfigUpdateRequest: Content {
+    let capabilities: [String]?
+    let version: String?
 }

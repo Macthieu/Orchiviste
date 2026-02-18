@@ -135,4 +135,29 @@ enum ConfigLoader {
         let decoded = try JSONDecoder().decode(RoutingRuleSet.self, from: data)
         try saveRoutingRules(decoded)
     }
+
+    static func renamingGuideURL() -> URL {
+        baseDir().appendingPathComponent("analysis/routing/guide.md")
+    }
+
+    static func loadRenamingGuide() -> String {
+        let url = renamingGuideURL()
+        guard let data = try? Data(contentsOf: url),
+              let text = String(data: data, encoding: .utf8) else {
+            return """
+            # Guide de renommage
+
+            - Type: ProcesVerbal
+            - Sujet: Comité de direction
+            - Format conseillé: {class_code}-{type_doc}-{sujet}-{date}-{numero}
+            """
+        }
+        return text
+    }
+
+    static func saveRenamingGuide(_ text: String) throws {
+        let dir = baseDir().appendingPathComponent("analysis/routing", isDirectory: true)
+        try ensureDir(dir)
+        try Data(text.utf8).write(to: renamingGuideURL(), options: [.atomic])
+    }
 }

@@ -97,6 +97,7 @@
     <strong>Orchiviste Préréglages</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
@@ -151,12 +152,55 @@
             </label>
             <button class="btn" type="submit">Importer le plan</button>
         </form>
+        <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+        <h3>Importer depuis un PDF du plan</h3>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Orchiviste extrait automatiquement les codes (ex: 1000, 1110, 1111-01) et construit le JSON de taxonomie.
+        </p>
+        <form action="/ui/taxonomy/import-pdf" method="post" enctype="multipart/form-data">
+            <div class="form-grid">
+                <label>ID du plan
+                    <input type="text" name="taxonomy_id" value="#(selected_taxonomy_id)" placeholder="syged_2026_pdf">
+                </label>
+                <label>Fichier PDF du plan
+                    <input type="file" name="pdf" accept="application/pdf" required>
+                </label>
+            </div>
+            <button class="btn" type="submit">Importer le PDF</button>
+        </form>
         <div style="margin-top: 10px;">
             <strong>Plans disponibles:</strong>
             #for(id in taxonomy_ids):
             <a href="/ui/presets?taxonomy_id=#(id)" style="margin-left: 8px;">#(id)</a>
             #endfor
         </div>
+    </section>
+
+    <section class="card">
+        <h2>Suggérer une règle depuis un dossier déjà renommé</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Utilise un dossier homogène (même type/sujet). Orchiviste propose une règle initiale que tu peux ensuite ajuster.
+        </p>
+        <form action="/ui/routing/rules/suggest" method="post">
+            <div class="form-grid">
+                <label>Dossier source
+                    <input type="text" name="input_folder" placeholder="/data/routed/finance/pv" required>
+                </label>
+                <label>Type document (critère)
+                    <input type="text" name="when_type_doc" placeholder="ProcesVerbal">
+                </label>
+                <label>Sujet (critère)
+                    <input type="text" name="when_sujet" placeholder="Finance">
+                </label>
+                <label>Préréglage cible (optionnel)
+                    <input type="text" name="preset_id" placeholder="preset_pv">
+                </label>
+                <label>Nombre max de fichiers
+                    <input type="number" name="max_files" min="5" max="500" value="80">
+                </label>
+            </div>
+            <button class="btn" type="submit">Générer une règle suggérée</button>
+        </form>
     </section>
 
     <section class="card">
