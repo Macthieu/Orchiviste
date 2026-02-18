@@ -36,8 +36,18 @@ struct LocalHeuristicsProvider: AnalysisProvider {
 
         let hasSignature = containsAny(in: merged, tokens: ["signature", "signe", "signed"])
         let pages = estimatedPages(from: request.text)
-        let champs = extractFields(from: "\(request.file_id)\n\(request.text ?? "")")
-        let confidence = min(0.95, max(0.2, 0.35 + selected.baseScore))
+        let extractedFields = extractFields(from: "\(request.file_id)\n\(request.text ?? "")")
+        let idp = IDPSemanticPipeline.run(
+            request: request,
+            typeDoc: selected.type,
+            baseFields: extractedFields
+        )
+        let champs = mergeFields(primary: extractedFields, secondary: idp.semanticFields)
+        let confidence = adjustedConfidence(
+            baseScore: selected.baseScore,
+            completeness: idp.completenessScore,
+            validationFlags: idp.validationFlags
+        )
         let inferredSujets = inferSubjects(request: request)
         let sujets = mergeSubjects(defaultSujets: selected.sujets, inferred: inferredSujets, typeDoc: selected.type)
 
@@ -46,6 +56,15 @@ struct LocalHeuristicsProvider: AnalysisProvider {
         if resolutionScore > 0 { matchedRules.append("rule_resolution_tokens") }
         if pvScore > 0 { matchedRules.append("rule_pv_tokens") }
         if hasSignature { matchedRules.append("rule_signature_detected") }
+        if !idp.relevantPages.isEmpty { matchedRules.append("rule_idp_relevant_pages") }
+        if idp.hasTableLayout { matchedRules.append("rule_idp_layout_table_detected") }
+        if idp.clauseAttenduQueCount > 0 { matchedRules.append("rule_idp_clause_attendu_que") }
+        if idp.clauseResoluCount > 0 { matchedRules.append("rule_idp_clause_resolu") }
+        if idp.validationFlags.isEmpty {
+            matchedRules.append("rule_idp_validation_complete")
+        } else {
+            matchedRules.append("rule_idp_validation_flags_present")
+        }
         if matchedRules.isEmpty { matchedRules.append("rule_fallback_autre") }
 
         logger.debug("Analyse heuristique locale terminée.", metadata: [
@@ -65,7 +84,7 @@ struct LocalHeuristicsProvider: AnalysisProvider {
             suggestedPreset: request.preset_id ?? selected.preset,
             suggestedClassCode: selected.classCode,
             matchedRules: matchedRules,
-            topNodes: [selected.classCode]
+            topNodes: [selected.classCode] + Array(idp.titleHints.prefix(2))
         )
     }
 
@@ -194,5 +213,30 @@ struct LocalHeuristicsProvider: AnalysisProvider {
             }
         }
         return merged
+    }
+
+    private func mergeFields(
+        primary: [String: String],
+        secondary: [String: String]
+    ) -> [String: String] {
+        primary.merging(secondary) { current, incoming in
+            let trimmedCurrent = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedCurrent.isEmpty {
+                return incoming
+            }
+            return current
+        }
+    }
+
+    private func adjustedConfidence(
+        baseScore: Double,
+        completeness: Double,
+        validationFlags: [String]
+    ) -> Double {
+        let base = 0.35 + baseScore
+        let completenessBoost = (completeness - 0.5) * 0.25
+        let validationPenalty = Double(validationFlags.count) * 0.06
+        let adjusted = base + completenessBoost - validationPenalty
+        return min(0.95, max(0.2, adjusted))
     }
 }

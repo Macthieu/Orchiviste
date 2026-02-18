@@ -113,12 +113,16 @@
         <a href="/ui/presets">Préréglages</a>
         <a href="/ui/events">Événements</a>
         <a class="btn" href="#(download_url)">Télécharger (action explicite)</a>
+        <a class="btn" href="#(download_searchable_url)">Télécharger PDF OCR (explicite)</a>
     </nav>
 </header>
 
 <main class="wrap">
     <section class="panel">
         <h3>Aperçu des pages (chargement paresseux)</h3>
+        <p style="margin:0 0 10px; color: var(--muted); font-size: 13px;">
+            Aperçu en images JPG: la sélection de texte se fait via "Texte d'aperçu" ou via "Télécharger PDF OCR".
+        </p>
         <div id="pages"></div>
     </section>
 
@@ -131,12 +135,18 @@
             <dt>Préréglage</dt><dd>#(suggested_preset)</dd>
             <dt>Code de classement</dt><dd>#(suggested_class_code)</dd>
             <dt>Confiance</dt><dd>#(confidence)</dd>
+            <dt>Type détecté</dt><dd>#(analysis_type_doc)</dd>
+            <dt>Sujets détectés</dt><dd>#(analysis_sujets)</dd>
+            <dt>Validation IDP</dt><dd>#(analysis_validation_flags)</dd>
         </dl>
 
         <h4>Texte d'aperçu</h4>
         <label>Page <input id="textPage" type="number" min="1" value="1"></label>
         <button class="btn" type="button" onclick="loadText()">Charger le texte</button>
         <textarea id="textArea" rows="10" readonly></textarea>
+
+        <h4>Champs extraits (JSON)</h4>
+        <textarea rows="10" readonly>#(analysis_champs_json)</textarea>
 
         #if(can_review):
         <p class="notice">Revue requise : correction obligatoire avant routage.</p>

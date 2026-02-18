@@ -33,6 +33,7 @@ private struct UIPresetsContext: Encodable {
     let routing_local_route_root: String
     let routing_default_destination_template: String
     let routing_default_name_format: String
+    let routing_rules: [UIRoutingRuleSummary]
     let routing_rules_json: String
     let notice: String?
     let error: String?
@@ -83,6 +84,17 @@ private struct UIPresetSummary: Encodable {
     let postprocess: String
 }
 
+private struct UIRoutingRuleSummary: Encodable {
+    let id: String
+    let when_type_doc: String
+    let when_sujet: String
+    let when_class_code: String
+    let class_code: String
+    let preset_id: String
+    let destination_template: String
+    let name_format: String
+}
+
 private struct UIJobViewerContext: Encodable {
     let id: String
     let status: String
@@ -98,6 +110,11 @@ private struct UIJobViewerContext: Encodable {
     let routed_at: String?
     let preview_pages: Int
     let download_url: String
+    let download_searchable_url: String
+    let analysis_type_doc: String
+    let analysis_sujets: String
+    let analysis_champs_json: String
+    let analysis_validation_flags: String
 }
 
 private struct UILocalIngestForm: Content {
@@ -121,6 +138,17 @@ private struct UIRoutingSettingsForm: Content {
 
 private struct UIRoutingRulesForm: Content {
     let rules_json: String
+}
+
+private struct UIRoutingRuleCreateForm: Content {
+    let id: String?
+    let when_type_doc: String?
+    let when_sujet: String?
+    let when_class_code: String?
+    let class_code: String?
+    let preset_id: String?
+    let destination_template: String?
+    let name_format: String?
 }
 
 private struct UIWorkerEnrollForm: Content {
@@ -281,6 +309,86 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
+    app.on(.POST, "ui", "routing", "rules", "create", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIRoutingRuleCreateForm.self)
+            let whenTypeDoc = nonEmptyString(form.when_type_doc)
+            let whenSujet = nonEmptyString(form.when_sujet)
+            let whenClassCode = nonEmptyString(form.when_class_code)
+            let classCode = nonEmptyString(form.class_code)
+            let presetID = nonEmptyString(form.preset_id)
+            let destinationTemplate = nonEmptyString(form.destination_template)
+            let nameFormat = nonEmptyString(form.name_format)
+
+            guard whenTypeDoc != nil || whenSujet != nil || whenClassCode != nil else {
+                throw Abort(.badRequest, reason: "Ajouter au moins un critère (type, sujet ou code).")
+            }
+            guard classCode != nil || presetID != nil || destinationTemplate != nil || nameFormat != nil else {
+                throw Abort(.badRequest, reason: "Ajouter au moins une action (code, preset, dossier ou format).")
+            }
+
+            let providedID = nonEmptyString(form.id)
+            let computedID = buildRoutingRuleID(
+                explicit: providedID,
+                whenTypeDoc: whenTypeDoc,
+                whenSujet: whenSujet,
+                whenClassCode: whenClassCode
+            )
+
+            let rule = RoutingRule(
+                id: computedID,
+                when_type_doc: whenTypeDoc,
+                when_sujet: whenSujet,
+                when_class_code: whenClassCode,
+                class_code: classCode,
+                preset_id: presetID,
+                destination_template: destinationTemplate,
+                name_format: nameFormat
+            )
+
+            var existing = ConfigLoader.loadRoutingRules()?.rules ?? []
+            if let index = existing.firstIndex(where: { nonEmptyString($0.id) == computedID }) {
+                existing[index] = rule
+            } else {
+                existing.append(rule)
+            }
+
+            try ConfigLoader.saveRoutingRules(RoutingRuleSet(rules: existing))
+            return req.redirect(to: "/ui/presets?notice=\(urlQueryEncoded("Règle type/sujet enregistrée."))")
+        } catch let abort as AbortError {
+            let reason = abort.reason.isEmpty ? "Échec de sauvegarde de la règle." : abort.reason
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(reason))")
+        } catch {
+            req.logger.error("Échec création règle type/sujet UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant l'enregistrement de la règle."))")
+        }
+    }
+
+    app.post("ui", "routing", "rules", ":id", "delete") { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let trimmedID = nonEmptyString(id) else {
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Identifiant de règle invalide."))")
+        }
+
+        do {
+            let current = ConfigLoader.loadRoutingRules()?.rules ?? []
+            let updated = current.filter { nonEmptyString($0.id) != trimmedID }
+            guard updated.count != current.count else {
+                return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Règle introuvable."))")
+            }
+            try ConfigLoader.saveRoutingRules(RoutingRuleSet(rules: updated))
+            return req.redirect(to: "/ui/presets?notice=\(urlQueryEncoded("Règle supprimée."))")
+        } catch {
+            req.logger.error("Échec suppression règle type/sujet UI.", metadata: [
+                "error": .string(error.localizedDescription),
+                "rule_id": .string(trimmedID)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant la suppression de la règle."))")
+        }
+    }
+
     app.on(.POST, "ui", "workers", "enroll", body: .collect(maxSize: "1mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIWorkerEnrollForm.self)
@@ -412,6 +520,18 @@ func registerUIRoutes(_ app: Application) {
     app.get("ui", "presets") { req async throws -> View in
         let presets = await loadPresets(req: req)
         let routingSettings = ConfigLoader.loadRoutingLocalSettings()
+        let routingRules = (ConfigLoader.loadRoutingRules()?.rules ?? []).map { rule in
+            UIRoutingRuleSummary(
+                id: nonEmptyString(rule.id) ?? "(sans-id)",
+                when_type_doc: nonEmptyString(rule.when_type_doc) ?? "-",
+                when_sujet: nonEmptyString(rule.when_sujet) ?? "-",
+                when_class_code: nonEmptyString(rule.when_class_code) ?? "-",
+                class_code: nonEmptyString(rule.class_code) ?? "-",
+                preset_id: nonEmptyString(rule.preset_id) ?? "-",
+                destination_template: nonEmptyString(rule.destination_template) ?? "-",
+                name_format: nonEmptyString(rule.name_format) ?? "-"
+            )
+        }
         return try await req.view.render(
             "presets",
             UIPresetsContext(
@@ -419,6 +539,7 @@ func registerUIRoutes(_ app: Application) {
                 routing_local_route_root: routingSettings?.local_route_root ?? "",
                 routing_default_destination_template: routingSettings?.default_destination_template ?? "",
                 routing_default_name_format: routingSettings?.default_name_format ?? "",
+                routing_rules: routingRules,
                 routing_rules_json: ConfigLoader.loadRoutingRulesRawJSON(),
                 notice: req.query[String.self, at: "notice"],
                 error: req.query[String.self, at: "error"]
@@ -482,7 +603,12 @@ func registerUIRoutes(_ app: Application) {
             route_disabled_reason: routeDisabledReason,
             routed_at: job.steps.routed.map(formatTimestamp),
             preview_pages: max(1, preview?.pages ?? 1),
-            download_url: "/v1/jobs/\(job.id.uuidString)/download"
+            download_url: "/v1/jobs/\(job.id.uuidString)/download",
+            download_searchable_url: "/v1/jobs/\(job.id.uuidString)/download/searchable",
+            analysis_type_doc: job.analysisTypeDoc ?? "N/D",
+            analysis_sujets: (job.analysisSujets ?? []).isEmpty ? "N/D" : (job.analysisSujets ?? []).joined(separator: ", "),
+            analysis_champs_json: prettyPrintedJSON(job.analysisChamps),
+            analysis_validation_flags: extractValidationFlags(job.analysisChamps)
         )
         return try await req.view.render("job_viewer", context)
     }
@@ -701,6 +827,58 @@ private func parseOptionalDouble(_ raw: String?) -> Double? {
 private func parseOptionalInt(_ raw: String?) -> Int? {
     guard let value = nonEmptyString(raw) else { return nil }
     return Int(value)
+}
+
+private func buildRoutingRuleID(
+    explicit: String?,
+    whenTypeDoc: String?,
+    whenSujet: String?,
+    whenClassCode: String?
+) -> String {
+    if let explicit {
+        return sanitizeRoutingRuleID(explicit)
+    }
+    let raw = [
+        "rule",
+        whenTypeDoc ?? "anytype",
+        whenSujet ?? "anysujet",
+        whenClassCode ?? "anycode"
+    ].joined(separator: "-")
+    return sanitizeRoutingRuleID(raw)
+}
+
+private func sanitizeRoutingRuleID(_ raw: String) -> String {
+    let folded = raw
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+    let slug = folded.replacingOccurrences(
+        of: #"[^\p{L}\p{N}._-]+"#,
+        with: "-",
+        options: .regularExpression
+    )
+    let cleaned = slug
+        .trimmingCharacters(in: CharacterSet(charactersIn: "-._"))
+    return cleaned.isEmpty ? "rule-\(UUID().uuidString.prefix(8))" : cleaned
+}
+
+private func prettyPrintedJSON(_ dictionary: [String: String]?) -> String {
+    guard let dictionary, !dictionary.isEmpty else {
+        return "{}"
+    }
+    guard JSONSerialization.isValidJSONObject(dictionary),
+          let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.prettyPrinted, .sortedKeys]),
+          let text = String(data: data, encoding: .utf8) else {
+        return "{}"
+    }
+    return text
+}
+
+private func extractValidationFlags(_ dictionary: [String: String]?) -> String {
+    guard let raw = dictionary?["idp_validation_flags"] else {
+        return "Aucun"
+    }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "Aucun" : trimmed
 }
 
 private func resolveUILocalIngestInboxDirectory() -> URL {

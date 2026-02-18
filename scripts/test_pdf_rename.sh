@@ -223,6 +223,12 @@ if [[ -n "$destination_local_path" ]]; then
   escaped_dest="${destination_local_path//\"/\\\"}"
   if docker_compose exec -T api sh -lc "test -f \"$escaped_dest\""; then
     echo "OK  fichier present a la destination."
+    if [[ "${destination_local_path##*.}" == "pdf" ]]; then
+      selectable_chars="$(docker_compose exec -T api sh -lc "pdftotext -enc UTF-8 -layout \"$escaped_dest\" - 2>/dev/null | tr -d '[:space:]' | wc -c" | tr -d '[:space:]')"
+      if [[ -n "$selectable_chars" ]]; then
+        echo "Texte sélectionnable détecté (caractères): $selectable_chars"
+      fi
+    fi
   else
     echo "ERREUR: fichier absent a la destination." >&2
     exit 1

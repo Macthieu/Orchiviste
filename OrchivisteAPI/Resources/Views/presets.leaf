@@ -129,6 +129,75 @@
     </section>
 
     <section class="card">
+        <h2>Ajouter une règle type/sujet</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Formulaire guidé pour choisir automatiquement le dossier et le nom selon le type de document et le sujet détectés.
+        </p>
+        <form action="/ui/routing/rules/create" method="post">
+            <div class="form-grid">
+                <label>ID règle (optionnel)
+                    <input type="text" name="id" placeholder="pv-finance">
+                </label>
+                <label>Type document (critère)
+                    <input type="text" name="when_type_doc" placeholder="ProcesVerbal">
+                </label>
+                <label>Sujet (critère)
+                    <input type="text" name="when_sujet" placeholder="Finance">
+                </label>
+                <label>Code (critère)
+                    <input type="text" name="when_class_code" placeholder="ADM-PV">
+                </label>
+                <label>Code de classement (action)
+                    <input type="text" name="class_code" placeholder="ADM-PV">
+                </label>
+                <label>Préréglage (action)
+                    <input type="text" name="preset_id" placeholder="preset_pv">
+                </label>
+                <label>Modèle dossier (action)
+                    <input type="text" name="destination_template" placeholder="Archives/{year}/{class_code}/Proces-Verbaux/{sujet}">
+                </label>
+                <label>Format de nom (action)
+                    <input type="text" name="name_format" placeholder="{class_code}-PV-{sujet}-{date}-{numero}">
+                </label>
+            </div>
+            <button class="btn" type="submit">Enregistrer la règle</button>
+        </form>
+        <table style="margin-top: 12px;">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Critères</th>
+                <th>Actions</th>
+                <th>Suppression</th>
+            </tr>
+            </thead>
+            <tbody>
+            #for(rule in routing_rules):
+            <tr>
+                <td class="mono">#(rule.id)</td>
+                <td>
+                    Type: #(rule.when_type_doc)<br>
+                    Sujet: #(rule.when_sujet)<br>
+                    Code: #(rule.when_class_code)
+                </td>
+                <td>
+                    Code: #(rule.class_code)<br>
+                    Preset: #(rule.preset_id)<br>
+                    Dossier: <span class="mono">#(rule.destination_template)</span><br>
+                    Nom: <span class="mono">#(rule.name_format)</span>
+                </td>
+                <td>
+                    <form action="/ui/routing/rules/#(rule.id)/delete" method="post" onsubmit="return confirm('Supprimer cette règle ?');">
+                        <button class="btn" type="submit">Supprimer</button>
+                    </form>
+                </td>
+            </tr>
+            #endfor
+            </tbody>
+        </table>
+    </section>
+
+    <section class="card">
         <h2>Règles automatiques type/sujet (JSON)</h2>
         <p style="margin: 0 0 10px; color: var(--muted);">
             Ces règles permettent de choisir automatiquement le dossier, le format de nom, le code et le préréglage selon le type de document et le sujet détectés.

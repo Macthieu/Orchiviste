@@ -286,6 +286,23 @@ private func routeLocalFileIfPossible(
         proposedFileName: destinationName
     )
 
+    if (try? SearchablePDFBuilder.buildIfNeeded(
+        sourceURL: sourceURL,
+        destinationURL: destinationURL,
+        logger: logger
+    )) == true {
+        do {
+            try FileManager.default.removeItem(at: sourceURL)
+        } catch {
+            logger.warning("Le PDF OCR a été généré, mais la suppression de la source a échoué.", metadata: [
+                "job_id": .string(job.id.uuidString),
+                "source_path": .string(sourceURL.path),
+                "error": .string(error.localizedDescription)
+            ])
+        }
+        return LocalRouteResult(destinationPath: destinationURL.path, fileName: destinationURL.lastPathComponent)
+    }
+
     do {
         try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
     } catch {

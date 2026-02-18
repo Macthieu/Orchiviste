@@ -112,6 +112,62 @@ func registerJobRoutes(_ app: Application) {
             )
             return response
         }
+
+        v1.get("jobs", ":id", "download", "searchable") { req async throws -> Response in
+            guard let id = jobID(from: req) else {
+                throw Abort(.badRequest, reason: "Identifiant de tâche invalide.")
+            }
+            let job = try await resolveJob(id: id, req: req)
+
+            if job.source.kind.lowercased() == "sharepoint",
+               let url = job.source.url,
+               !url.isEmpty {
+                return req.redirect(to: url)
+            }
+
+            guard let localFile = resolveLocalFileURL(raw: job.fileURL),
+                  FileManager.default.fileExists(atPath: localFile.path) else {
+                throw Abort(.notFound, reason: "Le fichier source local est indisponible.")
+            }
+
+            let tempDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("orchiviste-searchable-download-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+            let searchableURL = tempDir.appendingPathComponent(
+                "\(localFile.deletingPathExtension().lastPathComponent)-searchable.pdf"
+            )
+            let shouldTryOCR = localFile.pathExtension.lowercased() == "pdf"
+            let builtSearchable = shouldTryOCR && ((try? SearchablePDFBuilder.buildIfNeeded(
+                sourceURL: localFile,
+                destinationURL: searchableURL,
+                logger: req.logger
+            )) == true)
+
+            let outputURL = builtSearchable ? searchableURL : localFile
+            let response = try await req.fileio.asyncStreamFile(at: outputURL.path)
+            let outputFilename = builtSearchable
+                ? searchableURL.lastPathComponent
+                : localFile.lastPathComponent
+            response.headers.replaceOrAdd(
+                name: .contentDisposition,
+                value: "attachment; filename=\"\(outputFilename)\""
+            )
+            response.headers.replaceOrAdd(
+                name: "x-orchiviste-ocr",
+                value: builtSearchable ? "generated" : "source"
+            )
+
+            if builtSearchable {
+                Task.detached {
+                    try? await Task.sleep(nanoseconds: 120_000_000_000)
+                    try? FileManager.default.removeItem(at: tempDir)
+                }
+            } else {
+                try? FileManager.default.removeItem(at: tempDir)
+            }
+            return response
+        }
     }
 }
 

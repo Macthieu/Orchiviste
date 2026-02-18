@@ -102,6 +102,18 @@ func registerOpenAPIRoutes(_ app: Application) {
                         ]
                     ]
                 ],
+                "/v1/jobs/{id}/download/searchable": [
+                    "parameters": [["$ref": "#/components/parameters/JobID"]],
+                    "get": [
+                        "summary": "Telechargement explicite du PDF OCR selectionnable",
+                        "responses": [
+                            "200": ["description": "Flux fichier PDF OCR"],
+                            "302": ["description": "Redirection SharePoint"],
+                            "400": ["$ref": "#/components/responses/Error400"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
                 "/v1/workers/enroll": [
                     "post": [
                         "requestBody": [

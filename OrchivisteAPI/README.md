@@ -28,6 +28,9 @@ UI (SSR Leaf) :
 - agents : http://127.0.0.1:28780/ui/workers
 - préréglages : http://127.0.0.1:28780/ui/presets
 - la visionneuse utilise l'aperçu lazy-load (`/v1/preview/...`) et ne télécharge que sur action explicite
+- important : l'aperçu est une image JPG (sélection de texte impossible directement dans la page).  
+  Le texte OCR est disponible via `GET /v1/preview/{id}/text`, et les PDF routés peuvent être régénérés en PDF sélectionnable.
+- téléchargement PDF OCR explicite : `GET /v1/jobs/{id}/download/searchable` (bouton dans la page tâche `/ui/jobs/{id}`)
 
 Docker Compose :
 - démarrage standard : `docker compose up -d`
@@ -64,9 +67,13 @@ Tests de renommage PDF (local -> routage) :
 - lot de fichiers ou dossier : `./scripts/test_pdf_rename_batch.sh "/chemin/dossier-ou-fichier"`
 - rapport CSV batch (optionnel) : `ORCHIVISTE_BATCH_REPORT=/tmp/rename-report.csv ./scripts/test_pdf_rename_batch.sh "/chemin/dossier"`
 - surcharge dossier/nom à la volée : `ORCHIVISTE_ROUTE_DESTINATION_FOLDER='Archives/{year}/{class_code}/{type_doc}/{sujet}' ORCHIVISTE_ROUTE_NAME_FORMAT='{class_code}-{type_doc}-{sujet}-{date}-{numero}' ./scripts/test_pdf_rename.sh "/chemin/fichier.pdf"`
-- règles automatiques par type/sujet : page UI `http://127.0.0.1:28780/ui/presets` section **Règles automatiques type/sujet (JSON)** (`configs/analysis/routing/local.rules.json`)
+- règles automatiques par type/sujet :
+  - formulaire guidé UI : `http://127.0.0.1:28780/ui/presets` section **Ajouter une règle type/sujet**
+  - mode JSON avancé : section **Règles automatiques type/sujet (JSON)** (`configs/analysis/routing/local.rules.json`)
+  - en Docker, ces fichiers sont persistés sur l'hôte via le montage `./OrchivisteAPI/configs:/app/OrchivisteAPI/configs`
 - chemin des PDF traités (hôte) : `${ORCHIVISTE_ROUTED_EXPORT_DIR:-./runtime/routed}`
 - récupération des anciens PDF stockés dans le volume Docker : `./scripts/recover_routed_from_volume.sh`
+- lister les derniers fichiers réellement routés (côté hôte) : `./scripts/show_routed_files.sh 50`
 - les scripts `test_pdf_rename*.sh` fonctionnent depuis n'importe quel dossier (pas besoin d'être à la racine)
 
 Dépannage Docker :
@@ -105,6 +112,12 @@ Analyse :
   - `ORCHIVISTE_OCR_MAX_PAGES` (`12` par défaut)
   - `ORCHIVISTE_OCR_DPI` (`220` par défaut)
   - `ORCHIVISTE_OCR_MIN_TEXT_CHARS` (`140` par défaut; sous ce seuil, OCR tenté)
+- OCR PDF sélectionnable au routage local :
+  - `ORCHIVISTE_ROUTE_OCR_SEARCHABLE_PDF` (`1` par défaut)
+  - `ORCHIVISTE_ROUTE_OCR_LANG` (hérite de `ORCHIVISTE_OCR_LANG` par défaut)
+  - `ORCHIVISTE_ROUTE_OCR_MAX_PAGES` (hérite de `ORCHIVISTE_OCR_MAX_PAGES`)
+  - `ORCHIVISTE_ROUTE_OCR_DPI` (hérite de `ORCHIVISTE_OCR_DPI`)
+  - `ORCHIVISTE_ROUTE_OCR_MIN_TEXT_CHARS` (hérite de `ORCHIVISTE_OCR_MIN_TEXT_CHARS`)
 
 Routage SharePoint Graph (optionnel) :
 - `ORCHIVISTE_GRAPH_ENABLED` = `1`
