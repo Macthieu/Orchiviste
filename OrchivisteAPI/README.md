@@ -43,6 +43,7 @@ Scripts d'exploitation locale recommandés :
 - fallback builder classique (si BuildKit instable) : `./scripts/dev_up.sh --build --classic-builder`
 - contournement blocage `docker-credential-desktop` : `./scripts/dev_up.sh --anon-auth`
 - rebuild ciblé plus rapide : `docker compose build api` (ou `analyse`, `worker`)
+- préflight local (mode rapide/complet) : `./scripts/preflight_local.sh --quick` ou `./scripts/preflight_local.sh --full`
 - validation release en une commande : `./scripts/validate_release.sh`
 - validation release + contournement auth Docker : `./scripts/validate_release.sh --anon-auth`
 - arrêt propre : `./scripts/dev_down.sh`
@@ -55,7 +56,8 @@ Tests fumée MVP :
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
 - contrôle OpenAPI MVP (endpoints + webhook) : `./scripts/check_openapi_mvp.sh`
-- exécution groupée recommandée : `./scripts/validate_release.sh`
+- exécution groupée recommandée : `./scripts/preflight_local.sh --full`
+- alias de compatibilité : `./scripts/validate_release.sh`
 
 Tests de renommage PDF (local -> routage) :
 - fichier unique : `./scripts/test_pdf_rename.sh "/chemin/vers/fichier.pdf"`
