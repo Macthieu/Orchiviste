@@ -92,6 +92,100 @@ enum JobPersistenceRepository {
         )
     }
 
+    static func upsertWorker(
+        _ worker: WorkerRecord,
+        on db: Database
+    ) async throws {
+        let now = Date()
+        let capabilitiesJSON = try encodeJSONString(worker.capabilities)
+        if let existing = try await WorkerRow.find(worker.id, on: db) {
+            existing.name = worker.name
+            existing.status = worker.status.rawValue
+            existing.capabilitiesJSON = capabilitiesJSON
+            existing.lastSeenAt = worker.lastSeen
+            existing.version = worker.version
+            existing.load = worker.load
+            existing.ramMB = worker.ram_mb
+            existing.token = worker.token
+            existing.updatedAt = now
+            try await existing.update(on: db)
+            return
+        }
+
+        let row = WorkerRow(
+            record: worker,
+            capabilitiesJSON: capabilitiesJSON,
+            createdAt: now,
+            updatedAt: now
+        )
+        try await row.create(on: db)
+    }
+
+    static func fetchWorker(id: UUID, on db: Database) async throws -> WorkerRecord? {
+        guard let row = try await WorkerRow.find(id, on: db) else {
+            return nil
+        }
+        return try workerRecord(from: row)
+    }
+
+    static func listWorkers(on db: Database) async throws -> [WorkerRecord] {
+        let rows = try await WorkerRow.query(on: db)
+            .sort(\.$name, .ascending)
+            .all()
+        return try rows.map(workerRecord(from:))
+    }
+
+    static func enrollWorker(
+        name: String,
+        capabilities: [String],
+        on db: Database
+    ) async throws -> WorkerRecord {
+        let worker = WorkerRecord(
+            id: UUID(),
+            name: name,
+            status: .pending,
+            capabilities: capabilities,
+            lastSeen: nil,
+            version: nil,
+            load: nil,
+            ram_mb: nil,
+            token: nil
+        )
+        try await upsertWorker(worker, on: db)
+        return worker
+    }
+
+    static func approveWorker(id: UUID, on db: Database) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var approved = existing
+        approved.status = .approved
+        approved.token = approved.token ?? UUID().uuidString
+        try await upsertWorker(approved, on: db)
+        return approved
+    }
+
+    static func heartbeatWorker(
+        id: UUID,
+        payload: WorkerHeartbeatRequest,
+        on db: Database
+    ) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var updated = existing
+        updated.lastSeen = Date()
+        updated.version = payload.version ?? updated.version
+        updated.load = payload.load ?? updated.load
+        updated.ram_mb = payload.ram_mb ?? updated.ram_mb
+        if let caps = payload.capabilities {
+            updated.capabilities = caps
+        }
+        try await upsertWorker(updated, on: db)
+        return updated
+    }
+
     @discardableResult
     static func appendEvent(
         type: String,
@@ -171,6 +265,22 @@ enum JobPersistenceRepository {
             suggestedClassCode: row.suggestedClassCode,
             confidence: row.confidence,
             needsReview: row.needsReview
+        )
+    }
+
+    private static func workerRecord(from row: WorkerRow) throws -> WorkerRecord {
+        let id = row.id ?? UUID()
+        let capabilities: [String] = (try? decodeJSONValue(row.capabilitiesJSON)) ?? []
+        return WorkerRecord(
+            id: id,
+            name: row.name,
+            status: WorkerStatus(rawValue: row.status) ?? .pending,
+            capabilities: capabilities,
+            lastSeen: row.lastSeenAt,
+            version: row.version,
+            load: row.load,
+            ram_mb: row.ramMB,
+            token: row.token
         )
     }
 }

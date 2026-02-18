@@ -234,9 +234,10 @@ func registerUIRoutes(_ app: Application) {
                 throw Abort(.badRequest, reason: "Le nom de l'agent est requis.")
             }
             let capabilities = parseUploadTags(raw: form.capabilities)
-            let worker = await req.application.appState.enrollWorker(
+            let worker = await uiEnrollWorkerWithPersistence(
                 name: name,
-                capabilities: capabilities
+                capabilities: capabilities,
+                req: req
             )
             await EventPublisher.publish(
                 type: "worker.enrolled",
@@ -258,9 +259,10 @@ func registerUIRoutes(_ app: Application) {
               let workerID = UUID(uuidString: id) else {
             return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
         }
-        guard let worker = await req.application.appState.approveWorker(id: workerID) else {
+        guard let existing = await uiResolveWorker(workerID, req: req) else {
             return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
         }
+        let worker = await uiApproveWorkerWithPersistence(id: workerID, fallback: existing, req: req)
         await EventPublisher.publish(
             type: "worker.approved",
             payload: ["worker_id": worker.id.uuidString],
@@ -276,7 +278,7 @@ func registerUIRoutes(_ app: Application) {
               let workerID = UUID(uuidString: id) else {
             return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
         }
-        guard let existing = await req.application.appState.worker(id: workerID) else {
+        guard let existing = await uiResolveWorker(workerID, req: req) else {
             return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
         }
         guard existing.status == .approved else {
@@ -294,9 +296,12 @@ func registerUIRoutes(_ app: Application) {
             }()
         )
 
-        guard let worker = await req.application.appState.heartbeatWorker(id: workerID, payload: heartbeat) else {
-            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
-        }
+        let worker = await uiHeartbeatWorkerWithPersistence(
+            id: workerID,
+            payload: heartbeat,
+            fallback: existing,
+            req: req
+        )
         await EventPublisher.publish(
             type: "worker.heartbeat",
             payload: ["worker_id": worker.id.uuidString],
@@ -309,7 +314,7 @@ func registerUIRoutes(_ app: Application) {
 
     app.get("ui") { req async throws -> View in
         let jobs = try await loadJobs(req: req, limit: 100)
-        let workerCount = await req.application.appState.listWorkers().count
+        let workerCount = try await loadWorkerRecords(req: req).count
         let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
         let uploadError = req.query[String.self, at: "upload_error"]
 
@@ -424,7 +429,7 @@ func registerUIRoutes(_ app: Application) {
 }
 
 private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
-    let workers = await req.application.appState.listWorkers()
+    let workers = ((try? await loadWorkerRecords(req: req)) ?? [])
         .sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
@@ -444,6 +449,70 @@ private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
             can_heartbeat: rawStatus == WorkerStatus.approved.rawValue
         )
     }
+}
+
+private func loadWorkerRecords(req: Request) async throws -> [WorkerRecord] {
+    if let persisted = try? await JobPersistenceRepository.listWorkers(on: req.db) {
+        await req.application.appState.cacheWorkers(persisted)
+        return persisted
+    }
+    return await req.application.appState.listWorkers()
+}
+
+private func uiResolveWorker(_ id: UUID, req: Request) async -> WorkerRecord? {
+    if let inMemory = await req.application.appState.worker(id: id) {
+        return inMemory
+    }
+    if let worker = try? await JobPersistenceRepository.fetchWorker(id: id, on: req.db) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return nil
+}
+
+private func uiEnrollWorkerWithPersistence(
+    name: String,
+    capabilities: [String],
+    req: Request
+) async -> WorkerRecord {
+    if let persisted = try? await JobPersistenceRepository.enrollWorker(
+        name: name,
+        capabilities: capabilities,
+        on: req.db
+    ) {
+        await req.application.appState.cacheWorker(persisted)
+        return persisted
+    }
+    return await req.application.appState.enrollWorker(name: name, capabilities: capabilities)
+}
+
+private func uiApproveWorkerWithPersistence(
+    id: UUID,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.approveWorker(id: id, on: req.db) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.approveWorker(id: id) ?? fallback
+}
+
+private func uiHeartbeatWorkerWithPersistence(
+    id: UUID,
+    payload: WorkerHeartbeatRequest,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.heartbeatWorker(
+        id: id,
+        payload: payload,
+        on: req.db
+    ) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.heartbeatWorker(id: id, payload: payload) ?? fallback
 }
 
 private func loadUIEvents(req: Request, cursor: Int) async throws -> EventsResponse {

@@ -16,6 +16,7 @@ func configure(_ app: Application) throws {
     app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
     app.views.use(.leaf)
     app.leaf.configuration.rootDirectory = resolveViewsDirectory()
+    app.lifecycle.use(IngestQueueConsumerLifecycle())
 
     try configureDatabase(app)
     registerMigrations(app)
@@ -106,6 +107,7 @@ private func registerMigrations(_ app: Application) {
     app.migrations.add(CreateJobsMigration())
     app.migrations.add(CreateEventsMigration())
     app.migrations.add(CreateIdempotencyKeysMigration())
+    app.migrations.add(CreateWorkersMigration())
 }
 
 private func resolveViewsDirectory() -> String {

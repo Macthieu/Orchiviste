@@ -147,3 +147,56 @@ struct PersistedIdempotencyRecord: Sendable {
     let requestHash: String
     let jobId: UUID
 }
+
+final class WorkerRow: Model, @unchecked Sendable {
+    static let schema = "workers"
+
+    @ID(custom: "id", generatedBy: .user)
+    var id: UUID?
+
+    @Field(key: "name")
+    var name: String
+
+    @Field(key: "status")
+    var status: String
+
+    @Field(key: "capabilities_json")
+    var capabilitiesJSON: String
+
+    @OptionalField(key: "last_seen_at")
+    var lastSeenAt: Date?
+
+    @OptionalField(key: "version")
+    var version: String?
+
+    @OptionalField(key: "load")
+    var load: Double?
+
+    @OptionalField(key: "ram_mb")
+    var ramMB: Int?
+
+    @OptionalField(key: "token")
+    var token: String?
+
+    @Field(key: "created_at")
+    var createdAt: Date
+
+    @Field(key: "updated_at")
+    var updatedAt: Date
+
+    init() { }
+
+    init(record: WorkerRecord, capabilitiesJSON: String, createdAt: Date, updatedAt: Date) {
+        self.id = record.id
+        self.name = record.name
+        self.status = record.status.rawValue
+        self.capabilitiesJSON = capabilitiesJSON
+        self.lastSeenAt = record.lastSeen
+        self.version = record.version
+        self.load = record.load
+        self.ramMB = record.ram_mb
+        self.token = record.token
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}

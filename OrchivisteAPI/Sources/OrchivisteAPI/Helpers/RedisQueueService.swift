@@ -59,6 +59,34 @@ enum RedisQueueService {
         }
     }
 
+    static func dequeueIngest(
+        application: Application,
+        logger: Logger,
+        timeoutSeconds: Int = 2
+    ) async -> Data? {
+        guard let connection = try? await makeConnection(application: application).get() else {
+            return nil
+        }
+        defer {
+            Task { _ = try? await connection.close().get() }
+        }
+        do {
+            let timeout = max(0, timeoutSeconds)
+            let payload = try await connection
+                .blpop(from: ingestKey, timeout: .seconds(Int64(timeout)))
+                .get()
+            guard let raw = payload.string, !raw.isEmpty else {
+                return nil
+            }
+            return Data(raw.utf8)
+        } catch {
+            logger.warning("Impossible de dépiler la file Redis d'ingestion.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return nil
+        }
+    }
+
     private static func enqueue(
         data: Data,
         key: RedisKey,

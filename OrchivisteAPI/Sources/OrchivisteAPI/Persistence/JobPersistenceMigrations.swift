@@ -62,3 +62,25 @@ struct CreateIdempotencyKeysMigration: AsyncMigration {
         try await database.schema(IdempotencyKeyRow.schema).delete()
     }
 }
+
+struct CreateWorkersMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema(WorkerRow.schema)
+            .field("id", .uuid, .identifier(auto: false))
+            .field("name", .string, .required)
+            .field("status", .string, .required)
+            .field("capabilities_json", .string, .required)
+            .field("last_seen_at", .datetime)
+            .field("version", .string)
+            .field("load", .double)
+            .field("ram_mb", .int)
+            .field("token", .string)
+            .field("created_at", .datetime, .required)
+            .field("updated_at", .datetime, .required)
+            .create()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema(WorkerRow.schema).delete()
+    }
+}

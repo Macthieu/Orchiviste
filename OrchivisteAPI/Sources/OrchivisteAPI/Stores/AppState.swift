@@ -73,6 +73,17 @@ actor AppState {
         return job
     }
 
+    func failJob(id: UUID) -> JobRecord? {
+        guard var job = jobs[id] else { return nil }
+        let now = Date()
+        job.status = .failed
+        job.updatedAt = now
+        job.steps.completed = job.steps.completed ?? now
+        jobs[id] = job
+        addEvent(type: "job.failed", payload: ["job_id": id.uuidString])
+        return job
+    }
+
     func markPreviewReady(jobId: UUID, preview: PreviewRecord) -> JobRecord? {
         previews[jobId] = preview
         guard var job = jobs[jobId] else { return nil }
@@ -210,6 +221,16 @@ actor AppState {
 
     func worker(id: UUID) -> WorkerRecord? {
         workers[id]
+    }
+
+    func cacheWorker(_ worker: WorkerRecord) {
+        workers[worker.id] = worker
+    }
+
+    func cacheWorkers(_ records: [WorkerRecord]) {
+        for worker in records {
+            workers[worker.id] = worker
+        }
     }
 
     func heartbeatWorker(id: UUID, payload: WorkerHeartbeatRequest) -> WorkerRecord? {

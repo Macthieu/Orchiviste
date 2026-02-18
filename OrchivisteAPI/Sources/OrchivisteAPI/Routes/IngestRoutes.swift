@@ -199,49 +199,6 @@ func enqueueIngest(
         ])
     }
 
-    if Environment.get("ORCHIVISTE_DISABLE_INGEST_PIPELINE") != "1" {
-        let app = req.application
-        Task.detached(priority: .background) {
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            let preview = PreviewRenderer.makePreview(for: job, logger: app.logger)
-            if let updatedJob = await app.appState.markPreviewReady(jobId: job.id, preview: preview) {
-                try? await JobPersistenceRepository.upsert(job: updatedJob, on: app.db)
-                await EventPublisher.publish(
-                    type: "job.preview_ready",
-                    payload: ["job_id": job.id.uuidString],
-                    application: app,
-                    database: app.db,
-                    logger: app.logger
-                )
-            }
-
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            let analysisRequest = AnalysisRequest(
-                file_id: job.id.uuidString,
-                text: preview.textPages[1],
-                source: job.source,
-                lang: nil,
-                hints: nil,
-                preset_id: nil,
-                policy: nil
-            )
-            let analysis = await AnalysisProxyClient.analyzeWithFallback(
-                request: analysisRequest,
-                correlationId: nil,
-                using: app.client,
-                logger: app.logger
-            )
-            _ = try? await JobAnalysisLifecycle.apply(
-                analysis: analysis,
-                forFileID: job.id.uuidString,
-                policy: Optional<AnalysisPolicy>.none,
-                application: app,
-                database: app.db,
-                logger: app.logger
-            )
-        }
-    }
-
     return job.id
 }
 

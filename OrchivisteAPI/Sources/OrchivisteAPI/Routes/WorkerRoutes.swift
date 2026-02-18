@@ -8,9 +8,10 @@ func registerWorkerRoutes(_ app: Application) {
             guard !body.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw Abort(.badRequest, reason: "Le nom de l'agent est requis.")
             }
-            let worker = await req.application.appState.enrollWorker(
+            let worker = await enrollWorkerWithPersistence(
                 name: body.name,
-                capabilities: body.capabilities ?? []
+                capabilities: body.capabilities ?? [],
+                req: req
             )
             await EventPublisher.publish(
                 type: "worker.enrolled",
@@ -31,9 +32,10 @@ func registerWorkerRoutes(_ app: Application) {
                   let id = UUID(uuidString: idStr) else {
                 throw Abort(.badRequest, reason: "Identifiant d'agent invalide.")
             }
-            guard let worker = await req.application.appState.approveWorker(id: id) else {
+            guard let existing = await resolveWorker(id: id, req: req) else {
                 throw Abort(.notFound, reason: "Agent introuvable.")
             }
+            let worker = await approveWorkerWithPersistence(id: id, fallback: existing, req: req)
             await EventPublisher.publish(
                 type: "worker.approved",
                 payload: ["worker_id": worker.id.uuidString],
@@ -50,7 +52,7 @@ func registerWorkerRoutes(_ app: Application) {
                 throw Abort(.badRequest, reason: "Identifiant d'agent invalide.")
             }
             let body = try req.content.decode(WorkerHeartbeatRequest.self)
-            guard let existing = await req.application.appState.worker(id: id) else {
+            guard let existing = await resolveWorker(id: id, req: req) else {
                 throw Abort(.notFound, reason: "Agent introuvable.")
             }
             guard existing.status == .approved else {
@@ -61,9 +63,12 @@ func registerWorkerRoutes(_ app: Application) {
                     throw Abort(.unauthorized, reason: "Jeton agent invalide.")
                 }
             }
-            guard let worker = await req.application.appState.heartbeatWorker(id: id, payload: body) else {
-                throw Abort(.notFound, reason: "Agent introuvable.")
-            }
+            let worker = await heartbeatWorkerWithPersistence(
+                id: id,
+                payload: body,
+                fallback: existing,
+                req: req
+            )
             await EventPublisher.publish(
                 type: "worker.heartbeat",
                 payload: ["worker_id": worker.id.uuidString],
@@ -75,7 +80,67 @@ func registerWorkerRoutes(_ app: Application) {
         }
 
         workers.get { req async throws -> [WorkerRecord] in
-            await req.application.appState.listWorkers()
+            if let persisted = try? await JobPersistenceRepository.listWorkers(on: req.db) {
+                await req.application.appState.cacheWorkers(persisted)
+                return persisted
+            }
+            return await req.application.appState.listWorkers()
         }
     }
+}
+
+private func resolveWorker(id: UUID, req: Request) async -> WorkerRecord? {
+    if let inMemory = await req.application.appState.worker(id: id) {
+        return inMemory
+    }
+    if let worker = try? await JobPersistenceRepository.fetchWorker(id: id, on: req.db) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return nil
+}
+
+private func enrollWorkerWithPersistence(
+    name: String,
+    capabilities: [String],
+    req: Request
+) async -> WorkerRecord {
+    if let persisted = try? await JobPersistenceRepository.enrollWorker(
+        name: name,
+        capabilities: capabilities,
+        on: req.db
+    ) {
+        await req.application.appState.cacheWorker(persisted)
+        return persisted
+    }
+    return await req.application.appState.enrollWorker(name: name, capabilities: capabilities)
+}
+
+private func approveWorkerWithPersistence(
+    id: UUID,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.approveWorker(id: id, on: req.db) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.approveWorker(id: id) ?? fallback
+}
+
+private func heartbeatWorkerWithPersistence(
+    id: UUID,
+    payload: WorkerHeartbeatRequest,
+    fallback: WorkerRecord,
+    req: Request
+) async -> WorkerRecord {
+    if let worker = try? await JobPersistenceRepository.heartbeatWorker(
+        id: id,
+        payload: payload,
+        on: req.db
+    ) {
+        await req.application.appState.cacheWorker(worker)
+        return worker
+    }
+    return await req.application.appState.heartbeatWorker(id: id, payload: payload) ?? fallback
 }
