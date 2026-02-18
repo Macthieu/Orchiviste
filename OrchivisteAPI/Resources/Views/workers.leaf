@@ -33,6 +33,74 @@
             font-weight: 700;
         }
         .wrap { max-width: 1200px; margin: 20px auto 40px; padding: 0 16px; }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .enroll {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .enroll-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+        .enroll-form label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+        }
+        .enroll-form input {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            background: #fff;
+        }
+        .btn {
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: #ebf8f4;
+            border-radius: 8px;
+            padding: 7px 9px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-primary {
+            color: #fff;
+            background: var(--accent);
+        }
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .mini-form {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .mini-form input {
+            width: 92px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px;
+            font-size: 12px;
+            background: #fff;
+        }
         .cards {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -76,13 +144,34 @@
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/events">Événements</a>
     </nav>
 </header>
 <main class="wrap">
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
     <section class="cards">
         <article class="card"><div>Agents</div><div class="kpi">#(workers.count)</div></article>
         <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
         <article class="card"><div>File de rejet</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
+    </section>
+
+    <section class="enroll">
+        <h3>Enrôler un agent</h3>
+        <form class="enroll-form" action="/ui/workers/enroll" method="post">
+            <label>Nom agent
+                <input type="text" name="name" placeholder="worker-mac-01" required>
+            </label>
+            <label>Capacités (csv)
+                <input type="text" name="capabilities" placeholder="ocr,vision,pdf">
+            </label>
+            <button class="btn btn-primary" type="submit">Enrôler</button>
+        </form>
     </section>
 
     <table>
@@ -96,6 +185,7 @@
             <th>Version</th>
             <th>Charge</th>
             <th>RAM MB</th>
+            <th>Actions</th>
         </tr>
         </thead>
         <tbody>
@@ -109,6 +199,24 @@
             <td>#(worker.version)</td>
             <td>#(worker.load)</td>
             <td>#(worker.ram_mb)</td>
+            <td>
+                <div class="actions">
+                    #if(worker.can_approve):
+                    <form method="post" action="/ui/workers/#(worker.id)/approve">
+                        <button class="btn" type="submit">Approuver</button>
+                    </form>
+                    #endif
+
+                    #if(worker.can_heartbeat):
+                    <form class="mini-form" method="post" action="/ui/workers/#(worker.id)/heartbeat">
+                        <input type="text" name="version" placeholder="ui-test">
+                        <input type="text" name="load" placeholder="0.15">
+                        <input type="text" name="ram_mb" placeholder="512">
+                        <button class="btn" type="submit">Heartbeat test</button>
+                    </form>
+                    #endif
+                </div>
+            </td>
         </tr>
         #endfor
         </tbody>

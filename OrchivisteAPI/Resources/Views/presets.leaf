@@ -32,6 +32,48 @@
             font-weight: 700;
         }
         .wrap { max-width: 1200px; margin: 20px auto 40px; padding: 0 16px; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 10px;
+        }
+        label { display: block; font-size: 13px; color: var(--muted); }
+        input {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            background: #fff;
+        }
+        .btn {
+            margin-top: 10px;
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: #ac5d0c;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -58,9 +100,40 @@
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/events">Événements</a>
     </nav>
 </header>
 <main class="wrap">
+    <section class="card">
+        <h2>Créer un préréglage</h2>
+        #if(notice):
+        <p class="notice">#(notice)</p>
+        #endif
+        #if(error):
+        <p class="error">#(error)</p>
+        #endif
+        <form action="/ui/presets" method="post">
+            <div class="form-grid">
+                <label>ID
+                    <input type="text" name="id" placeholder="preset_pv" required>
+                </label>
+                <label>Nom
+                    <input type="text" name="name" placeholder="Preset Procès-Verbal" required>
+                </label>
+                <label>Format de nom
+                    <input type="text" name="name_format" placeholder="{type}-{date}-{numero}" required>
+                </label>
+                <label>Code de classement
+                    <input type="text" name="class_code" placeholder="ADM-PV">
+                </label>
+                <label>Post-traitement (csv)
+                    <input type="text" name="postprocess" placeholder="upper,trim">
+                </label>
+            </div>
+            <button class="btn" type="submit">Enregistrer le préréglage</button>
+        </form>
+    </section>
+
     <table>
         <thead>
         <tr>

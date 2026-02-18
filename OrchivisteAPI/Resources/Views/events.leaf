@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Événements</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Avenir Next", "Helvetica Neue", sans-serif; color: var(--ink); background: var(--bg); }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap { max-width: 1280px; margin: 20px auto 40px; padding: 0 16px; }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+        .btn {
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: #ebf8f4;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 13px;
+            vertical-align: top;
+        }
+        th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .mono { font-family: "SF Mono", Menlo, monospace; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Événements</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+<main class="wrap">
+    <section class="toolbar">
+        <span class="badge">Curseur courant: <strong id="cursor">#(initial_cursor)</strong></span>
+        <button class="btn" type="button" id="togglePolling" data-enabled="1">Pause polling</button>
+        <button class="btn" type="button" id="refreshNow">Rafraîchir maintenant</button>
+    </section>
+
+    <table>
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Payload</th>
+        </tr>
+        </thead>
+        <tbody id="eventsBody">
+        #for(event in events):
+        <tr>
+            <td class="mono">#(event.id)</td>
+            <td>#(event.type)</td>
+            <td>#(event.created_at)</td>
+            <td class="mono">#(event.payload)</td>
+        </tr>
+        #endfor
+        </tbody>
+    </table>
+</main>
+<script>
+let cursor = Number("#(initial_cursor)") || 0;
+const cursorNode = document.getElementById("cursor");
+const tbody = document.getElementById("eventsBody");
+const toggleBtn = document.getElementById("togglePolling");
+const refreshBtn = document.getElementById("refreshNow");
+let pollingEnabled = true;
+
+function updateCursor(value) {
+    cursor = Number(value) || cursor;
+    cursorNode.textContent = String(cursor);
+}
+
+function appendEventRow(event) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="mono">${event.id}</td>
+      <td>${event.type}</td>
+      <td>${event.created_at || "-"}</td>
+      <td class="mono">${formatPayload(event.payload)}</td>
+    `;
+    tbody.insertBefore(tr, tbody.firstChild);
+    while (tbody.children.length > 300) {
+        tbody.removeChild(tbody.lastChild);
+    }
+}
+
+function formatPayload(payload) {
+    if (!payload || typeof payload !== "object") return "-";
+    const keys = Object.keys(payload).sort();
+    if (keys.length === 0) return "-";
+    return keys.map((key) => `${key}=${payload[key]}`).join(", ");
+}
+
+async function pollEvents() {
+    if (!pollingEnabled) return;
+    try {
+        const res = await fetch(`/v1/events?cursor=${encodeURIComponent(cursor)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data.events) ? data.events : [];
+        list.forEach((event) => appendEventRow(event));
+        updateCursor(data.cursor);
+    } catch (_) {
+        // noop
+    }
+}
+
+toggleBtn.addEventListener("click", () => {
+    pollingEnabled = !pollingEnabled;
+    toggleBtn.textContent = pollingEnabled ? "Pause polling" : "Reprendre polling";
+    toggleBtn.dataset.enabled = pollingEnabled ? "1" : "0";
+});
+
+refreshBtn.addEventListener("click", () => {
+    pollEvents();
+});
+
+setInterval(pollEvents, 2500);
+</script>
+</body>
+</html>

@@ -24,10 +24,26 @@ private struct UIWorkersContext: Encodable {
     let workers: [UIWorkerSummary]
     let queue_ingest_depth: Int
     let queue_dead_letter_depth: Int
+    let notice: String?
+    let error: String?
 }
 
 private struct UIPresetsContext: Encodable {
     let presets: [UIPresetSummary]
+    let notice: String?
+    let error: String?
+}
+
+private struct UIEventsContext: Encodable {
+    let events: [UIEventSummary]
+    let initial_cursor: Int
+}
+
+private struct UIEventSummary: Encodable {
+    let id: Int
+    let type: String
+    let created_at: String
+    let payload: String
 }
 
 private struct UIJobSummary: Encodable {
@@ -44,12 +60,15 @@ private struct UIJobSummary: Encodable {
 private struct UIWorkerSummary: Encodable {
     let id: String
     let name: String
+    let status_raw: String
     let status: String
     let capabilities: String
     let last_seen: String
     let version: String
     let load: String
     let ram_mb: String
+    let can_approve: Bool
+    let can_heartbeat: Bool
 }
 
 private struct UIPresetSummary: Encodable {
@@ -82,6 +101,26 @@ private struct UILocalIngestForm: Content {
     let tags: String?
 }
 
+private struct UIPresetCreateForm: Content {
+    let id: String
+    let name: String
+    let name_format: String
+    let class_code: String?
+    let postprocess: String?
+}
+
+private struct UIWorkerEnrollForm: Content {
+    let name: String
+    let capabilities: String?
+}
+
+private struct UIWorkerHeartbeatForm: Content {
+    let version: String?
+    let load: String?
+    let ram_mb: String?
+    let capabilities: String?
+}
+
 func registerUIRoutes(_ app: Application) {
     app.get { req async throws -> Response in
         req.redirect(to: "/ui")
@@ -98,6 +137,9 @@ func registerUIRoutes(_ app: Application) {
     }
     app.get("u", "presets") { req async throws -> Response in
         req.redirect(to: "/ui/presets")
+    }
+    app.get("u", "events") { req async throws -> Response in
+        req.redirect(to: "/ui/events")
     }
     app.get("u", "jobs", ":id") { req async throws -> Response in
         guard let id = req.parameters.get("id") else {
@@ -159,6 +201,112 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
+    app.on(.POST, "ui", "presets", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIPresetCreateForm.self)
+            let preset = Preset(
+                id: form.id.trimmingCharacters(in: .whitespacesAndNewlines),
+                name: form.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                name_format: form.name_format.trimmingCharacters(in: .whitespacesAndNewlines),
+                class_code: nonEmptyString(form.class_code),
+                postprocess: parseUploadTags(raw: form.postprocess)
+            )
+            try validatePreset(preset)
+            await req.application.appState.upsertPreset(preset)
+            try ConfigLoader.savePreset(preset)
+            return req.redirect(to: "/ui/presets?notice=\(urlQueryEncoded("Préréglage enregistré."))")
+        } catch let abort as AbortError {
+            let reason = abort.reason.isEmpty ? "Échec de création du préréglage." : abort.reason
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(reason))")
+        } catch {
+            req.logger.error("Échec création préréglage UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant la création du préréglage."))")
+        }
+    }
+
+    app.on(.POST, "ui", "workers", "enroll", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIWorkerEnrollForm.self)
+            let name = form.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else {
+                throw Abort(.badRequest, reason: "Le nom de l'agent est requis.")
+            }
+            let capabilities = parseUploadTags(raw: form.capabilities)
+            let worker = await req.application.appState.enrollWorker(
+                name: name,
+                capabilities: capabilities
+            )
+            await EventPublisher.publish(
+                type: "worker.enrolled",
+                payload: ["worker_id": worker.id.uuidString],
+                application: req.application,
+                database: req.db,
+                logger: req.logger
+            )
+            return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Agent enrôlé."))")
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded(abort.reason))")
+        } catch {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Erreur interne pendant l'enrôlement."))")
+        }
+    }
+
+    app.post("ui", "workers", ":id", "approve") { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let workerID = UUID(uuidString: id) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
+        }
+        guard let worker = await req.application.appState.approveWorker(id: workerID) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
+        }
+        await EventPublisher.publish(
+            type: "worker.approved",
+            payload: ["worker_id": worker.id.uuidString],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+        return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Agent approuvé."))")
+    }
+
+    app.on(.POST, "ui", "workers", ":id", "heartbeat", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let workerID = UUID(uuidString: id) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Identifiant d'agent invalide."))")
+        }
+        guard let existing = await req.application.appState.worker(id: workerID) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
+        }
+        guard existing.status == .approved else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("L'agent doit être approuvé avant heartbeat."))")
+        }
+
+        let form = try req.content.decode(UIWorkerHeartbeatForm.self)
+        let heartbeat = WorkerHeartbeatRequest(
+            version: nonEmptyString(form.version) ?? "ui-test",
+            load: parseOptionalDouble(form.load),
+            ram_mb: parseOptionalInt(form.ram_mb),
+            capabilities: {
+                let parsed = parseUploadTags(raw: form.capabilities)
+                return parsed.isEmpty ? nil : parsed
+            }()
+        )
+
+        guard let worker = await req.application.appState.heartbeatWorker(id: workerID, payload: heartbeat) else {
+            return req.redirect(to: "/ui/workers?error=\(urlQueryEncoded("Agent introuvable."))")
+        }
+        await EventPublisher.publish(
+            type: "worker.heartbeat",
+            payload: ["worker_id": worker.id.uuidString],
+            application: req.application,
+            database: req.db,
+            logger: req.logger
+        )
+        return req.redirect(to: "/ui/workers?notice=\(urlQueryEncoded("Heartbeat de test envoyé."))")
+    }
+
     app.get("ui") { req async throws -> View in
         let jobs = try await loadJobs(req: req, limit: 100)
         let workerCount = await req.application.appState.listWorkers().count
@@ -194,14 +342,40 @@ func registerUIRoutes(_ app: Application) {
         let context = UIWorkersContext(
             workers: workers,
             queue_ingest_depth: queueStats.ingest_depth,
-            queue_dead_letter_depth: queueStats.dead_letter_depth
+            queue_dead_letter_depth: queueStats.dead_letter_depth,
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"]
         )
         return try await req.view.render("workers", context)
     }
 
     app.get("ui", "presets") { req async throws -> View in
         let presets = await loadPresets(req: req)
-        return try await req.view.render("presets", UIPresetsContext(presets: presets))
+        return try await req.view.render(
+            "presets",
+            UIPresetsContext(
+                presets: presets,
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+
+    app.get("ui", "events") { req async throws -> View in
+        let bootstrap = try await loadUIEvents(req: req, cursor: 0)
+        let summaries = bootstrap.events.map { event in
+            UIEventSummary(
+                id: event.id,
+                type: event.type,
+                created_at: formatTimestamp(event.created_at),
+                payload: formatEventPayload(event.payload)
+            )
+        }
+        let context = UIEventsContext(
+            events: Array(summaries.suffix(200)),
+            initial_cursor: bootstrap.cursor
+        )
+        return try await req.view.render("events", context)
     }
 
     app.get("ui", "jobs", ":id") { req async throws -> View in
@@ -255,24 +429,36 @@ private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
     return workers.map { worker in
-        UIWorkerSummary(
+        let rawStatus = worker.status.rawValue
+        return UIWorkerSummary(
             id: worker.id.uuidString,
             name: worker.name,
-            status: localizedWorkerStatus(worker.status.rawValue),
+            status_raw: rawStatus,
+            status: localizedWorkerStatus(rawStatus),
             capabilities: worker.capabilities.joined(separator: ", "),
             last_seen: worker.lastSeen.map(formatTimestamp) ?? "-",
             version: worker.version ?? "-",
             load: worker.load.map { String(format: "%.2f", $0) } ?? "-",
-            ram_mb: worker.ram_mb.map(String.init) ?? "-"
+            ram_mb: worker.ram_mb.map(String.init) ?? "-",
+            can_approve: rawStatus == WorkerStatus.pending.rawValue,
+            can_heartbeat: rawStatus == WorkerStatus.approved.rawValue
         )
+    }
+}
+
+private func loadUIEvents(req: Request, cursor: Int) async throws -> EventsResponse {
+    do {
+        return try await JobPersistenceRepository.listEvents(after: cursor, on: req.db)
+    } catch {
+        req.logger.warning("Bascule vers les événements en mémoire: \(error.localizedDescription)")
+        return await req.application.appState.events(after: cursor)
     }
 }
 
 private func loadPresets(req: Request) async -> [UIPresetSummary] {
     let disk = ConfigLoader.loadPresets()
     let memory = await req.application.appState.listPresets()
-    let merged = Dictionary(uniqueKeysWithValues: (disk + memory).map { ($0.id, $0) })
-    return merged.values
+    return mergePresets(disk: disk, memory: memory)
         .sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
@@ -326,6 +512,14 @@ private func formatTimestamp(_ date: Date) -> String {
     return formatter.string(from: date)
 }
 
+private func formatEventPayload(_ payload: [String: String]) -> String {
+    guard !payload.isEmpty else { return "-" }
+    return payload
+        .sorted { $0.key < $1.key }
+        .map { "\($0.key)=\($0.value)" }
+        .joined(separator: ", ")
+}
+
 private func localizedJobStatus(_ raw: String) -> String {
     switch raw {
     case "pending": return "En attente"
@@ -362,6 +556,22 @@ private func parseUploadTags(raw: String?) -> [String] {
         .split(whereSeparator: { $0 == "," || $0 == ";" })
         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty }
+}
+
+private func nonEmptyString(_ raw: String?) -> String? {
+    guard let raw else { return nil }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+}
+
+private func parseOptionalDouble(_ raw: String?) -> Double? {
+    guard let value = nonEmptyString(raw) else { return nil }
+    return Double(value)
+}
+
+private func parseOptionalInt(_ raw: String?) -> Int? {
+    guard let value = nonEmptyString(raw) else { return nil }
+    return Int(value)
 }
 
 private func resolveUILocalIngestInboxDirectory() -> URL {

@@ -111,6 +111,7 @@
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/events">Événements</a>
         <a class="btn" href="#(download_url)">Télécharger (action explicite)</a>
     </nav>
 </header>

@@ -5,8 +5,7 @@ func registerPresetRoutes(_ app: Application) {
         v1.get("presets") { req async throws -> [Preset] in
             let disk = ConfigLoader.loadPresets()
             let memory = await req.application.appState.listPresets()
-            let merged = Dictionary(uniqueKeysWithValues: (disk + memory).map { ($0.id, $0) })
-            return Array(merged.values)
+            return mergePresets(disk: disk, memory: memory)
         }
 
         v1.post("presets") { req async throws -> Preset in
@@ -19,7 +18,20 @@ func registerPresetRoutes(_ app: Application) {
     }
 }
 
-private func validatePreset(_ preset: Preset) throws {
+func mergePresets(disk: [Preset], memory: [Preset]) -> [Preset] {
+    var byID: [String: Preset] = [:]
+    for preset in disk {
+        byID[preset.id] = preset
+    }
+    for preset in memory {
+        byID[preset.id] = preset
+    }
+    return byID.values.sorted {
+        $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending
+    }
+}
+
+func validatePreset(_ preset: Preset) throws {
     guard !preset.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         throw Abort(.badRequest, reason: "L'identifiant du préréglage est requis.")
     }
