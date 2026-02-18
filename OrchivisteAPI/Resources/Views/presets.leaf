@@ -104,6 +104,13 @@
     </nav>
 </header>
 <main class="wrap">
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
     <section class="card">
         <h2>Paramètres de routage local</h2>
         <p style="margin: 0 0 10px; color: var(--muted);">
@@ -129,9 +136,33 @@
     </section>
 
     <section class="card">
+        <h2>Plan de classification (ville / SyGED)</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Importer ici le plan de classification officiel (JSON) pour centraliser les codes, libellés et mots-clés.
+        </p>
+        <form action="/ui/taxonomy/import" method="post">
+            <div class="form-grid">
+                <label>ID du plan
+                    <input type="text" name="taxonomy_id" value="#(selected_taxonomy_id)" placeholder="syged_2026">
+                </label>
+            </div>
+            <label>JSON du plan de classification
+                <textarea name="taxonomy_json" rows="14" spellcheck="false">#(selected_taxonomy_json)</textarea>
+            </label>
+            <button class="btn" type="submit">Importer le plan</button>
+        </form>
+        <div style="margin-top: 10px;">
+            <strong>Plans disponibles:</strong>
+            #for(id in taxonomy_ids):
+            <a href="/ui/presets?taxonomy_id=#(id)" style="margin-left: 8px;">#(id)</a>
+            #endfor
+        </div>
+    </section>
+
+    <section class="card">
         <h2>Ajouter une règle type/sujet</h2>
         <p style="margin: 0 0 10px; color: var(--muted);">
-            Formulaire guidé pour choisir automatiquement le dossier et le nom selon le type de document et le sujet détectés.
+            Formulaire guidé pour choisir automatiquement le dossier et le nom selon le type et le sujet détectés.
         </p>
         <form action="/ui/routing/rules/create" method="post">
             <div class="form-grid">
@@ -215,12 +246,6 @@
 
     <section class="card">
         <h2>Créer un préréglage</h2>
-        #if(notice):
-        <p class="notice">#(notice)</p>
-        #endif
-        #if(error):
-        <p class="error">#(error)</p>
-        #endif
         <form action="/ui/presets" method="post">
             <div class="form-grid">
                 <label>ID

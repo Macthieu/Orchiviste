@@ -123,6 +123,9 @@
         <p style="margin:0 0 10px; color: var(--muted); font-size: 13px;">
             Aperçu en images JPG: la sélection de texte se fait via "Texte d'aperçu" ou via "Télécharger PDF OCR".
         </p>
+        <p style="margin:0 0 10px; color: var(--muted); font-size: 12px;">
+            Si une page ne s'affiche pas, recharge la page puis utilise "Télécharger PDF OCR (explicite)" pour vérifier le rendu texte sélectionnable.
+        </p>
         <div id="pages"></div>
     </section>
 
@@ -150,10 +153,17 @@
 
         #if(can_review):
         <p class="notice">Revue requise : correction obligatoire avant routage.</p>
+        <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
+            Corrige le code/préréglage ci-dessous, ajoute un commentaire, puis clique sur "Soumettre la revue".
+        </p>
         <label>Code de classement corrigé <input id="reviewClass" type="text"></label>
         <label>Préréglage corrigé <input id="reviewPreset" type="text"></label>
         <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
         <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
+        #else:
+        <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
+            Aucune correction requise pour cette tâche (statut différent de "Revue requise").
+        </p>
         #endif
 
         <h4>Routage et renommage</h4>
@@ -207,6 +217,11 @@ const observer = new IntersectionObserver((entries) => {
         if (img.dataset.loaded === "1") continue;
         img.src = `/v1/preview/${jobId}/page/${page}.jpg`;
         img.onload = () => { img.classList.add("ready"); img.dataset.loaded = "1"; };
+        img.onerror = () => {
+            img.dataset.loaded = "1";
+            entry.target.style.background = "#f6efe4";
+            entry.target.innerHTML = `<div style="padding:12px;color:#ac5d0c;font-size:12px;">Aperçu image indisponible pour la page ${page}.</div>`;
+        };
     }
 }, { rootMargin: "300px 0px" });
 

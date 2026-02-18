@@ -111,22 +111,29 @@ enum PreviewRenderer {
             return nil
         }
 
+        let renderedImages = extractImagesWithPdftoppm(fileURL: fileURL, logger: logger)
         var textPages: [Int: String] = [:]
         var imagesByPage: [Int: Data] = [:]
-        for (index, text) in selectedPages.enumerated() {
+        let totalPages = max(selectedPages.count, renderedImages.count, 1)
+        for index in 0..<totalPages {
             let page = index + 1
+            let text = index < selectedPages.count ? selectedPages[index] : ""
             textPages[page] = text.isEmpty ? PreviewHelper.defaultText(page: page) : text
-            imagesByPage[page] = PreviewHelper.placeholderJPEG()
+            if index < renderedImages.count {
+                imagesByPage[page] = renderedImages[index]
+            } else {
+                imagesByPage[page] = PreviewHelper.placeholderJPEG()
+            }
         }
 
         logger.info("Aperçu texte externe généré.", metadata: [
             "job_id": .string(jobId.uuidString),
-            "pages": .stringConvertible(selectedPages.count),
+            "pages": .stringConvertible(totalPages),
             "source": .string(selectedSource)
         ])
         return PreviewRecord(
             jobId: jobId,
-            pages: selectedPages.count,
+            pages: totalPages,
             textPages: textPages,
             imagesByPage: imagesByPage,
             createdAt: Date()
@@ -191,6 +198,16 @@ enum PreviewRenderer {
     private static func ocrMaxPages() -> Int {
         let parsed = Int(Environment.get("ORCHIVISTE_OCR_MAX_PAGES") ?? "12") ?? 12
         return max(1, min(200, parsed))
+    }
+
+    private static func previewMaxPages() -> Int {
+        let parsed = Int(Environment.get("ORCHIVISTE_PREVIEW_MAX_PAGES") ?? "\(ocrMaxPages())") ?? ocrMaxPages()
+        return max(1, min(200, parsed))
+    }
+
+    private static func previewImageDPI() -> Int {
+        let parsed = Int(Environment.get("ORCHIVISTE_PREVIEW_DPI") ?? "140") ?? 140
+        return max(72, min(300, parsed))
     }
 
     private static func ocrDPI() -> Int {
@@ -292,6 +309,64 @@ enum PreviewRenderer {
             return nil
         }
         return pages
+    }
+
+    private static func extractImagesWithPdftoppm(fileURL: URL, logger: Logger) -> [Data] {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-preview-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            logger.warning("Aperçu image externe indisponible: création dossier temporaire échouée.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return []
+        }
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        let imagePrefix = tempDir.appendingPathComponent("page").path
+        let convert = runCommand(
+            executable: "pdftoppm",
+            arguments: [
+                "-f", "1",
+                "-l", "\(previewMaxPages())",
+                "-r", "\(previewImageDPI())",
+                "-jpeg",
+                fileURL.path,
+                imagePrefix
+            ]
+        )
+        if convert.exitCode != 0 {
+            logger.warning("Aperçu image externe indisponible: pdftoppm en échec.", metadata: [
+                "path": .string(fileURL.path),
+                "stderr": .string(convert.stderr)
+            ])
+            return []
+        }
+
+        let imageURLs: [URL]
+        do {
+            imageURLs = try FileManager.default
+                .contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension.lowercased() == "jpg" || $0.pathExtension.lowercased() == "jpeg" }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        } catch {
+            logger.warning("Aperçu image externe indisponible: lecture des images échouée.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return []
+        }
+
+        var images: [Data] = []
+        images.reserveCapacity(imageURLs.count)
+        for url in imageURLs {
+            if let data = try? Data(contentsOf: url), !data.isEmpty {
+                images.append(data)
+            }
+        }
+        return images
     }
 
     private static func runCommand(executable: String, arguments: [String]) -> (stdout: String, stderr: String, exitCode: Int32) {

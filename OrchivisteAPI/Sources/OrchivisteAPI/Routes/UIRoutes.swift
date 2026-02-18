@@ -13,7 +13,10 @@ private struct UIDashboardContext: Encodable {
     let queue_ingest_depth: Int
     let queue_dead_letter_depth: Int
     let recent_jobs: [UIJobSummary]
+    let upload_notice: String?
     let upload_error: String?
+    let ingest_default_input_folder: String
+    let ingest_default_output_folder: String
 }
 
 private struct UIJobsContext: Encodable {
@@ -35,6 +38,9 @@ private struct UIPresetsContext: Encodable {
     let routing_default_name_format: String
     let routing_rules: [UIRoutingRuleSummary]
     let routing_rules_json: String
+    let taxonomy_ids: [String]
+    let selected_taxonomy_id: String?
+    let selected_taxonomy_json: String
     let notice: String?
     let error: String?
 }
@@ -122,6 +128,14 @@ private struct UILocalIngestForm: Content {
     let tags: String?
 }
 
+private struct UIFolderIngestForm: Content {
+    let input_folder: String
+    let tags: String?
+    let recursive: String?
+    let max_files: String?
+    let output_root: String?
+}
+
 private struct UIPresetCreateForm: Content {
     let id: String
     let name: String
@@ -149,6 +163,11 @@ private struct UIRoutingRuleCreateForm: Content {
     let preset_id: String?
     let destination_template: String?
     let name_format: String?
+}
+
+private struct UITaxonomyImportForm: Content {
+    let taxonomy_id: String?
+    let taxonomy_json: String
 }
 
 private struct UIWorkerEnrollForm: Content {
@@ -240,6 +259,67 @@ func registerUIRoutes(_ app: Application) {
                 "error": .string(error.localizedDescription)
             ])
             return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded("Erreur interne pendant l'import PDF."))")
+        }
+    }
+
+    app.on(.POST, "ui", "ingest", "folder", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIFolderIngestForm.self)
+            let inputFolderRaw = form.input_folder.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !inputFolderRaw.isEmpty else {
+                throw Abort(.badRequest, reason: "Le dossier d'entrée est requis.")
+            }
+
+            let inputURL = URL(fileURLWithPath: inputFolderRaw, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: inputURL.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                throw Abort(.badRequest, reason: "Le dossier d'entrée est introuvable sur le serveur API.")
+            }
+
+            let recursive = parseBooleanFlag(form.recursive, defaultValue: true)
+            let maxFiles = parseMaxFiles(form.max_files)
+            let tags = parseUploadTags(raw: form.tags)
+            let files = try collectPDFFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
+            guard !files.isEmpty else {
+                throw Abort(.badRequest, reason: "Aucun fichier PDF trouvé dans le dossier d'entrée.")
+            }
+
+            if let outputRoot = nonEmptyString(form.output_root) {
+                let existing = ConfigLoader.loadRoutingLocalSettings()
+                let merged = RoutingLocalSettings(
+                    local_route_root: outputRoot,
+                    default_destination_template: existing?.default_destination_template,
+                    default_name_format: existing?.default_name_format
+                )
+                try ConfigLoader.saveRoutingLocalSettings(merged)
+            }
+
+            var ingested = 0
+            for file in files {
+                let requestBody = IngestRequest(
+                    fileURL: file.path,
+                    source: JobSource(kind: "local", url: nil, site: nil, library: nil, itemId: nil),
+                    tags: tags.isEmpty ? nil : tags,
+                    hints: nil
+                )
+                let idempotency = buildFolderIngestIdempotencyKey(fileURL: file)
+                _ = try await enqueueIngest(
+                    body: requestBody,
+                    idempotencyKey: idempotency,
+                    req: req
+                )
+                ingested += 1
+            }
+
+            return req.redirect(to: "/ui?upload_notice=\(urlQueryEncoded("\(ingested) PDF ajouté(s) depuis le dossier."))")
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded(abort.reason))")
+        } catch {
+            req.logger.error("Échec ingestion dossier UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded("Erreur interne pendant l'import du dossier."))")
         }
     }
 
@@ -389,6 +469,36 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
+    app.on(.POST, "ui", "taxonomy", "import", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UITaxonomyImportForm.self)
+            let rawJSON = form.taxonomy_json.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !rawJSON.isEmpty else {
+                throw Abort(.badRequest, reason: "Le JSON du plan de classification est requis.")
+            }
+
+            let data = Data(rawJSON.utf8)
+            var taxonomy = try JSONDecoder().decode(TaxonomyRecord.self, from: data)
+            if let explicitID = nonEmptyString(form.taxonomy_id),
+               explicitID != taxonomy.taxonomy_id {
+                taxonomy = TaxonomyRecord(taxonomy_id: explicitID, root: taxonomy.root)
+            }
+
+            await req.application.appState.saveTaxonomy(taxonomy)
+            try ConfigLoader.saveTaxonomy(taxonomy)
+            return req.redirect(
+                to: "/ui/presets?notice=\(urlQueryEncoded("Plan de classification importé."))&taxonomy_id=\(urlQueryEncoded(taxonomy.taxonomy_id))"
+            )
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(abort.reason))")
+        } catch {
+            req.logger.error("Échec import taxonomie UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("JSON de taxonomie invalide ou erreur interne."))")
+        }
+    }
+
     app.on(.POST, "ui", "workers", "enroll", body: .collect(maxSize: "1mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIWorkerEnrollForm.self)
@@ -479,6 +589,8 @@ func registerUIRoutes(_ app: Application) {
         let jobs = try await loadJobs(req: req, limit: 100)
         let workerCount = try await loadWorkerRecords(req: req).count
         let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
+        let routingSettings = ConfigLoader.loadRoutingLocalSettings()
+        let uploadNotice = req.query[String.self, at: "upload_notice"]
         let uploadError = req.query[String.self, at: "upload_error"]
 
         let counts = Dictionary(grouping: jobs, by: \.status)
@@ -494,7 +606,10 @@ func registerUIRoutes(_ app: Application) {
             queue_ingest_depth: queueStats.ingest_depth,
             queue_dead_letter_depth: queueStats.dead_letter_depth,
             recent_jobs: Array(jobs.prefix(15)),
-            upload_error: uploadError
+            upload_notice: uploadNotice,
+            upload_error: uploadError,
+            ingest_default_input_folder: resolveUILocalIngestInboxDirectory().path,
+            ingest_default_output_folder: routingSettings?.local_route_root ?? "/data/routed"
         )
         return try await req.view.render("dashboard", context)
     }
@@ -520,6 +635,9 @@ func registerUIRoutes(_ app: Application) {
     app.get("ui", "presets") { req async throws -> View in
         let presets = await loadPresets(req: req)
         let routingSettings = ConfigLoader.loadRoutingLocalSettings()
+        let taxonomyIDs = await loadTaxonomyIDs(req: req)
+        let selectedTaxonomyID = req.query[String.self, at: "taxonomy_id"] ?? taxonomyIDs.first
+        let selectedTaxonomyJSON = await loadTaxonomyJSONPreview(id: selectedTaxonomyID, req: req)
         let routingRules = (ConfigLoader.loadRoutingRules()?.rules ?? []).map { rule in
             UIRoutingRuleSummary(
                 id: nonEmptyString(rule.id) ?? "(sans-id)",
@@ -541,6 +659,9 @@ func registerUIRoutes(_ app: Application) {
                 routing_default_name_format: routingSettings?.default_name_format ?? "",
                 routing_rules: routingRules,
                 routing_rules_json: ConfigLoader.loadRoutingRulesRawJSON(),
+                taxonomy_ids: taxonomyIDs,
+                selected_taxonomy_id: selectedTaxonomyID,
+                selected_taxonomy_json: selectedTaxonomyJSON,
                 notice: req.query[String.self, at: "notice"],
                 error: req.query[String.self, at: "error"]
             )
@@ -570,7 +691,7 @@ func registerUIRoutes(_ app: Application) {
             throw Abort(.badRequest, reason: "Identifiant de tâche invalide.")
         }
         let job = try await resolveUIJob(jobID: jobID, req: req)
-        let preview = await req.application.appState.preview(jobId: jobID)
+        let preview = try await PreviewLoader.ensurePreview(jobId: jobID, req: req)
         let canRoute: Bool
         let routeDisabledReason: String?
         if job.status == .needs_review {
@@ -920,6 +1041,118 @@ private func formatUploadTimestamp(_ date: Date) -> String {
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.dateFormat = "yyyyMMdd-HHmmss"
     return formatter.string(from: date)
+}
+
+private func parseBooleanFlag(_ raw: String?, defaultValue: Bool) -> Bool {
+    guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+          !raw.isEmpty else {
+        return defaultValue
+    }
+    return raw == "1" || raw == "true" || raw == "on" || raw == "yes"
+}
+
+private func parseMaxFiles(_ raw: String?) -> Int {
+    guard let value = Int(raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") else {
+        return 50
+    }
+    return max(1, min(500, value))
+}
+
+private func collectPDFFiles(in root: URL, recursive: Bool, maxFiles: Int) throws -> [URL] {
+    let manager = FileManager.default
+    var results: [URL] = []
+    if recursive {
+        guard let enumerator = manager.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else { continue }
+            guard url.pathExtension.lowercased() == "pdf" else { continue }
+            results.append(url)
+            if results.count >= maxFiles {
+                break
+            }
+        }
+    } else {
+        let items = try manager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        for url in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else { continue }
+            guard url.pathExtension.lowercased() == "pdf" else { continue }
+            results.append(url)
+            if results.count >= maxFiles {
+                break
+            }
+        }
+    }
+    return results.sorted(by: { $0.path < $1.path })
+}
+
+private func buildFolderIngestIdempotencyKey(fileURL: URL) -> String {
+    let modificationDate = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        ?? Date.distantPast
+    let seconds = Int(modificationDate.timeIntervalSince1970)
+    let raw = "ui-folder-\(fileURL.path)-\(seconds)"
+    return raw
+        .replacingOccurrences(of: "[^a-zA-Z0-9._:-]+", with: "-", options: .regularExpression)
+        .prefix(200)
+        .description
+}
+
+private func loadTaxonomyIDs(req: Request) async -> [String] {
+    var ids = Set<String>()
+
+    let inMemory = await req.application.appState.listTaxonomies().map(\.taxonomy_id)
+    for id in inMemory where !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        ids.insert(id)
+    }
+
+    let diskDirectory = ConfigLoader.baseDir().appendingPathComponent("analysis/taxonomy", isDirectory: true)
+    if let files = try? FileManager.default.contentsOfDirectory(at: diskDirectory, includingPropertiesForKeys: nil) {
+        for url in files where url.pathExtension.lowercased() == "json" {
+            ids.insert(url.deletingPathExtension().lastPathComponent)
+        }
+    }
+    return ids.sorted()
+}
+
+private func loadTaxonomyJSONPreview(id: String?, req: Request) async -> String {
+    guard let id = id?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !id.isEmpty else {
+        return "{\n  \"taxonomy_id\": \"plan-ville\",\n  \"root\": []\n}\n"
+    }
+
+    if let inMemory = await req.application.appState.taxonomy(id: id),
+       let data = try? JSONEncoder.prettyNoSlash.encode(inMemory),
+       let text = String(data: data, encoding: .utf8) {
+        return text
+    }
+
+    if let disk = ConfigLoader.loadTaxonomy(id: id),
+       let data = try? JSONEncoder.prettyNoSlash.encode(disk),
+       let text = String(data: data, encoding: .utf8) {
+        return text
+    }
+
+    return "{\n  \"taxonomy_id\": \"\(id)\",\n  \"root\": []\n}\n"
+}
+
+private extension JSONEncoder {
+    static var prettyNoSlash: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        return encoder
+    }
 }
 
 private func urlQueryEncoded(_ raw: String) -> String {

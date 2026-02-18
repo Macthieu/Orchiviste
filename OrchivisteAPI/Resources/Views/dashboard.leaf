@@ -89,6 +89,16 @@
             font-weight: 700;
             margin-top: 10px;
         }
+        .notice {
+            color: var(--accent);
+            font-weight: 700;
+            margin-top: 10px;
+        }
+        .help {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 8px;
+        }
         .kpi {
             font-size: 28px;
             font-weight: 800;
@@ -155,6 +165,32 @@
             </label>
             <button type="submit">Importer et analyser</button>
         </form>
+        <div class="help">
+            Mode Docker: le serveur lit les dossiers montés, par défaut <code>/data/inbox</code> (entrée) et <code>/data/routed</code> (sortie).
+        </div>
+        <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
+        <h3 style="margin: 0 0 8px;">Importer un dossier local (lot)</h3>
+        <form class="upload-form" action="/ui/ingest/folder" method="post">
+            <label>Dossier d'entrée (côté serveur)
+                <input type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox">
+            </label>
+            <label>Dossier de sortie (optionnel)
+                <input type="text" name="output_root" value="#(ingest_default_output_folder)" placeholder="/data/routed">
+            </label>
+            <label>Étiquettes (optionnel)
+                <input type="text" name="tags" placeholder="ville, résolution, conseil">
+            </label>
+            <label>Maximum de fichiers
+                <input type="number" name="max_files" min="1" max="500" value="50">
+            </label>
+            <label>Récursif
+                <input type="checkbox" name="recursive" value="1" checked>
+            </label>
+            <button type="submit">Importer le dossier</button>
+        </form>
+        #if(upload_notice):
+        <p class="notice">#(upload_notice)</p>
+        #endif
         #if(upload_error):
         <p class="error">#(upload_error)</p>
         #endif

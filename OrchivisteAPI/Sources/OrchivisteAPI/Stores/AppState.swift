@@ -148,12 +148,53 @@ actor AppState {
         job.needsReview = false
         job.status = .completed
         job.steps.completed = job.steps.completed ?? now
+        var champs = job.analysisChamps ?? [:]
+
         if let correctedClassCode = request.corrected_class_code, !correctedClassCode.isEmpty {
             job.suggestedClassCode = correctedClassCode
+            champs["review.corrected.class_code"] = correctedClassCode
         }
         if let correctedPreset = request.corrected_preset, !correctedPreset.isEmpty {
             job.suggestedPreset = correctedPreset
+            champs["review.corrected.preset"] = correctedPreset
         }
+        if let correctedFields = request.corrected_fields {
+            for (rawKey, rawValue) in correctedFields {
+                let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !key.isEmpty, !value.isEmpty else { continue }
+                champs["review.corrected.\(key)"] = value
+                switch key.lowercased() {
+                case "type_doc":
+                    job.analysisTypeDoc = value
+                case "sujets", "sujet":
+                    let sujets = value
+                        .split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "|" })
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    if !sujets.isEmpty {
+                        job.analysisSujets = sujets
+                    }
+                case "class_code":
+                    if request.corrected_class_code?.isEmpty != false {
+                        job.suggestedClassCode = value
+                    }
+                case "preset", "preset_id":
+                    if request.corrected_preset?.isEmpty != false {
+                        job.suggestedPreset = value
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        if let comment = request.comment?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !comment.isEmpty {
+            champs["review.comment"] = comment
+        }
+        champs["review.reviewed_at"] = ISO8601DateFormatter().string(from: now)
+        job.analysisChamps = champs
+
         jobs[jobId] = job
         addEvent(type: "job.reviewed", payload: ["job_id": jobId.uuidString])
         addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
@@ -162,6 +203,10 @@ actor AppState {
 
     func preview(jobId: UUID) -> PreviewRecord? {
         previews[jobId]
+    }
+
+    func cachePreview(_ preview: PreviewRecord) {
+        previews[preview.jobId] = preview
     }
 
     func analysis(jobId: UUID) -> AnalysisResponse? {

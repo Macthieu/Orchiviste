@@ -155,6 +155,17 @@
     <p class="error">#(error)</p>
     #endif
 
+    <section class="enroll" style="margin-bottom: 14px;">
+        <h3>À quoi servent les agents ?</h3>
+        <p style="margin: 0 0 6px;">
+            Les agents sont des workers macOS pour les traitements lourds (OCR Vision, Core ML, découpe PDF).
+            En MVP, cette page sert surtout à simuler leur cycle <strong>enrôlement → approbation → heartbeat</strong>.
+        </p>
+        <p style="margin: 0; color: var(--muted); font-size: 12px;">
+            Si tu n’utilises pas encore de workers externes, tu peux laisser cette section telle quelle.
+        </p>
+    </section>
+
     <section class="cards">
         <article class="card"><div>Agents</div><div class="kpi">#(workers.count)</div></article>
         <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
