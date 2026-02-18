@@ -16,6 +16,8 @@ xcuserdata/
 
 # Logs / runtime
 *.log
+runtime/
+rename-batch-report-*.csv
 
 # DB locale
 db.sqlite

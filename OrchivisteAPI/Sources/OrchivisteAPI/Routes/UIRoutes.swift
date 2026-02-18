@@ -30,6 +30,10 @@ private struct UIWorkersContext: Encodable {
 
 private struct UIPresetsContext: Encodable {
     let presets: [UIPresetSummary]
+    let routing_local_route_root: String
+    let routing_default_destination_template: String
+    let routing_default_name_format: String
+    let routing_rules_json: String
     let notice: String?
     let error: String?
 }
@@ -107,6 +111,16 @@ private struct UIPresetCreateForm: Content {
     let name_format: String
     let class_code: String?
     let postprocess: String?
+}
+
+private struct UIRoutingSettingsForm: Content {
+    let local_route_root: String?
+    let default_destination_template: String?
+    let default_name_format: String?
+}
+
+private struct UIRoutingRulesForm: Content {
+    let rules_json: String
 }
 
 private struct UIWorkerEnrollForm: Content {
@@ -223,6 +237,47 @@ func registerUIRoutes(_ app: Application) {
                 "error": .string(error.localizedDescription)
             ])
             return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant la création du préréglage."))")
+        }
+    }
+
+    app.on(.POST, "ui", "routing", "settings", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIRoutingSettingsForm.self)
+            let settings = RoutingLocalSettings(
+                local_route_root: nonEmptyString(form.local_route_root),
+                default_destination_template: nonEmptyString(form.default_destination_template),
+                default_name_format: nonEmptyString(form.default_name_format)
+            )
+            try ConfigLoader.saveRoutingLocalSettings(settings)
+            return req.redirect(to: "/ui/presets?notice=\(urlQueryEncoded("Paramètres de routage enregistrés."))")
+        } catch let abort as AbortError {
+            let reason = abort.reason.isEmpty ? "Échec de sauvegarde des paramètres de routage." : abort.reason
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(reason))")
+        } catch {
+            req.logger.error("Échec sauvegarde paramètres de routage UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant l'enregistrement des paramètres de routage."))")
+        }
+    }
+
+    app.on(.POST, "ui", "routing", "rules", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIRoutingRulesForm.self)
+            let raw = form.rules_json.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !raw.isEmpty else {
+                throw Abort(.badRequest, reason: "Le JSON des règles ne peut pas être vide.")
+            }
+            try ConfigLoader.saveRoutingRulesRawJSON(raw)
+            return req.redirect(to: "/ui/presets?notice=\(urlQueryEncoded("Règles type/sujet enregistrées."))")
+        } catch let abort as AbortError {
+            let reason = abort.reason.isEmpty ? "Échec de sauvegarde des règles type/sujet." : abort.reason
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(reason))")
+        } catch {
+            req.logger.error("Échec sauvegarde règles type/sujet UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("JSON invalide ou erreur interne pendant l'enregistrement des règles."))")
         }
     }
 
@@ -356,10 +411,15 @@ func registerUIRoutes(_ app: Application) {
 
     app.get("ui", "presets") { req async throws -> View in
         let presets = await loadPresets(req: req)
+        let routingSettings = ConfigLoader.loadRoutingLocalSettings()
         return try await req.view.render(
             "presets",
             UIPresetsContext(
                 presets: presets,
+                routing_local_route_root: routingSettings?.local_route_root ?? "",
+                routing_default_destination_template: routingSettings?.default_destination_template ?? "",
+                routing_default_name_format: routingSettings?.default_name_format ?? "",
+                routing_rules_json: ConfigLoader.loadRoutingRulesRawJSON(),
                 notice: req.query[String.self, at: "notice"],
                 error: req.query[String.self, at: "error"]
             )

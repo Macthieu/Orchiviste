@@ -36,6 +36,9 @@ struct JobRecord: Content, Codable {
     var steps: JobStepTimestamps
     var suggestedPreset: String?
     var suggestedClassCode: String?
+    var analysisTypeDoc: String?
+    var analysisSujets: [String]?
+    var analysisChamps: [String: String]?
     var confidence: Double?
     var needsReview: Bool
 }

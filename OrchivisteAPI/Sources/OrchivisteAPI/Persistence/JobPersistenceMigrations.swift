@@ -84,3 +84,47 @@ struct CreateWorkersMigration: AsyncMigration {
         try await database.schema(WorkerRow.schema).delete()
     }
 }
+
+struct AddJobAnalysisSummaryMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await addColumnIfMissing(
+            name: "analysis_type_doc",
+            type: .string,
+            on: database
+        )
+        try await addColumnIfMissing(
+            name: "analysis_sujets_json",
+            type: .string,
+            on: database
+        )
+        try await addColumnIfMissing(
+            name: "analysis_champs_json",
+            type: .string,
+            on: database
+        )
+    }
+
+    func revert(on database: Database) async throws {
+        // MVP: colonnes conservées pour compatibilité descendante.
+    }
+
+    private func addColumnIfMissing(
+        name: String,
+        type: DatabaseSchema.DataType,
+        on database: Database
+    ) async throws {
+        do {
+            try await database.schema(JobRow.schema)
+                .field(FieldKey(stringLiteral: name), type)
+                .update()
+        } catch {
+            let message = String(describing: error).lowercased()
+            if message.contains("duplicate column")
+                || message.contains("already exists")
+                || message.contains("duplicate") {
+                return
+            }
+            throw error
+        }
+    }
+}

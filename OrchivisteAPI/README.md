@@ -63,6 +63,11 @@ Tests de renommage PDF (local -> routage) :
 - fichier unique : `./scripts/test_pdf_rename.sh "/chemin/vers/fichier.pdf"`
 - lot de fichiers ou dossier : `./scripts/test_pdf_rename_batch.sh "/chemin/dossier-ou-fichier"`
 - rapport CSV batch (optionnel) : `ORCHIVISTE_BATCH_REPORT=/tmp/rename-report.csv ./scripts/test_pdf_rename_batch.sh "/chemin/dossier"`
+- surcharge dossier/nom à la volée : `ORCHIVISTE_ROUTE_DESTINATION_FOLDER='Archives/{year}/{class_code}/{type_doc}/{sujet}' ORCHIVISTE_ROUTE_NAME_FORMAT='{class_code}-{type_doc}-{sujet}-{date}-{numero}' ./scripts/test_pdf_rename.sh "/chemin/fichier.pdf"`
+- règles automatiques par type/sujet : page UI `http://127.0.0.1:28780/ui/presets` section **Règles automatiques type/sujet (JSON)** (`configs/analysis/routing/local.rules.json`)
+- chemin des PDF traités (hôte) : `${ORCHIVISTE_ROUTED_EXPORT_DIR:-./runtime/routed}`
+- récupération des anciens PDF stockés dans le volume Docker : `./scripts/recover_routed_from_volume.sh`
+- les scripts `test_pdf_rename*.sh` fonctionnent depuis n'importe quel dossier (pas besoin d'être à la racine)
 
 Dépannage Docker :
 - en cas de blocage sur `error getting credentials` ou `docker-credential-desktop get`, exécuter : `ORCHIVISTE_DOCKER_ANON_AUTH=1 ./scripts/dev_up.sh --build`
@@ -88,6 +93,18 @@ Analyse :
 - `ORCHIVISTE_ANALYSE_HOST` (defaut `127.0.0.1`, utiliser `0.0.0.0` en Docker)
 - `ORCHIVISTE_ANALYSE_URL` (URL cible de proxy pour l'API)
 - `ORCHIVISTE_ANALYSE_PORT` (defaut `28781`)
+- fournisseur Coginov (optionnel) :
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_ENABLED` (`0`/`1`)
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_URL`
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_TOKEN`
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_TIMEOUT_MS`
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_MODEL`
+- OCR fallback (API) :
+  - `ORCHIVISTE_OCR_ENABLED` (`1` par défaut)
+  - `ORCHIVISTE_OCR_LANG` (`fra+eng` par défaut)
+  - `ORCHIVISTE_OCR_MAX_PAGES` (`12` par défaut)
+  - `ORCHIVISTE_OCR_DPI` (`220` par défaut)
+  - `ORCHIVISTE_OCR_MIN_TEXT_CHARS` (`140` par défaut; sous ce seuil, OCR tenté)
 
 Routage SharePoint Graph (optionnel) :
 - `ORCHIVISTE_GRAPH_ENABLED` = `1`

@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+COMPOSE_FILE="$REPO_ROOT/docker-compose.yml"
+
 API_BASE="${ORCHIVISTE_API_BASE:-http://127.0.0.1:28780}"
 REVIEW_CLASS_CODE="${ORCHIVISTE_REVIEW_CLASS_CODE:-ADM-PV}"
 TIMEOUT_SECONDS="${ORCHIVISTE_RENAME_TIMEOUT:-120}"
+ROUTE_DESTINATION_FOLDER="${ORCHIVISTE_ROUTE_DESTINATION_FOLDER:-}"
+ROUTE_NAME_FORMAT="${ORCHIVISTE_ROUTE_NAME_FORMAT:-}"
+ROUTE_CLASS_CODE="${ORCHIVISTE_ROUTE_CLASS_CODE:-}"
+ROUTE_PRESET_ID="${ORCHIVISTE_ROUTE_PRESET_ID:-}"
+ROUTED_HOST_DIR="${ORCHIVISTE_ROUTED_EXPORT_DIR:-$REPO_ROOT/runtime/routed}"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 /chemin/vers/fichier.pdf" >&2
@@ -21,12 +30,21 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! docker compose ps api >/dev/null 2>&1; then
-  echo "ERREUR: lance ce script depuis la racine du repo (docker-compose.yml requis)." >&2
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+  echo "ERREUR: docker-compose.yml introuvable ($COMPOSE_FILE)." >&2
   exit 1
 fi
 
-if ! docker compose ps --status running api | grep -q "orchiviste-api"; then
+docker_compose() {
+  docker compose --project-directory "$REPO_ROOT" -f "$COMPOSE_FILE" "$@"
+}
+
+if ! docker_compose ps api >/dev/null 2>&1; then
+  echo "ERREUR: impossible de lire l'etat docker compose pour ce repo." >&2
+  exit 1
+fi
+
+if ! docker_compose ps --status running api | grep -q "orchiviste-api"; then
   echo "ERREUR: le service api n'est pas demarre. Lance: docker compose up -d" >&2
   exit 1
 fi
@@ -81,7 +99,7 @@ http_raw() {
 }
 
 echo "Preparation du fichier local dans le conteneur API..."
-docker compose exec -T api sh -lc "mkdir -p /data/inbox"
+docker_compose exec -T api sh -lc "mkdir -p /data/inbox"
 timestamp="$(date +%Y%m%d-%H%M%S)"
 container_file="/data/inbox/${timestamp}-$(basename "$SOURCE_FILE")"
 docker cp "$SOURCE_FILE" "orchiviste-api:$container_file"
@@ -159,8 +177,27 @@ JSON
   echo "OK  revue appliquee"
 fi
 
+route_payload="$tmp_dir/route.json"
+# Génère la charge JSON de routage avec les options configurées.
+python3 - "$ROUTE_CLASS_CODE" "$ROUTE_PRESET_ID" "$ROUTE_DESTINATION_FOLDER" "$ROUTE_NAME_FORMAT" <<'PY' >"$route_payload"
+import json
+import sys
+
+def non_empty(value: str):
+    value = (value or "").strip()
+    return value if value else None
+
+payload = {
+    "class_code": non_empty(sys.argv[1]),
+    "preset_id": non_empty(sys.argv[2]),
+    "destination_folder": non_empty(sys.argv[3]),
+    "name_format": non_empty(sys.argv[4]),
+}
+print(json.dumps(payload, ensure_ascii=False))
+PY
+
 route_file="$tmp_dir/route_response.json"
-route_code="$(http_raw POST "$API_BASE/v1/route/$job_id" "$route_file")"
+route_code="$(http_json POST "$API_BASE/v1/route/$job_id" "$route_payload" "$route_file")"
 if [[ "$route_code" != "200" ]]; then
   echo "ERREUR: routage en echec (HTTP $route_code)." >&2
   cat "$route_file" >&2
@@ -170,12 +207,21 @@ fi
 mode="$(json_get "$route_file" "mode")"
 class_code="$(json_get "$route_file" "class_code")"
 destination_local_path="$(json_get "$route_file" "destination_local_path")"
+resolved_file_name="$(json_get "$route_file" "resolved_file_name")"
 
 echo "OK  routage termine (mode=$mode, class_code=$class_code)"
+if [[ -n "$resolved_file_name" ]]; then
+  echo "Fichier renommé: $resolved_file_name"
+fi
 if [[ -n "$destination_local_path" ]]; then
   echo "Destination locale: $destination_local_path"
+  if [[ "$destination_local_path" == /data/routed/* ]]; then
+    suffix="${destination_local_path#/data/routed/}"
+    host_destination="$ROUTED_HOST_DIR/$suffix"
+    echo "Destination hôte estimée: $host_destination"
+  fi
   escaped_dest="${destination_local_path//\"/\\\"}"
-  if docker compose exec -T api sh -lc "test -f \"$escaped_dest\""; then
+  if docker_compose exec -T api sh -lc "test -f \"$escaped_dest\""; then
     echo "OK  fichier present a la destination."
   else
     echo "ERREUR: fichier absent a la destination." >&2
@@ -186,7 +232,7 @@ else
 fi
 
 escaped_source="${container_file//\"/\\\"}"
-if docker compose exec -T api sh -lc "test ! -f \"$escaped_source\""; then
+if docker_compose exec -T api sh -lc "test ! -f \"$escaped_source\""; then
   echo "OK  fichier source deplace (plus present dans inbox)."
 else
   echo "ATTENTION: fichier source encore present dans inbox." >&2

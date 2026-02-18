@@ -7,15 +7,15 @@ import AppKit
 
 enum PreviewRenderer {
     static func makePreview(for job: JobRecord, logger: Logger) -> PreviewRecord {
-        #if canImport(PDFKit) && canImport(AppKit)
         guard job.source.kind.lowercased() == "local",
               let localFileURL = resolveLocalFileURL(raw: job.fileURL),
-              FileManager.default.fileExists(atPath: localFileURL.path) else {
+              FileManager.default.fileExists(atPath: localFileURL.path),
+              localFileURL.pathExtension.lowercased() == "pdf" else {
             return placeholder(jobId: job.id)
         }
 
-        guard localFileURL.pathExtension.lowercased() == "pdf",
-              let document = PDFDocument(url: localFileURL) else {
+        #if canImport(PDFKit) && canImport(AppKit)
+        guard let document = PDFDocument(url: localFileURL) else {
             return placeholder(jobId: job.id)
         }
 
@@ -57,7 +57,10 @@ enum PreviewRenderer {
             createdAt: Date()
         )
         #else
-        logger.warning("Rendu PDF indisponible sur cette plateforme. Utilisation d'un aperçu de substitution.")
+        if let external = makeExternalPreview(fileURL: localFileURL, jobId: job.id, logger: logger) {
+            return external
+        }
+        logger.warning("Rendu PDF indisponible sur cette plateforme et extraction texte externe indisponible.")
         return placeholder(jobId: job.id)
         #endif
     }
@@ -81,6 +84,238 @@ enum PreviewRenderer {
         }
         let current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         return current.appendingPathComponent(raw)
+    }
+
+    private static func makeExternalPreview(
+        fileURL: URL,
+        jobId: UUID,
+        logger: Logger
+    ) -> PreviewRecord? {
+        let directText = extractTextWithPdftotext(fileURL: fileURL, logger: logger)
+        let directPages = splitTextByPages(directText ?? "")
+        var selectedPages = directPages
+        var selectedSource = "pdftotext"
+        let directChars = meaningfulCharactersCount(directPages)
+
+        if shouldTryOCRFallback(directChars: directChars) {
+            if let ocrPages = extractTextWithTesseract(fileURL: fileURL, logger: logger) {
+                let ocrChars = meaningfulCharactersCount(ocrPages)
+                if ocrChars > directChars {
+                    selectedPages = ocrPages
+                    selectedSource = "tesseract"
+                }
+            }
+        }
+
+        guard !selectedPages.isEmpty else {
+            return nil
+        }
+
+        var textPages: [Int: String] = [:]
+        var imagesByPage: [Int: Data] = [:]
+        for (index, text) in selectedPages.enumerated() {
+            let page = index + 1
+            textPages[page] = text.isEmpty ? PreviewHelper.defaultText(page: page) : text
+            imagesByPage[page] = PreviewHelper.placeholderJPEG()
+        }
+
+        logger.info("Aperçu texte externe généré.", metadata: [
+            "job_id": .string(jobId.uuidString),
+            "pages": .stringConvertible(selectedPages.count),
+            "source": .string(selectedSource)
+        ])
+        return PreviewRecord(
+            jobId: jobId,
+            pages: selectedPages.count,
+            textPages: textPages,
+            imagesByPage: imagesByPage,
+            createdAt: Date()
+        )
+    }
+
+    private static func extractTextWithPdftotext(fileURL: URL, logger: Logger) -> String? {
+        let result = runCommand(
+            executable: "pdftotext",
+            arguments: ["-enc", "UTF-8", "-layout", fileURL.path, "-"]
+        )
+        if result.exitCode != 0 {
+            logger.warning("pdftotext non disponible ou en échec.", metadata: [
+                "path": .string(fileURL.path),
+                "stderr": .string(result.stderr)
+            ])
+            return nil
+        }
+        let output = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return output.isEmpty ? nil : output
+    }
+
+    private static func splitTextByPages(_ raw: String) -> [String] {
+        let wholeTrimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if wholeTrimmed.isEmpty {
+            return []
+        }
+        let rawPages = raw.components(separatedBy: "\u{0C}")
+        let trimmed = rawPages.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let lastIndex = trimmed.lastIndex(where: { !$0.isEmpty }) ?? -1
+        guard lastIndex >= 0 else {
+            return [wholeTrimmed]
+        }
+        return Array(trimmed.prefix(lastIndex + 1))
+    }
+
+    private static func meaningfulCharactersCount(_ pages: [String]) -> Int {
+        pages
+            .joined(separator: " ")
+            .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+            .count
+    }
+
+    private static func shouldTryOCRFallback(directChars: Int) -> Bool {
+        guard ocrEnabled() else {
+            return false
+        }
+        return directChars < ocrMinTextChars()
+    }
+
+    private static func ocrEnabled() -> Bool {
+        let raw = (Environment.get("ORCHIVISTE_OCR_ENABLED") ?? "1")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return !(raw == "0" || raw == "false" || raw == "no" || raw == "off")
+    }
+
+    private static func ocrMinTextChars() -> Int {
+        max(20, Int(Environment.get("ORCHIVISTE_OCR_MIN_TEXT_CHARS") ?? "140") ?? 140)
+    }
+
+    private static func ocrMaxPages() -> Int {
+        let parsed = Int(Environment.get("ORCHIVISTE_OCR_MAX_PAGES") ?? "12") ?? 12
+        return max(1, min(200, parsed))
+    }
+
+    private static func ocrDPI() -> Int {
+        let parsed = Int(Environment.get("ORCHIVISTE_OCR_DPI") ?? "220") ?? 220
+        return max(120, min(600, parsed))
+    }
+
+    private static func ocrLanguage() -> String {
+        guard let value = Environment.get("ORCHIVISTE_OCR_LANG")?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return "fra+eng"
+        }
+        return value
+    }
+
+    private static func extractTextWithTesseract(fileURL: URL, logger: Logger) -> [String]? {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-ocr-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            logger.warning("Impossible de créer le dossier temporaire OCR.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return nil
+        }
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        let imagePrefix = tempDir.appendingPathComponent("page").path
+        let maxPages = ocrMaxPages()
+        let dpi = ocrDPI()
+        let convert = runCommand(
+            executable: "pdftoppm",
+            arguments: [
+                "-f", "1",
+                "-l", "\(maxPages)",
+                "-r", "\(dpi)",
+                "-png",
+                fileURL.path,
+                imagePrefix
+            ]
+        )
+        if convert.exitCode != 0 {
+            logger.warning("OCR ignoré: conversion PDF -> image en échec.", metadata: [
+                "path": .string(fileURL.path),
+                "stderr": .string(convert.stderr)
+            ])
+            return nil
+        }
+
+        let imageURLs: [URL]
+        do {
+            imageURLs = try FileManager.default
+                .contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension.lowercased() == "png" }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        } catch {
+            logger.warning("OCR ignoré: impossible de lister les images converties.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return nil
+        }
+
+        guard !imageURLs.isEmpty else {
+            logger.warning("OCR ignoré: aucune image générée.")
+            return nil
+        }
+
+        let language = ocrLanguage()
+        var pages: [String] = []
+        pages.reserveCapacity(imageURLs.count)
+
+        for imageURL in imageURLs {
+            let ocr = runCommand(
+                executable: "tesseract",
+                arguments: [
+                    imageURL.path,
+                    "stdout",
+                    "-l", language,
+                    "--dpi", "\(dpi)"
+                ]
+            )
+            if ocr.exitCode != 0 {
+                logger.warning("OCR en échec pour une page.", metadata: [
+                    "image": .string(imageURL.lastPathComponent),
+                    "stderr": .string(ocr.stderr)
+                ])
+                pages.append("")
+                continue
+            }
+            pages.append(ocr.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        let chars = meaningfulCharactersCount(pages)
+        if chars == 0 {
+            return nil
+        }
+        return pages
+    }
+
+    private static func runCommand(executable: String, arguments: [String]) -> (stdout: String, stderr: String, exitCode: Int32) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [executable] + arguments
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        do {
+            try process.run()
+        } catch {
+            return ("", "\(error)", -1)
+        }
+        process.waitUntilExit()
+
+        let outData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        let stdout = String(data: outData, encoding: .utf8) ?? ""
+        let stderr = String(data: errData, encoding: .utf8) ?? ""
+        return (stdout, stderr, process.terminationStatus)
     }
 
     #if canImport(PDFKit) && canImport(AppKit)

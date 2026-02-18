@@ -34,10 +34,12 @@ struct LocalHeuristicsProvider: AnalysisProvider {
             selected = ("Autre", "GEN-000", 0.25, ["General"], "preset_default")
         }
 
-        let hasSignature = containsAny(in: merged, tokens: ["signature", "signé", "signed"])
+        let hasSignature = containsAny(in: merged, tokens: ["signature", "signe", "signed"])
         let pages = estimatedPages(from: request.text)
-        let champs = extractFields(from: request.text ?? "")
+        let champs = extractFields(from: "\(request.file_id)\n\(request.text ?? "")")
         let confidence = min(0.95, max(0.2, 0.35 + selected.baseScore))
+        let inferredSujets = inferSubjects(request: request)
+        let sujets = mergeSubjects(defaultSujets: selected.sujets, inferred: inferredSujets, typeDoc: selected.type)
 
         var matchedRules = [String]()
         if factureScore > 0 { matchedRules.append("rule_facture_tokens") }
@@ -55,7 +57,7 @@ struct LocalHeuristicsProvider: AnalysisProvider {
         return ProviderCandidate(
             provider: name,
             typeDoc: selected.type,
-            sujets: selected.sujets,
+            sujets: sujets,
             hasSignature: hasSignature,
             pages: pages,
             champs: champs,
@@ -150,5 +152,47 @@ struct LocalHeuristicsProvider: AnalysisProvider {
         value
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func inferSubjects(request: AnalysisRequest) -> [String] {
+        let source = "\(request.file_id) \(request.text ?? "")"
+        let cleaned = source
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: " ", options: .regularExpression)
+            .lowercased()
+        let stopwords: Set<String> = [
+            "pdf", "file", "name", "tags", "data", "job", "uuid", "comite", "comitee",
+            "session", "general", "autre", "archives", "analyse", "preview", "texte",
+            "dossier", "fichier", "local", "sharepoint", "projet", "demande", "adoption"
+        ]
+        var sujets: [String] = []
+        for token in cleaned.split(separator: " ").map(String.init) {
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.count < 4 { continue }
+            if stopwords.contains(trimmed) { continue }
+            if trimmed.allSatisfy({ $0.isNumber }) { continue }
+            let normalized = trimmed.capitalized
+            if sujets.contains(normalized) { continue }
+            sujets.append(normalized)
+            if sujets.count == 2 { break }
+        }
+        return sujets
+    }
+
+    private func mergeSubjects(defaultSujets: [String], inferred: [String], typeDoc: String) -> [String] {
+        if inferred.isEmpty {
+            return defaultSujets
+        }
+        if typeDoc == "Autre" {
+            return inferred
+        }
+        var merged = defaultSujets
+        for sujet in inferred {
+            if merged.count >= 2 { break }
+            if !merged.contains(sujet) {
+                merged.append(sujet)
+            }
+        }
+        return merged
     }
 }

@@ -45,7 +45,7 @@
             gap: 10px;
         }
         label { display: block; font-size: 13px; color: var(--muted); }
-        input {
+        input, textarea {
             margin-top: 4px;
             width: 100%;
             border: 1px solid var(--border);
@@ -104,6 +104,46 @@
     </nav>
 </header>
 <main class="wrap">
+    <section class="card">
+        <h2>Paramètres de routage local</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Ces paramètres servent de valeurs par défaut. Tu peux aussi les surcharger lors du routage d'une tâche.
+        </p>
+        <form action="/ui/routing/settings" method="post">
+            <div class="form-grid">
+                <label>Racine locale de destination
+                    <input type="text" name="local_route_root" value="#(routing_local_route_root)" placeholder="/data/routed">
+                </label>
+                <label>Modèle dossier par défaut
+                    <input type="text" name="default_destination_template" value="#(routing_default_destination_template)" placeholder="Archives/{year}/{class_code}/{type_doc}">
+                </label>
+                <label>Modèle nom par défaut
+                    <input type="text" name="default_name_format" value="#(routing_default_name_format)" placeholder="{class_code}-{type_doc}-{sujet}-{date}-{numero}">
+                </label>
+            </div>
+            <button class="btn" type="submit">Enregistrer les paramètres de routage</button>
+        </form>
+        <p style="margin: 10px 0 0; color: var(--muted); font-size: 12px;">
+            Variables disponibles : <code>{class_code}</code>, <code>{year}</code>, <code>{type_doc}</code>, <code>{sujet}</code>, <code>{sujets}</code>, <code>{date}</code>, <code>{datetime}</code>, <code>{numero}</code>, <code>{comite}</code>, <code>{preset_id}</code>, <code>{job_id}</code>, <code>{original}</code>.
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>Règles automatiques type/sujet (JSON)</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Ces règles permettent de choisir automatiquement le dossier, le format de nom, le code et le préréglage selon le type de document et le sujet détectés.
+        </p>
+        <form action="/ui/routing/rules" method="post">
+            <label>JSON des règles
+                <textarea name="rules_json" rows="14" spellcheck="false">#(routing_rules_json)</textarea>
+            </label>
+            <button class="btn" type="submit">Enregistrer les règles type/sujet</button>
+        </form>
+        <p style="margin: 10px 0 0; color: var(--muted); font-size: 12px;">
+            Exemple : <code>{"rules":[{"id":"pv-finance","when_type_doc":"ProcesVerbal","when_sujet":"Finance","destination_template":"Archives/{year}/{class_code}/Finance","name_format":"{class_code}-PV-FIN-{date}-{numero}","class_code":"ADM-PV","preset_id":"preset_pv"}]}</code>
+        </p>
+    </section>
+
     <section class="card">
         <h2>Créer un préréglage</h2>
         #if(notice):

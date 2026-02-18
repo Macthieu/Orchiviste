@@ -32,6 +32,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 \
     libstdc++6 \
     libxml2 \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-fra \
     tzdata \
     zlib1g \
     && rm -rf /var/lib/apt/lists/*

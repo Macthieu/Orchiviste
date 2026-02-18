@@ -110,6 +110,7 @@ private func registerMigrations(_ app: Application) {
     app.migrations.add(CreateEventsMigration())
     app.migrations.add(CreateIdempotencyKeysMigration())
     app.migrations.add(CreateWorkersMigration())
+    app.migrations.add(AddJobAnalysisSummaryMigration())
 }
 
 private func resolveViewsDirectory() -> String {

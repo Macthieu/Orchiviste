@@ -217,6 +217,10 @@ func registerOpenAPIRoutes(_ app: Application) {
                 "/v1/route/{file_id}": [
                     "parameters": [["name": "file_id", "in": "path", "required": true, "schema": ["type": "string"]]],
                     "post": [
+                        "requestBody": [
+                            "required": false,
+                            "content": ["application/json": ["schema": ["$ref": "#/components/schemas/RoutingRequest"]]]
+                        ],
                         "responses": [
                             "200": ["description": "Réponse de routage", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/RoutingResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
@@ -311,6 +315,9 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "steps": ["$ref": "#/components/schemas/JobStepTimestamps"],
                             "suggestedPreset": ["type": "string"],
                             "suggestedClassCode": ["type": "string"],
+                            "analysisTypeDoc": ["type": "string"],
+                            "analysisSujets": ["type": "array", "items": ["type": "string"]],
+                            "analysisChamps": ["type": "object", "additionalProperties": ["type": "string"]],
                             "confidence": ["type": "number"],
                             "needsReview": ["type": "boolean"]
                         ]
@@ -423,6 +430,15 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "metadata": ["type": "object", "additionalProperties": ["type": "string"]]
                         ]
                     ],
+                    "RoutingRequest": [
+                        "type": "object",
+                        "properties": [
+                            "class_code": ["type": "string"],
+                            "preset_id": ["type": "string"],
+                            "destination_folder": ["type": "string"],
+                            "name_format": ["type": "string"]
+                        ]
+                    ],
                     "RoutingResponse": [
                         "type": "object",
                         "properties": [
@@ -433,7 +449,8 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "mode": ["type": "string", "enum": ["stub", "graph", "local"]],
                             "destination_url": ["type": "string"],
                             "moved_item_id": ["type": "string"],
-                            "destination_local_path": ["type": "string"]
+                            "destination_local_path": ["type": "string"],
+                            "resolved_file_name": ["type": "string"]
                         ]
                     ],
                     "EventRecord": [

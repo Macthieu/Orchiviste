@@ -151,6 +151,18 @@
         <p>Déjà routée le <strong>#(routed_at)</strong>.</p>
         #endif
         #if(can_route):
+        <label>Dossier destination (optionnel)
+            <input id="routeFolder" type="text" placeholder="Archives/{year}/{class_code}/{type_doc}/{sujet}">
+        </label>
+        <label>Format de nom (optionnel)
+            <input id="routeNameFormat" type="text" placeholder="{class_code}-{type_doc}-{sujet}-{date}-{numero}">
+        </label>
+        <label>Code de classement (optionnel)
+            <input id="routeClassCode" type="text" value="#(suggested_class_code)">
+        </label>
+        <label>ID préréglage (optionnel)
+            <input id="routePresetId" type="text" value="#(suggested_preset)">
+        </label>
         <button class="btn" type="button" onclick="submitRoute()">Appliquer le routage</button>
         #else:
         #if(route_disabled_reason):
@@ -190,6 +202,15 @@ const observer = new IntersectionObserver((entries) => {
 
 document.querySelectorAll(".page").forEach((node) => observer.observe(node));
 
+const routeClassInput = document.getElementById("routeClassCode");
+if (routeClassInput && routeClassInput.value === "N/D") {
+    routeClassInput.value = "";
+}
+const routePresetInput = document.getElementById("routePresetId");
+if (routePresetInput && routePresetInput.value === "N/D") {
+    routePresetInput.value = "";
+}
+
 async function loadText() {
     const page = document.getElementById("textPage").value || "1";
     const res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
@@ -224,7 +245,23 @@ async function submitReview() {
 async function submitRoute() {
     const output = document.getElementById("routeResult");
     output.value = "Routage en cours...";
-    const res = await fetch(`/v1/route/${jobId}`, { method: "POST" });
+    const classCode = document.getElementById("routeClassCode")?.value || "";
+    const presetId = document.getElementById("routePresetId")?.value || "";
+    const destinationFolder = document.getElementById("routeFolder")?.value || "";
+    const nameFormat = document.getElementById("routeNameFormat")?.value || "";
+
+    const payload = {
+        class_code: classCode.trim() || null,
+        preset_id: presetId.trim() || null,
+        destination_folder: destinationFolder.trim() || null,
+        name_format: nameFormat.trim() || null
+    };
+
+    const res = await fetch(`/v1/route/${jobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
     if (!res.ok) {
         const msg = await res.text();
         output.value = `Échec du routage (${res.status}) : ${msg}`;
@@ -233,7 +270,8 @@ async function submitRoute() {
 
     const json = await res.json();
     const destination = json.destination_local_path || json.destination_url || json.resolved_folder || "N/D";
-    output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nDestination: ${destination}`;
+    const filename = json.resolved_file_name || "N/D";
+    output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nFichier: ${filename}\nDestination: ${destination}`;
     setTimeout(() => window.location.reload(), 700);
 }
 </script>

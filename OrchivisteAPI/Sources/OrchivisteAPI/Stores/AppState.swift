@@ -39,6 +39,9 @@ actor AppState {
             steps: JobStepTimestamps(ingestReceived: now, previewReady: nil, analysed: nil, routed: nil, completed: nil),
             suggestedPreset: nil,
             suggestedClassCode: nil,
+            analysisTypeDoc: nil,
+            analysisSujets: nil,
+            analysisChamps: nil,
             confidence: nil,
             needsReview: false
         )
@@ -102,6 +105,9 @@ actor AppState {
         job.steps.analysed = Date()
         job.suggestedPreset = analysis.suggested_preset
         job.suggestedClassCode = analysis.suggested_class_code
+        job.analysisTypeDoc = analysis.type_doc
+        job.analysisSujets = analysis.sujets
+        job.analysisChamps = analysis.champs
         job.confidence = analysis.confidence
         job.needsReview = needsReview
         job.status = needsReview ? .needs_review : .completed
