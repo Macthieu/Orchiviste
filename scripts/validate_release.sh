@@ -9,6 +9,7 @@ cd "$ROOT_DIR"
 ./scripts/dev_up.sh "$@"
 ./scripts/smoke_mvp.sh
 ./scripts/smoke_webhook_hmac.sh
+./scripts/check_openapi_mvp.sh
 
 echo
 echo "Validation release réussie."

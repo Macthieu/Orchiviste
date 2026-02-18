@@ -54,6 +54,7 @@ Tests fumée MVP :
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
+- contrôle OpenAPI MVP (endpoints + webhook) : `./scripts/check_openapi_mvp.sh`
 - exécution groupée recommandée : `./scripts/validate_release.sh`
 
 Tests de renommage PDF (local -> routage) :
