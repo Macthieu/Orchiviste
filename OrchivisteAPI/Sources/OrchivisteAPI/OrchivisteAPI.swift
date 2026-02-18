@@ -12,6 +12,7 @@ func configure(_ app: Application) throws {
         .flatMap(Int.init) ?? 28780
 
     app.middleware.use(CorrelationIDMiddleware())
+    app.middleware.use(RequestMetricsMiddleware())
     app.middleware.use(CORSMiddleware(configuration: makeCORSConfiguration()))
     app.middleware.use(RouteLoggingMiddleware(logLevel: .info))
     app.views.use(.leaf)
@@ -25,6 +26,7 @@ func configure(_ app: Application) throws {
     }
 
     registerHealthRoutes(app)
+    registerMetricsRoutes(app)
     registerIngestRoutes(app)
     registerJobRoutes(app)
     registerPreviewRoutes(app)

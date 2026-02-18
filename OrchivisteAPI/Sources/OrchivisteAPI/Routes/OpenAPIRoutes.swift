@@ -22,6 +22,17 @@ func registerOpenAPIRoutes(_ app: Application) {
                 "/v1/health": [
                     "get": ["responses": ["200": ["description": "Service disponible"]]]
                 ],
+                "/v1/metrics": [
+                    "get": [
+                        "summary": "Métriques API en mémoire (MVP)",
+                        "responses": [
+                            "200": [
+                                "description": "Instantané des métriques de requêtes",
+                                "content": ["application/json": ["schema": ["$ref": "#/components/schemas/RequestMetricsSnapshot"]]]
+                            ]
+                        ]
+                    ]
+                ],
                 "/v1/ingest": [
                     "post": [
                         "summary": "Creer une tâche d'ingestion",
@@ -446,6 +457,35 @@ func registerOpenAPIRoutes(_ app: Application) {
                         "properties": [
                             "ingest_depth": ["type": "integer"],
                             "dead_letter_depth": ["type": "integer"]
+                        ]
+                    ],
+                    "LatencySnapshot": [
+                        "type": "object",
+                        "properties": [
+                            "avg": ["type": "number"],
+                            "max": ["type": "number"]
+                        ]
+                    ],
+                    "RouteMetricSnapshot": [
+                        "type": "object",
+                        "properties": [
+                            "route": ["type": "string"],
+                            "count": ["type": "integer"],
+                            "avg_ms": ["type": "number"],
+                            "max_ms": ["type": "number"]
+                        ]
+                    ],
+                    "RequestMetricsSnapshot": [
+                        "type": "object",
+                        "properties": [
+                            "started_at": ["type": "string", "format": "date-time"],
+                            "uptime_s": ["type": "number"],
+                            "total_requests": ["type": "integer"],
+                            "in_flight": ["type": "integer"],
+                            "by_status": ["type": "object", "additionalProperties": ["type": "integer"]],
+                            "by_method": ["type": "object", "additionalProperties": ["type": "integer"]],
+                            "top_routes": ["type": "array", "items": ["$ref": "#/components/schemas/RouteMetricSnapshot"]],
+                            "latency_ms": ["$ref": "#/components/schemas/LatencySnapshot"]
                         ]
                     ]
                 ]

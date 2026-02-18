@@ -37,6 +37,7 @@ required_paths = {
     "/v1/preview/{id}/text": ["get"],
     "/v1/preview/{id}/office": ["get"],
     "/v1/openapi.json": ["get"],
+    "/v1/metrics": ["get"],
     "/v1/events": ["get"],
     "/v1/route/{file_id}": ["post"],
 }

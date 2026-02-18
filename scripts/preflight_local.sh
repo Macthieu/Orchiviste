@@ -98,6 +98,7 @@ fi
 
 ./scripts/check_openapi_mvp.sh
 ./scripts/smoke_mvp.sh
+./scripts/smoke_metrics.sh
 
 if [[ "$RUN_WEBHOOK" == "1" ]]; then
   ./scripts/smoke_webhook_hmac.sh
