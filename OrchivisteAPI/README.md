@@ -56,6 +56,11 @@ Tests fumée MVP :
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
 - exécution groupée recommandée : `./scripts/validate_release.sh`
 
+Tests de renommage PDF (local -> routage) :
+- fichier unique : `./scripts/test_pdf_rename.sh "/chemin/vers/fichier.pdf"`
+- lot de fichiers ou dossier : `./scripts/test_pdf_rename_batch.sh "/chemin/dossier-ou-fichier"`
+- rapport CSV batch (optionnel) : `ORCHIVISTE_BATCH_REPORT=/tmp/rename-report.csv ./scripts/test_pdf_rename_batch.sh "/chemin/dossier"`
+
 Dépannage Docker :
 - en cas de blocage sur `error getting credentials` ou `docker-credential-desktop get`, exécuter : `ORCHIVISTE_DOCKER_ANON_AUTH=1 ./scripts/dev_up.sh --build`
 - ce mode force une authentification registre anonyme temporaire uniquement pour l'exécution du script
