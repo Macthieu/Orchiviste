@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 RUN_WEBHOOK="1"
+RUN_WORKER="1"
 SKIP_UP="0"
 run_pdf_batch="0"
 start_epoch="$(date +%s)"
@@ -16,11 +17,13 @@ usage() {
 Usage: ./scripts/preflight_local.sh [options]
 
 Modes:
-  --full            validation complète (défaut) : smoke + webhook + openapi
-  --quick           validation rapide : smoke + openapi (sans webhook)
+  --full            validation complète (défaut) : smoke + openapi + webhook + worker
+  --quick           validation rapide : smoke + openapi (sans webhook, sans worker)
 
 Options:
   --skip-up         n'exécute pas ./scripts/dev_up.sh (stack déjà démarrée)
+  --with-worker     force l'exécution du test worker (même en mode --quick)
+  --no-worker       ignore le test worker (même en mode --full)
   --pdf <path>      lance aussi le test batch de renommage sur fichier/dossier PDF
                     option répétable, ex: --pdf ~/Documents --pdf ~/a.pdf
   --build           transmis à dev_up.sh
@@ -35,12 +38,20 @@ while (($# > 0)); do
   case "$1" in
     --full)
       RUN_WEBHOOK="1"
+      RUN_WORKER="1"
       ;;
     --quick)
       RUN_WEBHOOK="0"
+      RUN_WORKER="0"
       ;;
     --skip-up)
       SKIP_UP="1"
+      ;;
+    --with-worker)
+      RUN_WORKER="1"
+      ;;
+    --no-worker)
+      RUN_WORKER="0"
       ;;
     --pdf)
       shift
@@ -92,6 +103,12 @@ if [[ "$RUN_WEBHOOK" == "1" ]]; then
   ./scripts/smoke_webhook_hmac.sh
 else
   echo "INFO: test webhook ignoré (--quick)."
+fi
+
+if [[ "$RUN_WORKER" == "1" ]]; then
+  ./scripts/smoke_worker_controlplane.sh
+else
+  echo "INFO: test worker ignoré (mode rapide ou --no-worker)."
 fi
 
 if [[ "$run_pdf_batch" == "1" ]]; then

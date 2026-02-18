@@ -43,9 +43,14 @@ services:
     container_name: orchiviste-worker
     profiles: ["worker"]
     depends_on:
+      - api
       - redis
     environment:
+      ORCHIVISTE_API_BASE: "http://api:28780"
       ORCHIVISTE_REDIS_URL: "redis://redis:6379"
+      ORCHIVISTE_WORKER_ENABLE_QUEUE: "0"
+      ORCHIVISTE_WORKER_WAIT_FOR_APPROVAL: "1"
+      ORCHIVISTE_WORKER_AUTO_APPROVE: "0"
 
 volumes:
   orchiviste_sqlite_data:

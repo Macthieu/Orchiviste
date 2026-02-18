@@ -39,6 +39,10 @@ COPY --from=builder /usr/lib/swift/linux /usr/lib/swift/linux
 COPY --from=builder /app/OrchivisteWorker/.build/release/OrchivisteWorker /usr/local/bin/OrchivisteWorker
 
 ENV LD_LIBRARY_PATH=/usr/lib/swift/linux
+ENV ORCHIVISTE_API_BASE=http://api:28780
 ENV ORCHIVISTE_REDIS_URL=redis://redis:6379
+ENV ORCHIVISTE_WORKER_ENABLE_QUEUE=0
+ENV ORCHIVISTE_WORKER_WAIT_FOR_APPROVAL=1
+ENV ORCHIVISTE_WORKER_AUTO_APPROVE=0
 
 CMD ["OrchivisteWorker"]
