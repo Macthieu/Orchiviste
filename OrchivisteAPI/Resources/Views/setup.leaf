@@ -169,18 +169,23 @@
         <p style="margin: 0 0 10px; color: var(--muted);">
             Choisis tes dossiers montés (Docker) pour ingérer et classer les PDF.
         </p>
-        <form action="/ui/ingest/folder" method="post">
+        <form action="/ui/ingest/folder" method="post" enctype="multipart/form-data">
             <div class="form-grid">
-                <label>Dossier d'entrée
+                <label>Dossier d'entrée (serveur ou local)
                     <div class="path-row">
-                        <input id="setupInputFolder" type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox">
-                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupInputFolder')">Choisir</button>
+                        <input id="setupInputFolder" type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox (laisser vide pour un dossier local)">
+                        <button class="btn-soft" type="button" onclick="openLocalFolderDialog('setupInputFolderUpload')">Choisir</button>
+                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupInputFolder')">Serveur</button>
+                    </div>
+                    <input id="setupInputFolderUpload" type="file" name="folder_files" accept=".pdf,application/pdf" webkitdirectory directory multiple style="display:none" onchange="handleLocalFolderSelection('setupInputFolderUpload','setupInputFolder','setupInputFolderHint')">
+                    <div id="setupInputFolderHint" style="margin-top:4px; font-size:12px; color: var(--muted);">
+                        Le bouton "Choisir" ouvre le dossier local sur ton ordinateur.
                     </div>
                 </label>
                 <label>Dossier de sortie
                     <div class="path-row">
                         <input id="setupOutputFolder" type="text" name="output_root" value="#(routing_local_route_root)" placeholder="/data/routed">
-                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupOutputFolder')">Choisir</button>
+                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupOutputFolder')">Serveur</button>
                     </div>
                 </label>
                 <label>Étiquettes (optionnel)
@@ -245,8 +250,14 @@
             <div class="form-grid">
                 <label>Dossier source de référence
                     <div class="path-row">
-                        <input id="setupRuleFolder" type="text" name="input_folder" placeholder="/data/routed/pv-finance" required>
-                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupRuleFolder')">Choisir</button>
+                        <input id="setupRuleFolder" type="text" name="input_folder" placeholder="/data/routed/pv-finance (laisser vide si dossier local)">
+                        <button class="btn-soft" type="button" onclick="openLocalRuleFolderDialog('setupRuleFolderPicker')">Choisir</button>
+                        <button class="btn-soft" type="button" onclick="openFolderPicker('setupRuleFolder')">Serveur</button>
+                    </div>
+                    <input id="setupRuleFolderPicker" type="file" accept=".pdf,application/pdf" webkitdirectory directory multiple style="display:none" onchange="handleRuleFolderSelection('setupRuleFolderPicker','setupRuleFolder','setupRuleFolderHint','setupRuleFileNames')">
+                    <textarea id="setupRuleFileNames" name="input_file_names" style="display:none"></textarea>
+                    <div id="setupRuleFolderHint" style="margin-top:4px; font-size:12px; color: var(--muted);">
+                        "Choisir" sélectionne un dossier local de référence (les noms de PDF sont utilisés pour suggérer la règle).
                     </div>
                 </label>
                 <label>Type document
@@ -310,6 +321,90 @@ let pickerTargetInputId = null;
 let pickerCurrentPath = null;
 let pickerParentPath = null;
 let pickerRoots = [];
+
+function openLocalFolderDialog(fileInputId) {
+    const picker = document.getElementById(fileInputId);
+    if (!picker) {
+        return;
+    }
+    picker.value = "";
+    picker.click();
+}
+
+function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
+    const picker = document.getElementById(fileInputId);
+    const pathInput = document.getElementById(pathInputId);
+    const hint = document.getElementById(hintId);
+    if (!picker) {
+        return;
+    }
+
+    const files = Array.from(picker.files || []);
+    if (!files.length) {
+        if (hint) {
+            hint.textContent = "Aucun dossier local sélectionné.";
+        }
+        return;
+    }
+
+    const pdfCount = files.filter((file) => file.name.toLowerCase().endsWith(".pdf")).length;
+    const firstRelativePath = files[0].webkitRelativePath || files[0].name;
+    const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
+
+    if (pathInput) {
+        pathInput.value = "";
+    }
+    if (hint) {
+        hint.textContent = `Dossier local sélectionné: ${folderName} (${pdfCount} PDF).`;
+    }
+}
+
+function openLocalRuleFolderDialog(fileInputId) {
+    const picker = document.getElementById(fileInputId);
+    if (!picker) {
+        return;
+    }
+    picker.value = "";
+    picker.click();
+}
+
+function handleRuleFolderSelection(fileInputId, pathInputId, hintId, namesFieldId) {
+    const picker = document.getElementById(fileInputId);
+    const pathInput = document.getElementById(pathInputId);
+    const hint = document.getElementById(hintId);
+    const namesField = document.getElementById(namesFieldId);
+    if (!picker) {
+        return;
+    }
+
+    const files = Array.from(picker.files || []);
+    if (!files.length) {
+        if (hint) {
+            hint.textContent = "Aucun dossier local sélectionné.";
+        }
+        if (namesField) {
+            namesField.value = "";
+        }
+        return;
+    }
+
+    const pdfEntries = files
+        .filter((file) => file.name.toLowerCase().endsWith(".pdf"))
+        .map((file) => file.webkitRelativePath || file.name);
+
+    if (pathInput) {
+        pathInput.value = "";
+    }
+    if (namesField) {
+        namesField.value = pdfEntries.join("\n");
+    }
+
+    const firstRelativePath = pdfEntries[0] || files[0].webkitRelativePath || files[0].name;
+    const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
+    if (hint) {
+        hint.textContent = `Dossier local de référence: ${folderName} (${pdfEntries.length} PDF retenus).`;
+    }
+}
 
 function openFolderPicker(inputId) {
     pickerTargetInputId = inputId;

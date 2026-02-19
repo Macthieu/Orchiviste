@@ -147,11 +147,12 @@ private struct UILocalIngestForm: Content {
 }
 
 private struct UIFolderIngestForm: Content {
-    let input_folder: String
+    let input_folder: String?
     let tags: String?
     let recursive: String?
     let max_files: String?
     let output_root: String?
+    let folder_files: [File]?
 }
 
 private struct UIPresetCreateForm: Content {
@@ -188,7 +189,8 @@ private struct UIRoutingRuleCreateForm: Content {
 }
 
 private struct UIRoutingRuleSuggestForm: Content {
-    let input_folder: String
+    let input_folder: String?
+    let input_file_names: String?
     let when_type_doc: String?
     let when_sujet: String?
     let preset_id: String?
@@ -353,27 +355,60 @@ func registerUIRoutes(_ app: Application) {
         }
     }
 
-    app.on(.POST, "ui", "ingest", "folder", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+    app.on(.POST, "ui", "ingest", "folder", body: .collect(maxSize: "512mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIFolderIngestForm.self)
-            let inputFolderRaw = form.input_folder.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !inputFolderRaw.isEmpty else {
-                throw Abort(.badRequest, reason: "Le dossier d'entrée est requis.")
-            }
-
-            let inputURL = URL(fileURLWithPath: inputFolderRaw, isDirectory: true)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: inputURL.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
-                throw Abort(.badRequest, reason: "Le dossier d'entrée est introuvable sur le serveur API.")
-            }
-
+            let inputFolderRaw = nonEmptyString(form.input_folder)
             let recursive = parseBooleanFlag(form.recursive, defaultValue: true)
             let maxFiles = parseMaxFiles(form.max_files)
             let tags = parseUploadTags(raw: form.tags)
-            let files = try collectPDFFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
-            guard !files.isEmpty else {
-                throw Abort(.badRequest, reason: "Aucun fichier PDF trouvé dans le dossier d'entrée.")
+            let uploadedFolderFiles = form.folder_files ?? []
+
+            var files: [URL] = []
+            var sourceLabel = "dossier serveur"
+
+            if let inputFolderRaw {
+                let inputURL = URL(fileURLWithPath: inputFolderRaw, isDirectory: true)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: inputURL.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else {
+                    throw Abort(.badRequest, reason: "Le dossier d'entrée est introuvable sur le serveur API.")
+                }
+                files = try collectPDFFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
+                guard !files.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun fichier PDF trouvé dans le dossier d'entrée.")
+                }
+            } else if !uploadedFolderFiles.isEmpty {
+                let pdfFiles = uploadedFolderFiles.filter {
+                    $0.filename.lowercased().hasSuffix(".pdf") && $0.data.readableBytes > 0
+                }
+                guard !pdfFiles.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun PDF valide trouvé dans le dossier local.")
+                }
+                guard pdfFiles.count <= maxFiles else {
+                    throw Abort(
+                        .badRequest,
+                        reason: "Le dossier local contient \(pdfFiles.count) PDF. Réduis la sélection ou augmente la limite."
+                    )
+                }
+
+                let inboxDirectory = resolveUILocalIngestInboxDirectory()
+                try FileManager.default.createDirectory(
+                    at: inboxDirectory,
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+
+                let timestamp = formatUploadTimestamp(Date())
+                for (index, file) in pdfFiles.enumerated() {
+                    let safeName = sanitizeUploadFileName(file.filename)
+                    let destination = inboxDirectory.appendingPathComponent("\(timestamp)-\(index + 1)-\(safeName)")
+                    try Data(buffer: file.data).write(to: destination, options: .atomic)
+                    files.append(destination)
+                }
+                sourceLabel = "ton ordinateur"
+            } else {
+                throw Abort(.badRequest, reason: "Sélectionne un dossier serveur ou choisis un dossier local.")
             }
 
             if let outputRoot = nonEmptyString(form.output_root) {
@@ -403,7 +438,8 @@ func registerUIRoutes(_ app: Application) {
                 ingested += 1
             }
 
-            return req.redirect(to: "/ui?upload_notice=\(urlQueryEncoded("\(ingested) PDF ajouté(s) depuis le dossier."))")
+            let notice = "\(ingested) PDF ajouté(s) depuis \(sourceLabel)."
+            return req.redirect(to: "/ui?upload_notice=\(urlQueryEncoded(notice))")
         } catch let abort as AbortError {
             return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded(abort.reason))")
         } catch {
@@ -559,30 +595,43 @@ func registerUIRoutes(_ app: Application) {
     app.on(.POST, "ui", "routing", "rules", "suggest", body: .collect(maxSize: "1mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIRoutingRuleSuggestForm.self)
-            let folderRaw = form.input_folder.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !folderRaw.isEmpty else {
-                throw Abort(.badRequest, reason: "Le dossier source est requis.")
-            }
-            let folderURL = URL(fileURLWithPath: folderRaw, isDirectory: true)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
-                throw Abort(.badRequest, reason: "Le dossier source est introuvable.")
-            }
-
             let maxFiles = parseMaxFiles(form.max_files)
-            let sampleNames = try collectPDFFiles(in: folderURL, recursive: false, maxFiles: maxFiles)
-                .map(\.lastPathComponent)
-            guard !sampleNames.isEmpty else {
-                throw Abort(.badRequest, reason: "Aucun PDF trouvé dans le dossier source.")
+            let folderRaw = nonEmptyString(form.input_folder)
+            let localSubmittedNames = parseSubmittedPDFNames(form.input_file_names)
+
+            let sampleNames: [String]
+            let folderLabel: String
+            if let folderRaw {
+                let folderURL = URL(fileURLWithPath: folderRaw, isDirectory: true)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else {
+                    throw Abort(.badRequest, reason: "Le dossier source est introuvable.")
+                }
+                sampleNames = try collectPDFFiles(in: folderURL, recursive: false, maxFiles: maxFiles)
+                    .map(\.lastPathComponent)
+                guard !sampleNames.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun PDF trouvé dans le dossier source.")
+                }
+                folderLabel = folderURL.lastPathComponent
+            } else if !localSubmittedNames.isEmpty {
+                sampleNames = Array(localSubmittedNames.prefix(maxFiles)).map {
+                    URL(fileURLWithPath: $0).lastPathComponent
+                }
+                guard !sampleNames.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun PDF local valide n'a été transmis.")
+                }
+                folderLabel = inferSubmittedFolderLabel(from: localSubmittedNames) ?? "dossier-local"
+            } else {
+                throw Abort(.badRequest, reason: "Le dossier source est requis (serveur ou local).")
             }
 
             let inferredClassCode = inferClassCodeFromFileNames(sampleNames)
-            let ruleID = sanitizeRoutingRuleID("auto-\(folderURL.lastPathComponent)")
+            let ruleID = sanitizeRoutingRuleID("auto-\(folderLabel)")
             let whenTypeDoc = nonEmptyString(form.when_type_doc)
             let whenSujet = nonEmptyString(form.when_sujet)
             let presetID = nonEmptyString(form.preset_id)
-            let destinationTemplate = "Archives/{year}/{class_code}/\(sanitizeTemplateSegment(folderURL.lastPathComponent))"
+            let destinationTemplate = "Archives/{year}/{class_code}/\(sanitizeTemplateSegment(folderLabel))"
             let nameFormat = "{class_code}-{type_doc}-{sujet}-{date}-{numero}"
 
             let rule = RoutingRule(
@@ -1523,6 +1572,28 @@ private func collectPDFFiles(in root: URL, recursive: Bool, maxFiles: Int) throw
         }
     }
     return results.sorted(by: { $0.path < $1.path })
+}
+
+private func parseSubmittedPDFNames(_ raw: String?) -> [String] {
+    guard let raw else { return [] }
+    return raw
+        .components(separatedBy: .newlines)
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .map { $0.replacingOccurrences(of: "\\", with: "/") }
+        .filter { $0.lowercased().hasSuffix(".pdf") }
+}
+
+private func inferSubmittedFolderLabel(from submittedNames: [String]) -> String? {
+    for submittedName in submittedNames {
+        let normalized = submittedName.replacingOccurrences(of: "\\", with: "/")
+        let parts = normalized.split(separator: "/").map(String.init)
+        guard parts.count > 1 else { continue }
+        if let candidate = nonEmptyString(parts[0]) {
+            return candidate
+        }
+    }
+    return nil
 }
 
 private func inferClassCodeFromFileNames(_ names: [String]) -> String? {

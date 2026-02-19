@@ -54,6 +54,25 @@
             font: inherit;
             background: #fff;
         }
+        .path-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .path-row input {
+            flex: 1;
+        }
+        .btn-soft {
+            border: 1px solid var(--accent);
+            background: #ebf8f4;
+            color: var(--accent);
+            border-radius: 8px;
+            font-weight: 700;
+            padding: 8px 10px;
+            cursor: pointer;
+            margin-top: 4px;
+            white-space: nowrap;
+        }
         .btn {
             margin-top: 10px;
             border: 1px solid var(--accent);
@@ -184,7 +203,15 @@
         <form action="/ui/routing/rules/suggest" method="post">
             <div class="form-grid">
                 <label>Dossier source
-                    <input type="text" name="input_folder" placeholder="/data/routed/finance/pv" required>
+                    <div class="path-row">
+                        <input id="suggestRuleFolderField" type="text" name="input_folder" placeholder="/data/routed/finance/pv (laisser vide si dossier local)">
+                        <button class="btn-soft" type="button" onclick="openLocalRuleFolderDialog('suggestRuleFolderPicker')">Choisir</button>
+                    </div>
+                    <input id="suggestRuleFolderPicker" type="file" accept=".pdf,application/pdf" webkitdirectory directory multiple style="display:none" onchange="handleRuleFolderSelection('suggestRuleFolderPicker','suggestRuleFolderField','suggestRuleFolderHint','suggestRuleFileNames')">
+                    <textarea id="suggestRuleFileNames" name="input_file_names" style="display:none"></textarea>
+                    <div id="suggestRuleFolderHint" style="margin-top:4px; font-size:12px;">
+                        "Choisir" sélectionne un dossier local de référence (les noms de PDF sont envoyés pour la suggestion).
+                    </div>
                 </label>
                 <label>Type document (critère)
                     <input type="text" name="when_type_doc" placeholder="ProcesVerbal">
@@ -335,5 +362,53 @@
         </tbody>
     </table>
 </main>
+<script>
+function openLocalRuleFolderDialog(fileInputId) {
+    const picker = document.getElementById(fileInputId);
+    if (!picker) {
+        return;
+    }
+    picker.value = "";
+    picker.click();
+}
+
+function handleRuleFolderSelection(fileInputId, pathInputId, hintId, namesFieldId) {
+    const picker = document.getElementById(fileInputId);
+    const pathInput = document.getElementById(pathInputId);
+    const hint = document.getElementById(hintId);
+    const namesField = document.getElementById(namesFieldId);
+    if (!picker) {
+        return;
+    }
+
+    const files = Array.from(picker.files || []);
+    if (!files.length) {
+        if (hint) {
+            hint.textContent = "Aucun dossier local sélectionné.";
+        }
+        if (namesField) {
+            namesField.value = "";
+        }
+        return;
+    }
+
+    const pdfEntries = files
+        .filter((file) => file.name.toLowerCase().endsWith(".pdf"))
+        .map((file) => file.webkitRelativePath || file.name);
+
+    if (pathInput) {
+        pathInput.value = "";
+    }
+    if (namesField) {
+        namesField.value = pdfEntries.join("\n");
+    }
+
+    const firstRelativePath = pdfEntries[0] || files[0].webkitRelativePath || files[0].name;
+    const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
+    if (hint) {
+        hint.textContent = `Dossier local de référence: ${folderName} (${pdfEntries.length} PDF retenus).`;
+    }
+}
+</script>
 </body>
 </html>
