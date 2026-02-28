@@ -219,11 +219,11 @@
     </section>
 
     <section class="card upload-card">
-        <h2>Importer un PDF local</h2>
+        <h2>Importer un document local</h2>
         <p>L'import est explicite: le fichier est copié côté serveur puis injecté dans la file d'ingestion.</p>
         <form class="upload-form" action="/ui/ingest/local" method="post" enctype="multipart/form-data">
-            <label>Fichier PDF
-                <input type="file" name="pdf" accept="application/pdf" required>
+            <label>Fichier
+                <input type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" required>
             </label>
             <label>Étiquettes (optionnel)
                 <input type="text" name="tags" placeholder="pv, comité, facture">
@@ -242,7 +242,7 @@
                     <button class="path-btn" type="button" onclick="openLocalFolderDialog('inputFolderUpload')">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('inputFolderField')">Serveur</button>
                 </div>
-                <input id="inputFolderUpload" type="file" name="folder_files" accept=".pdf,application/pdf" webkitdirectory directory multiple style="display:none" onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint')">
+                <input id="inputFolderUpload" type="file" name="folder_files" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple style="display:none" onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint')">
                 <div id="inputFolderHint" class="help">Le bouton "Choisir" ouvre le sélecteur de dossier local (ton ordinateur).</div>
             </label>
             <label>Dossier de sortie (optionnel)
@@ -342,7 +342,7 @@ function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
         return;
     }
 
-    const pdfCount = files.filter((file) => file.name.toLowerCase().endsWith(".pdf")).length;
+    const supportedCount = files.filter((file) => /\.(pdf|docx|xlsx|pptx|png|jpe?g|tiff?)$/i.test(file.name)).length;
     const firstRelativePath = files[0].webkitRelativePath || files[0].name;
     const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
 
@@ -350,7 +350,7 @@ function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
         pathInput.value = "";
     }
     if (hint) {
-        hint.textContent = `Dossier local sélectionné: ${folderName} (${pdfCount} PDF).`;
+        hint.textContent = `Dossier local selectionne: ${folderName} (${supportedCount} document(s) supporte(s)).`;
     }
 }
 

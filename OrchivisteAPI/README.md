@@ -27,10 +27,12 @@ UI (SSR Leaf) :
 - alias : http://127.0.0.1:28780/u
 - agents : http://127.0.0.1:28780/ui/workers
 - préréglages : http://127.0.0.1:28780/ui/presets
+- téléchargement de l'exemple de preset : `GET /v1/presets/example/download`
 - la visionneuse utilise l'aperçu lazy-load (`/v1/preview/...`) et ne télécharge que sur action explicite
 - important : l'aperçu est une image JPG (sélection de texte impossible directement dans la page).  
   Le texte OCR est disponible via `GET /v1/preview/{id}/text`, et les PDF routés peuvent être régénérés en PDF sélectionnable.
 - téléchargement PDF OCR explicite : `GET /v1/jobs/{id}/download/searchable` (bouton dans la page tâche `/ui/jobs/{id}`)
+- apprentissage d'un preset depuis un dossier : `POST /v1/presets/learn`
 
 Docker Compose :
 - démarrage standard : `docker compose up -d`
@@ -61,6 +63,20 @@ Tests fumée MVP :
 - contrôle OpenAPI MVP (endpoints + webhook) : `./scripts/check_openapi_mvp.sh`
 - exécution groupée recommandée : `./scripts/preflight_local.sh --full`
 - alias de compatibilité : `./scripts/validate_release.sh`
+- alias OpenAPI racine : `GET /openapi.json` (conserve aussi `GET /v1/openapi.json`)
+
+Support multi-formats MVP :
+- PDF : preview image + texte natif, OCR fallback si necessaire
+- Word / Excel / PowerPoint (`.docx`, `.xlsx`, `.pptx`) : extraction texte OOXML sans dependance lourde, conversion preview Office -> PDF si `soffice` est disponible
+- Images (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`) : OCR direct + preview image/placeholder selon la plateforme
+- l'ingestion UI locale et par dossier accepte maintenant ces formats
+
+Preset JSON riche :
+- lecture/ecriture compatible avec l'ancien format `id/name/name_format/class_code/postprocess`
+- support du format enrichi (`preset_id`, `detect`, `extract`, `naming`, `classification`, `export`, `review`)
+- exemple modifiable sur disque : `OrchivisteAPI/configs/presets/example-resolution.json`
+- recuperation d'un preset : `GET /v1/presets/{id}`
+- apprentissage d'un draft depuis un dossier : `POST /v1/presets/learn`
 
 Tests de renommage PDF (local -> routage) :
 - fichier unique : `./scripts/test_pdf_rename.sh "/chemin/vers/fichier.pdf"`
@@ -118,6 +134,13 @@ Analyse :
   - `ORCHIVISTE_ROUTE_OCR_MAX_PAGES` (hérite de `ORCHIVISTE_OCR_MAX_PAGES`)
   - `ORCHIVISTE_ROUTE_OCR_DPI` (hérite de `ORCHIVISTE_OCR_DPI`)
   - `ORCHIVISTE_ROUTE_OCR_MIN_TEXT_CHARS` (hérite de `ORCHIVISTE_OCR_MIN_TEXT_CHARS`)
+- conversion Office optionnelle :
+  - `ORCHIVISTE_OFFICE_CONVERSION_ENABLED` (`1` par défaut)
+  - installer `soffice` / LibreOffice si vous voulez un preview PDF reel pour `docx/xlsx/pptx`
+- export PDF/A :
+  - `ORCHIVISTE_EXPORT_PDFA_ENABLED` (`0` par défaut, peut etre active par preset)
+  - `ORCHIVISTE_EXPORT_PREFERRED_PDF_FORMAT` (`PDF/A-2b`)
+  - Ghostscript est requis pour l'export PDF/A (`gs`, installe dans l'image Docker API)
 
 Routage SharePoint Graph (optionnel) :
 - `ORCHIVISTE_GRAPH_ENABLED` = `1`

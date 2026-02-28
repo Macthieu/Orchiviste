@@ -28,6 +28,7 @@ WORKDIR /app/OrchivisteAPI
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    ghostscript \
     libcurl4 \
     libsqlite3-0 \
     libstdc++6 \
@@ -36,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-fra \
     tzdata \
+    unzip \
     zlib1g \
     && rm -rf /var/lib/apt/lists/*
 

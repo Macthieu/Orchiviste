@@ -317,6 +317,10 @@
 
     <section class="card">
         <h2>Créer un préréglage</h2>
+        <p style="margin: 0 0 10px; color: var(--muted);">
+            Exemple pret a copier: <a href="/v1/presets/example/download">Telecharger l'exemple JSON</a>.
+            Apprentissage auto (endpoint admin): <code>POST /v1/presets/learn</code>.
+        </p>
         <form action="/ui/presets" method="post">
             <div class="form-grid">
                 <label>ID

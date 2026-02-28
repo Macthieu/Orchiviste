@@ -309,11 +309,11 @@ func registerUIRoutes(_ app: Application) {
             guard !filename.isEmpty else {
                 throw Abort(.badRequest, reason: "Aucun fichier fourni.")
             }
-            guard filename.lowercased().hasSuffix(".pdf") else {
-                throw Abort(.badRequest, reason: "Seuls les fichiers PDF sont acceptés.")
+            guard isSupportedIngestFileName(filename) else {
+                throw Abort(.badRequest, reason: "Format non supporte. Utilise PDF, DOCX, XLSX, PPTX, PNG, JPG ou TIFF.")
             }
             guard form.pdf.data.readableBytes > 0 else {
-                throw Abort(.badRequest, reason: "Le fichier PDF est vide.")
+                throw Abort(.badRequest, reason: "Le fichier est vide.")
             }
 
             let inboxDirectory = resolveUILocalIngestInboxDirectory()
@@ -342,7 +342,7 @@ func registerUIRoutes(_ app: Application) {
             )
             return req.redirect(to: "/ui/jobs/\(taskId.uuidString)")
         } catch let abort as AbortError {
-            let reason = abort.reason.isEmpty ? "Échec de l'import PDF." : abort.reason
+            let reason = abort.reason.isEmpty ? "Echec de l'import du document." : abort.reason
             req.logger.warning("Échec ingestion UI.", metadata: [
                 "reason": .string(reason)
             ])
@@ -351,7 +351,7 @@ func registerUIRoutes(_ app: Application) {
             req.logger.error("Échec ingestion UI.", metadata: [
                 "error": .string(error.localizedDescription)
             ])
-            return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded("Erreur interne pendant l'import PDF."))")
+            return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded("Erreur interne pendant l'import du document."))")
         }
     }
 
@@ -374,21 +374,21 @@ func registerUIRoutes(_ app: Application) {
                       isDirectory.boolValue else {
                     throw Abort(.badRequest, reason: "Le dossier d'entrée est introuvable sur le serveur API.")
                 }
-                files = try collectPDFFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
+                files = try collectSupportedDocumentFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
                 guard !files.isEmpty else {
-                    throw Abort(.badRequest, reason: "Aucun fichier PDF trouvé dans le dossier d'entrée.")
+                    throw Abort(.badRequest, reason: "Aucun document supporte trouve dans le dossier d'entree.")
                 }
             } else if !uploadedFolderFiles.isEmpty {
-                let pdfFiles = uploadedFolderFiles.filter {
-                    $0.filename.lowercased().hasSuffix(".pdf") && $0.data.readableBytes > 0
+                let supportedFiles = uploadedFolderFiles.filter {
+                    isSupportedIngestFileName($0.filename) && $0.data.readableBytes > 0
                 }
-                guard !pdfFiles.isEmpty else {
-                    throw Abort(.badRequest, reason: "Aucun PDF valide trouvé dans le dossier local.")
+                guard !supportedFiles.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun document valide trouve dans le dossier local.")
                 }
-                guard pdfFiles.count <= maxFiles else {
+                guard supportedFiles.count <= maxFiles else {
                     throw Abort(
                         .badRequest,
-                        reason: "Le dossier local contient \(pdfFiles.count) PDF. Réduis la sélection ou augmente la limite."
+                        reason: "Le dossier local contient \(supportedFiles.count) documents. Reduis la selection ou augmente la limite."
                     )
                 }
 
@@ -400,7 +400,7 @@ func registerUIRoutes(_ app: Application) {
                 )
 
                 let timestamp = formatUploadTimestamp(Date())
-                for (index, file) in pdfFiles.enumerated() {
+                for (index, file) in supportedFiles.enumerated() {
                     let safeName = sanitizeUploadFileName(file.filename)
                     let destination = inboxDirectory.appendingPathComponent("\(timestamp)-\(index + 1)-\(safeName)")
                     try Data(buffer: file.data).write(to: destination, options: .atomic)
@@ -438,7 +438,7 @@ func registerUIRoutes(_ app: Application) {
                 ingested += 1
             }
 
-            let notice = "\(ingested) PDF ajouté(s) depuis \(sourceLabel)."
+            let notice = "\(ingested) document(s) ajoute(s) depuis \(sourceLabel)."
             return req.redirect(to: "/ui?upload_notice=\(urlQueryEncoded(notice))")
         } catch let abort as AbortError {
             return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded(abort.reason))")
@@ -1456,9 +1456,14 @@ private func sanitizeUploadFileName(_ raw: String) -> String {
         }
     let fallback = sanitized.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
     if fallback.isEmpty {
-        return "document.pdf"
+        return "document"
     }
     return fallback
+}
+
+private func isSupportedIngestFileName(_ fileName: String) -> Bool {
+    let ext = URL(fileURLWithPath: fileName).pathExtension.lowercased()
+    return DocumentTextExtractor.supportedExtensions().contains(ext)
 }
 
 private func uiFolderPickerRoots() -> [URL] {
@@ -1565,6 +1570,48 @@ private func collectPDFFiles(in root: URL, recursive: Bool, maxFiles: Int) throw
             let values = try url.resourceValues(forKeys: [.isRegularFileKey])
             guard values.isRegularFile == true else { continue }
             guard url.pathExtension.lowercased() == "pdf" else { continue }
+            results.append(url)
+            if results.count >= maxFiles {
+                break
+            }
+        }
+    }
+    return results.sorted(by: { $0.path < $1.path })
+}
+
+private func collectSupportedDocumentFiles(in root: URL, recursive: Bool, maxFiles: Int) throws -> [URL] {
+    let manager = FileManager.default
+    let allowed = Set(DocumentTextExtractor.supportedExtensions())
+    var results: [URL] = []
+
+    if recursive {
+        guard let enumerator = manager.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else { continue }
+            guard allowed.contains(url.pathExtension.lowercased()) else { continue }
+            results.append(url)
+            if results.count >= maxFiles {
+                break
+            }
+        }
+    } else {
+        let items = try manager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        for url in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else { continue }
+            guard allowed.contains(url.pathExtension.lowercased()) else { continue }
             results.append(url)
             if results.count >= maxFiles {
                 break

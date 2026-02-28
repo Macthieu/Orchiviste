@@ -25,8 +25,20 @@ enum ConfigLoader {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
     }
 
+    static func presetsDirectory() -> URL {
+        baseDir().appendingPathComponent("presets", isDirectory: true)
+    }
+
+    static func presetURL(id: String) -> URL {
+        presetsDirectory().appendingPathComponent("\(id).json")
+    }
+
+    static func examplePresetURL() -> URL {
+        presetsDirectory().appendingPathComponent("example-resolution.json")
+    }
+
     static func loadPresets() -> [Preset] {
-        let dir = baseDir().appendingPathComponent("presets", isDirectory: true)
+        let dir = presetsDirectory()
         guard let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
             return []
         }
@@ -40,12 +52,28 @@ enum ConfigLoader {
         }
     }
 
-    static func savePreset(_ preset: Preset) throws {
-        let dir = baseDir().appendingPathComponent("presets", isDirectory: true)
+    static func loadPreset(id: String) -> Preset? {
+        let exact = presetURL(id: id)
+        if let data = try? Data(contentsOf: exact),
+           let preset = try? JSONDecoder().decode(Preset.self, from: data) {
+            return preset
+        }
+        return loadPresets().first { $0.id == id }
+    }
+
+    @discardableResult
+    static func savePreset(_ preset: Preset, filename: String? = nil) throws -> URL {
+        let dir = presetsDirectory()
         try ensureDir(dir)
-        let url = dir.appendingPathComponent("\(preset.id).json")
-        let data = try JSONEncoder().encode(preset)
+        let safeFileName = filename?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackFileName = "\(preset.id).json"
+        let outputFileName = safeFileName.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackFileName
+        let url = dir.appendingPathComponent(outputFileName)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(preset)
         try data.write(to: url, options: [.atomic])
+        return url
     }
 
     static func loadTaxonomy(id: String) -> TaxonomyRecord? {

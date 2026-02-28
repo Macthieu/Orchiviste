@@ -4,6 +4,8 @@ import Vapor
 private struct LocalRouteResult {
     let destinationPath: String
     let fileName: String
+    let warnings: [String]
+    let pdfStrategy: String?
 }
 
 func registerRoutingRoutes(_ app: Application) {
@@ -161,6 +163,7 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 classCode: effectiveClassCode,
                 localSettings: localSettings,
                 preferredFileName: resolvedFileName,
+                preset: selectedPreset,
                 logger: req.logger
             ) {
                 routeMode = "local"
@@ -179,6 +182,32 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                     database: req.db,
                     logger: req.logger
                 )
+                for warning in localRoute.warnings {
+                    await EventPublisher.publish(
+                        type: "route.warning",
+                        payload: [
+                            "job_id": resolvedJob.id.uuidString,
+                            "warning": warning,
+                            "mode": routeMode
+                        ],
+                        application: req.application,
+                        database: req.db,
+                        logger: req.logger
+                    )
+                }
+                if let pdfStrategy = localRoute.pdfStrategy {
+                    await EventPublisher.publish(
+                        type: "route.pdf_export_applied",
+                        payload: [
+                            "job_id": resolvedJob.id.uuidString,
+                            "strategy": pdfStrategy,
+                            "mode": routeMode
+                        ],
+                        application: req.application,
+                        database: req.db,
+                        logger: req.logger
+                    )
+                }
             }
         } catch {
             await EventPublisher.publish(
@@ -242,6 +271,7 @@ private func routeLocalFileIfPossible(
     classCode: String,
     localSettings: RoutingLocalSettings?,
     preferredFileName: String?,
+    preset: Preset?,
     logger: Logger
 ) throws -> LocalRouteResult? {
     guard job.source.kind.lowercased() == "local" else {
@@ -286,30 +316,87 @@ private func routeLocalFileIfPossible(
         proposedFileName: destinationName
     )
 
-    if (try? SearchablePDFBuilder.buildIfNeeded(
-        sourceURL: sourceURL,
-        destinationURL: destinationURL,
-        logger: logger
-    )) == true {
-        do {
-            try FileManager.default.removeItem(at: sourceURL)
-        } catch {
-            logger.warning("Le PDF OCR a été généré, mais la suppression de la source a échoué.", metadata: [
-                "job_id": .string(job.id.uuidString),
-                "source_path": .string(sourceURL.path),
-                "error": .string(error.localizedDescription)
-            ])
+    if sourceURL.pathExtension.lowercased() == "pdf" {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-route-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: tempDirectory)
         }
-        return LocalRouteResult(destinationPath: destinationURL.path, fileName: destinationURL.lastPathComponent)
+
+        let searchableURL = tempDirectory.appendingPathComponent("searchable.pdf")
+        let builtSearchable = (try? SearchablePDFBuilder.buildIfNeeded(
+            sourceURL: sourceURL,
+            destinationURL: searchableURL,
+            logger: logger
+        )) == true
+        let candidateURL = builtSearchable ? searchableURL : sourceURL
+
+        let pdfaDestination = tempDirectory.appendingPathComponent("archive.pdf")
+        let pdfaResult = ArchivalPDFExporter.convertIfNeeded(
+            sourceURL: candidateURL,
+            destinationURL: pdfaDestination,
+            preset: preset,
+            logger: logger
+        )
+        let finalSourceURL = pdfaResult.converted ? pdfaDestination : candidateURL
+        _ = try moveOrCopyLocalRouteFile(
+            sourceURL: finalSourceURL,
+            destinationURL: destinationURL
+        )
+
+        if finalSourceURL != sourceURL {
+            do {
+                try FileManager.default.removeItem(at: sourceURL)
+            } catch {
+                logger.warning("La suppression de la source apres export PDF a echoue.", metadata: [
+                    "job_id": .string(job.id.uuidString),
+                    "source_path": .string(sourceURL.path),
+                    "error": .string(error.localizedDescription)
+                ])
+            }
+        }
+
+        let strategy: String?
+        if pdfaResult.converted {
+            strategy = builtSearchable ? "searchable+pdfa" : "pdfa"
+        } else if builtSearchable {
+            strategy = "searchable"
+        } else {
+            strategy = nil
+        }
+
+        return LocalRouteResult(
+            destinationPath: destinationURL.path,
+            fileName: destinationURL.lastPathComponent,
+            warnings: pdfaResult.warnings,
+            pdfStrategy: strategy
+        )
     }
 
+    _ = try moveOrCopyLocalRouteFile(sourceURL: sourceURL, destinationURL: destinationURL)
+    return LocalRouteResult(
+        destinationPath: destinationURL.path,
+        fileName: destinationURL.lastPathComponent,
+        warnings: [],
+        pdfStrategy: nil
+    )
+}
+
+private func moveOrCopyLocalRouteFile(
+    sourceURL: URL,
+    destinationURL: URL
+) throws -> Bool {
     do {
         try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+        return false
     } catch {
-        // cross-device move can fail on rename; fallback to copy+delete
         do {
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-            try FileManager.default.removeItem(at: sourceURL)
+            if sourceURL != destinationURL {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
+            return true
         } catch {
             throw Abort(
                 .internalServerError,
@@ -317,8 +404,6 @@ private func routeLocalFileIfPossible(
             )
         }
     }
-
-    return LocalRouteResult(destinationPath: destinationURL.path, fileName: destinationURL.lastPathComponent)
 }
 
 private func resolveLocalFileURL(raw: String) -> URL? {
@@ -420,13 +505,13 @@ private func buildRoutedFileName(
     let ext = originalURL.pathExtension
 
     let now = Date()
-    let dateStamp = formatDate(now, pattern: "yyyyMMdd")
+    let dateStamp = nonEmpty(analysis?.champs["date"]) ?? formatDate(now, pattern: "yyyy-MM-dd")
     let dateTimeStamp = formatDate(now, pattern: "yyyyMMdd-HHmmss")
-    let number = analysis?.champs["numero"] ?? String(UUID().uuidString.prefix(8))
-    let committee = analysis?.champs["comite"] ?? "general"
-    let typeDoc = analysis?.type_doc ?? "autre"
-    let sujet = analysis?.sujets.first ?? "general"
-    let sujets = (analysis?.sujets ?? ["general"]).joined(separator: "-")
+    let number = nonEmpty(analysis?.champs["numero"]) ?? ""
+    let committee = nonEmpty(analysis?.champs["comite"]) ?? ""
+    let typeDoc = nonEmpty(analysis?.type_doc) ?? "Document"
+    let sujet = nonEmpty(analysis?.sujets.first) ?? originalStem
+    let sujets = ((analysis?.sujets ?? []).compactMap(nonEmpty).isEmpty ? [sujet] : (analysis?.sujets ?? [sujet])).joined(separator: "-")
 
     let values: [String: String] = [
         "class_code": classCode,
@@ -448,17 +533,21 @@ private func buildRoutedFileName(
     let format = nonEmpty(nameFormat) ?? "{class_code}-{type_doc}-{sujet}-{date}-{numero}"
     var rawName = substituteTokens(in: format, values: values)
     rawName = applyPostprocess(rawName, steps: postprocess)
+    rawName = rawName.replacingOccurrences(of: #"-{2,}"#, with: "-", options: .regularExpression)
+    rawName = rawName.replacingOccurrences(of: #"\s+-"#, with: "-", options: .regularExpression)
+    rawName = rawName.replacingOccurrences(of: #"-\s+"#, with: "-", options: .regularExpression)
+    rawName = NamingPolicy.normalizedStem(rawName)
     rawName = sanitizeFileName(rawName)
+    if rawName.isEmpty {
+        rawName = NamingPolicy.normalizedStem(originalStem)
+    }
     if rawName.isEmpty {
         rawName = "\(classCode)-\(dateTimeStamp)"
     }
-    if ext.isEmpty {
-        return rawName
-    }
-    if rawName.lowercased().hasSuffix(".\(ext.lowercased())") {
-        return rawName
-    }
-    return "\(rawName).\(ext)"
+    let baseName = rawName.lowercased().hasSuffix(".\(ext.lowercased())") || ext.isEmpty
+        ? rawName
+        : "\(rawName).\(ext)"
+    return NamingPolicy.truncateFileNameIfNeeded(baseName)
 }
 
 private func substituteTokens(in raw: String, values: [String: String]) -> String {

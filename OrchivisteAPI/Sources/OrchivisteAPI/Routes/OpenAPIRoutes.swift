@@ -1,7 +1,7 @@
 import Vapor
 
 func registerOpenAPIRoutes(_ app: Application) {
-    app.get("v1", "openapi.json") { _ -> Response in
+    let openAPIHandler: (Request) throws -> Response = { _ in
         let spec: [String: Any] = [
             "openapi": "3.1.0",
             "info": [
@@ -13,6 +13,12 @@ func registerOpenAPIRoutes(_ app: Application) {
                 ["url": "http://127.0.0.1:28780"]
             ],
             "paths": [
+                "/openapi.json": [
+                    "get": [
+                        "summary": "Specification OpenAPI 3.1",
+                        "responses": ["200": ["description": "Document OpenAPI"]]
+                    ]
+                ],
                 "/v1/openapi.json": [
                     "get": [
                         "summary": "Specification OpenAPI 3.1",
@@ -165,6 +171,34 @@ func registerOpenAPIRoutes(_ app: Application) {
                         "requestBody": ["required": true, "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
                         "responses": [
                             "200": ["description": "Préréglage enregistre", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
+                            "400": ["$ref": "#/components/responses/Error400"],
+                            "500": ["$ref": "#/components/responses/Error500"]
+                        ]
+                    ]
+                ],
+                "/v1/presets/{id}": [
+                    "parameters": [["name": "id", "in": "path", "required": true, "schema": ["type": "string"]]],
+                    "get": [
+                        "responses": [
+                            "200": ["description": "Prereglage", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/Preset"]]]],
+                            "400": ["$ref": "#/components/responses/Error400"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
+                "/v1/presets/example/download": [
+                    "get": [
+                        "responses": [
+                            "200": ["description": "Fichier JSON exemple de prereglage"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
+                "/v1/presets/learn": [
+                    "post": [
+                        "requestBody": ["required": true, "content": ["application/json": ["schema": ["$ref": "#/components/schemas/PresetLearnRequest"]]]],
+                        "responses": [
+                            "200": ["description": "Draft de prereglage appris", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/PresetLearnResponse"]]]],
                             "400": ["$ref": "#/components/responses/Error400"],
                             "500": ["$ref": "#/components/responses/Error500"]
                         ]
@@ -384,10 +418,130 @@ func registerOpenAPIRoutes(_ app: Application) {
                         "type": "object",
                         "properties": [
                             "id": ["type": "string"],
+                            "preset_id": ["type": "string"],
                             "name": ["type": "string"],
                             "name_format": ["type": "string"],
                             "class_code": ["type": "string"],
-                            "postprocess": ["type": "array", "items": ["type": "string"]]
+                            "postprocess": ["type": "array", "items": ["type": "string"]],
+                            "version": ["type": "string"],
+                            "description": ["type": "string"],
+                            "detect": [
+                                "type": "object",
+                                "properties": [
+                                    "signals_any": ["type": "array", "items": ["type": "string"]],
+                                    "regex_any": ["type": "array", "items": ["type": "string"]]
+                                ]
+                            ],
+                            "extract": [
+                                "type": "object",
+                                "properties": [
+                                    "fields": [
+                                        "type": "array",
+                                        "items": [
+                                            "type": "object",
+                                            "properties": [
+                                                "key": ["type": "string"],
+                                                "label": ["type": "string"],
+                                                "required": ["type": "boolean"],
+                                                "strategies": [
+                                                    "type": "array",
+                                                    "items": [
+                                                        "type": "object",
+                                                        "properties": [
+                                                            "kind": ["type": "string"],
+                                                            "pattern": ["type": "string"],
+                                                            "semantic_hint": ["type": "string"],
+                                                            "examples": ["type": "array", "items": ["type": "string"]],
+                                                            "notes": ["type": "array", "items": ["type": "string"]]
+                                                        ]
+                                                    ]
+                                                ],
+                                                "notes": ["type": "array", "items": ["type": "string"]]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "naming": [
+                                "type": "object",
+                                "properties": [
+                                    "template": ["type": "string"],
+                                    "normalization": ["type": "array", "items": ["type": "string"]],
+                                    "postprocess": ["type": "array", "items": ["type": "string"]],
+                                    "notes": ["type": "array", "items": ["type": "string"]]
+                                ]
+                            ],
+                            "classification": [
+                                "type": "object",
+                                "properties": [
+                                    "suggested_class_code": ["type": "string"],
+                                    "rules": [
+                                        "type": "array",
+                                        "items": [
+                                            "type": "object",
+                                            "properties": [
+                                                "when_signal": ["type": "string"],
+                                                "when_regex": ["type": "string"],
+                                                "when_type_doc": ["type": "string"],
+                                                "assign_class_code": ["type": "string"],
+                                                "notes": ["type": "array", "items": ["type": "string"]]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "export": [
+                                "type": "object",
+                                "properties": [
+                                    "preferred_pdf": [
+                                        "type": "object",
+                                        "properties": [
+                                            "format": ["type": "string"],
+                                            "enabled": ["type": "boolean"]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "review": [
+                                "type": "object",
+                                "properties": [
+                                    "min_confidence": ["type": "number"],
+                                    "required_fields": ["type": "array", "items": ["type": "string"]]
+                                ]
+                            ]
+                        ]
+                    ],
+                    "PresetLearnRequest": [
+                        "type": "object",
+                        "properties": [
+                            "folder_path": ["type": "string"],
+                            "sample_size": ["type": "integer"],
+                            "extensions": ["type": "array", "items": ["type": "string"]]
+                        ]
+                    ],
+                    "PresetLearnResponse": [
+                        "type": "object",
+                        "properties": [
+                            "preset": ["$ref": "#/components/schemas/Preset"],
+                            "saved_path": ["type": "string"],
+                            "confidence": ["type": "number"],
+                            "needs_review": ["type": "boolean"],
+                            "report": [
+                                "type": "object",
+                                "properties": [
+                                    "scanned_files": ["type": "integer"],
+                                    "sampled_files": ["type": "integer"],
+                                    "extensions": ["type": "array", "items": ["type": "string"]],
+                                    "detected_tokens": ["type": "array", "items": ["type": "string"]],
+                                    "document_types": ["type": "array", "items": ["type": "string"]],
+                                    "structure_hints": ["type": "array", "items": ["type": "string"]],
+                                    "suggested_fields": ["type": "array", "items": ["type": "object"]],
+                                    "proposed_name_template": ["type": "string"],
+                                    "normalization_rules": ["type": "array", "items": ["type": "string"]],
+                                    "examples_before_after": ["type": "array", "items": ["type": "object"]],
+                                    "warnings": ["type": "array", "items": ["type": "string"]]
+                                ]
+                            ]
                         ]
                     ],
                     "AnalysisRequest": [
@@ -544,4 +698,6 @@ func registerOpenAPIRoutes(_ app: Application) {
         res.body = .init(data: data)
         return res
     }
+    app.get("openapi.json", use: openAPIHandler)
+    app.get("v1", "openapi.json", use: openAPIHandler)
 }

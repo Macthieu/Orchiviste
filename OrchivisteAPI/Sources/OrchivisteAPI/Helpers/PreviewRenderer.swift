@@ -9,14 +9,43 @@ enum PreviewRenderer {
     static func makePreview(for job: JobRecord, logger: Logger) -> PreviewRecord {
         guard job.source.kind.lowercased() == "local",
               let localFileURL = resolveLocalFileURL(raw: job.fileURL),
-              FileManager.default.fileExists(atPath: localFileURL.path),
-              localFileURL.pathExtension.lowercased() == "pdf" else {
+              FileManager.default.fileExists(atPath: localFileURL.path) else {
             return placeholder(jobId: job.id)
         }
 
-        #if canImport(PDFKit) && canImport(AppKit)
-        guard let document = PDFDocument(url: localFileURL) else {
+        let ext = localFileURL.pathExtension.lowercased()
+        if ext == "pdf" {
+            return makePDFPreview(fileURL: localFileURL, jobId: job.id, logger: logger)
+        }
+
+        guard let extracted = DocumentTextExtractor.extract(fileURL: localFileURL, logger: logger) else {
             return placeholder(jobId: job.id)
+        }
+        defer {
+            cleanupTemporaryArtifacts(extracted.temporaryArtifacts, logger: logger)
+        }
+
+        if let previewPDFURL = extracted.previewPDFURL {
+            let pdfPreview = makePDFPreview(fileURL: previewPDFURL, jobId: job.id, logger: logger)
+            return mergePreview(pdfPreview, withExtractedPages: extracted.pages)
+        }
+
+        if extracted.kind == "image" {
+            return makeImagePreview(
+                fileURL: localFileURL,
+                jobId: job.id,
+                extractedPages: extracted.pages,
+                logger: logger
+            )
+        }
+
+        return makeTextOnlyPreview(jobId: job.id, pages: extracted.pages, logger: logger)
+    }
+
+    private static func makePDFPreview(fileURL: URL, jobId: UUID, logger: Logger) -> PreviewRecord {
+        #if canImport(PDFKit) && canImport(AppKit)
+        guard let document = PDFDocument(url: fileURL) else {
+            return placeholder(jobId: jobId)
         }
 
         var textPages: [Int: String] = [:]
@@ -48,20 +77,20 @@ enum PreviewRenderer {
             }
         }
 
-        logger.info("Aperçu genere.", metadata: ["job_id": .string(job.id.uuidString), "pages": .stringConvertible(pageCount)])
+        logger.info("Aperçu genere.", metadata: ["job_id": .string(jobId.uuidString), "pages": .stringConvertible(pageCount)])
         return PreviewRecord(
-            jobId: job.id,
+            jobId: jobId,
             pages: pageCount,
             textPages: textPages,
             imagesByPage: imagesByPage,
             createdAt: Date()
         )
         #else
-        if let external = makeExternalPreview(fileURL: localFileURL, jobId: job.id, logger: logger) {
+        if let external = makeExternalPreview(fileURL: fileURL, jobId: jobId, logger: logger) {
             return external
         }
         logger.warning("Rendu PDF indisponible sur cette plateforme et extraction texte externe indisponible.")
-        return placeholder(jobId: job.id)
+        return placeholder(jobId: jobId)
         #endif
     }
 
@@ -84,6 +113,90 @@ enum PreviewRenderer {
         }
         let current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         return current.appendingPathComponent(raw)
+    }
+
+    private static func mergePreview(
+        _ preview: PreviewRecord,
+        withExtractedPages pages: [String]
+    ) -> PreviewRecord {
+        guard !pages.isEmpty else {
+            return preview
+        }
+
+        var merged = preview
+        merged.pages = max(preview.pages, pages.count)
+        for (index, pageText) in pages.enumerated() {
+            let pageNumber = index + 1
+            let trimmed = pageText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                merged.textPages[pageNumber] = trimmed
+            }
+            if merged.imagesByPage[pageNumber] == nil {
+                merged.imagesByPage[pageNumber] = PreviewHelper.placeholderJPEG()
+            }
+        }
+        return merged
+    }
+
+    private static func makeTextOnlyPreview(jobId: UUID, pages: [String], logger: Logger) -> PreviewRecord {
+        let safePages = pages.isEmpty ? [PreviewHelper.defaultText(page: 1)] : pages
+        var textPages: [Int: String] = [:]
+        var imagesByPage: [Int: Data] = [:]
+
+        for (index, pageText) in safePages.enumerated() {
+            let page = index + 1
+            let trimmed = pageText.trimmingCharacters(in: .whitespacesAndNewlines)
+            textPages[page] = trimmed.isEmpty ? PreviewHelper.defaultText(page: page) : trimmed
+            imagesByPage[page] = PreviewHelper.placeholderJPEG()
+        }
+
+        logger.info("Aperçu texte genere sans rendu natif.", metadata: [
+            "job_id": .string(jobId.uuidString),
+            "pages": .stringConvertible(safePages.count)
+        ])
+        return PreviewRecord(
+            jobId: jobId,
+            pages: safePages.count,
+            textPages: textPages,
+            imagesByPage: imagesByPage,
+            createdAt: Date()
+        )
+    }
+
+    private static func makeImagePreview(
+        fileURL: URL,
+        jobId: UUID,
+        extractedPages: [String],
+        logger: Logger
+    ) -> PreviewRecord {
+        let imageData = loadImageJPEGData(fileURL: fileURL)
+        let text = extractedPages.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? PreviewHelper.defaultText(page: 1)
+
+        logger.info("Aperçu image genere.", metadata: [
+            "job_id": .string(jobId.uuidString),
+            "path": .string(fileURL.path)
+        ])
+        return PreviewRecord(
+            jobId: jobId,
+            pages: 1,
+            textPages: [1: text.isEmpty ? PreviewHelper.defaultText(page: 1) : text],
+            imagesByPage: [1: imageData ?? PreviewHelper.placeholderJPEG()],
+            createdAt: Date()
+        )
+    }
+
+    private static func cleanupTemporaryArtifacts(_ urls: [URL], logger: Logger) {
+        for url in urls {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                logger.debug("Nettoyage d'un artefact temporaire ignore.", metadata: [
+                    "path": .string(url.path),
+                    "error": .string(error.localizedDescription)
+                ])
+            }
+        }
     }
 
     private static func makeExternalPreview(
@@ -394,6 +507,16 @@ enum PreviewRenderer {
     }
 
     #if canImport(PDFKit) && canImport(AppKit)
+    private static func loadImageJPEGData(fileURL: URL) -> Data? {
+        if fileURL.pathExtension.lowercased() == "jpg" || fileURL.pathExtension.lowercased() == "jpeg" {
+            return try? Data(contentsOf: fileURL)
+        }
+        guard let image = NSImage(contentsOf: fileURL) else {
+            return nil
+        }
+        return jpegData(from: image)
+    }
+
     private static func jpegData(from image: NSImage) -> Data? {
         guard let tiff = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff) else {
@@ -403,6 +526,14 @@ enum PreviewRenderer {
             using: .jpeg,
             properties: [.compressionFactor: 0.72]
         )
+    }
+    #else
+    private static func loadImageJPEGData(fileURL: URL) -> Data? {
+        let ext = fileURL.pathExtension.lowercased()
+        guard ext == "jpg" || ext == "jpeg" else {
+            return nil
+        }
+        return try? Data(contentsOf: fileURL)
     }
     #endif
 }
