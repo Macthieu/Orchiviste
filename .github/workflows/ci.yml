@@ -36,6 +36,14 @@ jobs:
           docker compose config
           docker compose --profile worker config
 
+      - name: Analyse semantic regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke_analyse_semantic.sh scripts/smoke_regression_dataset.sh
+          ./scripts/smoke_analyse_semantic.sh
+          ./scripts/smoke_regression_dataset.sh
+
       - name: MVP smoke test
         shell: bash
         run: |

@@ -2,6 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: orchiviste-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
 
@@ -10,6 +11,7 @@ services:
       context: .
       dockerfile: OrchivisteAnalyse/Dockerfile
     container_name: orchiviste-analyse
+    restart: unless-stopped
     environment:
       ORCHIVISTE_ANALYSE_HOST: "0.0.0.0"
       ORCHIVISTE_ANALYSE_PORT: "28781"
@@ -26,6 +28,7 @@ services:
       context: .
       dockerfile: OrchivisteAPI/Dockerfile
     container_name: orchiviste-api
+    restart: unless-stopped
     depends_on:
       - analyse
       - redis
@@ -46,6 +49,21 @@ services:
       ORCHIVISTE_ROUTE_OCR_MAX_PAGES: "${ORCHIVISTE_ROUTE_OCR_MAX_PAGES:-12}"
       ORCHIVISTE_ROUTE_OCR_DPI: "${ORCHIVISTE_ROUTE_OCR_DPI:-220}"
       ORCHIVISTE_ROUTE_OCR_MIN_TEXT_CHARS: "${ORCHIVISTE_ROUTE_OCR_MIN_TEXT_CHARS:-140}"
+      ORCHIVISTE_PREVIEW_MAX_PAGES: "${ORCHIVISTE_PREVIEW_MAX_PAGES:-12}"
+      ORCHIVISTE_EXPORT_PDFA_ENABLED: "${ORCHIVISTE_EXPORT_PDFA_ENABLED:-0}"
+      ORCHIVISTE_EXPORT_PREFERRED_PDF_FORMAT: "${ORCHIVISTE_EXPORT_PREFERRED_PDF_FORMAT:-PDF/A-2b}"
+      ORCHIVISTE_PDFA_FAILURE_NEEDS_REVIEW: "${ORCHIVISTE_PDFA_FAILURE_NEEDS_REVIEW:-0}"
+      ORCHIVISTE_GRAPH_ENABLED: "${ORCHIVISTE_GRAPH_ENABLED:-0}"
+      ORCHIVISTE_GRAPH_TENANT_ID: "${ORCHIVISTE_GRAPH_TENANT_ID:-}"
+      ORCHIVISTE_GRAPH_CLIENT_ID: "${ORCHIVISTE_GRAPH_CLIENT_ID:-}"
+      ORCHIVISTE_GRAPH_CLIENT_SECRET: "${ORCHIVISTE_GRAPH_CLIENT_SECRET:-}"
+      ORCHIVISTE_GRAPH_BASE_URL: "${ORCHIVISTE_GRAPH_BASE_URL:-}"
+      ORCHIVISTE_GRAPH_AUTH_BASE_URL: "${ORCHIVISTE_GRAPH_AUTH_BASE_URL:-}"
+      ORCHIVISTE_GRAPH_COPY_TIMEOUT_MS: "${ORCHIVISTE_GRAPH_COPY_TIMEOUT_MS:-20000}"
+      ORCHIVISTE_GRAPH_COPY_POLL_INTERVAL_MS: "${ORCHIVISTE_GRAPH_COPY_POLL_INTERVAL_MS:-250}"
+      ORCHIVISTE_GRAPH_DELETE_SOURCE_AFTER_COPY: "${ORCHIVISTE_GRAPH_DELETE_SOURCE_AFTER_COPY:-1}"
+      ORCHIVISTE_WEBHOOK_URL: "${ORCHIVISTE_WEBHOOK_URL:-}"
+      ORCHIVISTE_WEBHOOK_SECRET: "${ORCHIVISTE_WEBHOOK_SECRET:-}"
     ports:
       - "28780:28780"
     volumes:
@@ -60,6 +78,7 @@ services:
       dockerfile: OrchivisteWorker/Dockerfile
     container_name: orchiviste-worker
     profiles: ["worker"]
+    restart: unless-stopped
     depends_on:
       - api
       - redis

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 RUN_WEBHOOK="1"
 RUN_WORKER="1"
+RUN_GRAPH="1"
 SKIP_UP="0"
 run_pdf_batch="0"
 start_epoch="$(date +%s)"
@@ -18,7 +19,7 @@ Usage: ./scripts/preflight_local.sh [options]
 
 Modes:
   --full            validation complète (défaut) : smoke + openapi + webhook + worker
-  --quick           validation rapide : smoke + openapi (sans webhook, sans worker)
+  --quick           validation rapide : smoke + openapi (sans webhook, sans worker, sans graph)
 
 Options:
   --skip-up         n'exécute pas ./scripts/dev_up.sh (stack déjà démarrée)
@@ -43,6 +44,7 @@ while (($# > 0)); do
     --quick)
       RUN_WEBHOOK="0"
       RUN_WORKER="0"
+      RUN_GRAPH="0"
       ;;
     --skip-up)
       SKIP_UP="1"
@@ -52,6 +54,12 @@ while (($# > 0)); do
       ;;
     --no-worker)
       RUN_WORKER="0"
+      ;;
+    --with-graph)
+      RUN_GRAPH="1"
+      ;;
+    --no-graph)
+      RUN_GRAPH="0"
       ;;
     --pdf)
       shift
@@ -101,6 +109,12 @@ fi
 ./scripts/smoke_mvp.sh
 ./scripts/smoke_metrics.sh
 
+if [[ "$RUN_GRAPH" == "1" ]]; then
+  ./scripts/smoke_graph_router.sh
+else
+  echo "INFO: test Graph ignoré (mode rapide ou --no-graph)."
+fi
+
 if [[ "$RUN_WEBHOOK" == "1" ]]; then
   ./scripts/smoke_webhook_hmac.sh
 else
@@ -116,6 +130,8 @@ fi
 if [[ "$run_pdf_batch" == "1" ]]; then
   ./scripts/test_pdf_rename_batch.sh "${pdf_inputs[@]}"
 fi
+
+./scripts/smoke_regression_dataset.sh
 
 elapsed=$(( $(date +%s) - start_epoch ))
 echo

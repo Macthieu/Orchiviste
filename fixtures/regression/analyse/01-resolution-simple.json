@@ -1,0 +1,15 @@
+{
+  "name": "resolution-simple",
+  "request": {
+    "file_id": "resolution-2024-015.pdf",
+    "lang": "fr",
+    "text": "MUNICIPALITE DE TEST\nRESOLUTION 2024-015\n14 avril 2024\nOBJET: Acquisition d'equipement informatique\nATTENDU QUE des achats sont requis.\nIL EST RESOLU d'autoriser l'acquisition."
+  },
+  "expect": {
+    "type_doc": "Resolution",
+    "needs_review": false,
+    "field_keys_all": ["resolution_numero", "date_document", "document_objet"],
+    "capture_unit_count_min": 1,
+    "suggested_class_code": "ADM-RES"
+  }
+}

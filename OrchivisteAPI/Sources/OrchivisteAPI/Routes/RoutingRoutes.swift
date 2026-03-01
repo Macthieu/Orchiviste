@@ -142,22 +142,55 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 target: target,
                 resolvedFolder: resolved,
                 classCode: effectiveClassCode,
+                preferredFileName: resolvedFileName,
                 req: req
             ) {
                 routeMode = "graph"
                 destinationURL = graphRoute.destinationURL
                 movedItemID = graphRoute.movedItemID
+                resolvedFileName = graphRoute.fileName
                 await EventPublisher.publish(
                     type: "route.graph_applied",
                     payload: [
                         "job_id": resolvedJob.id.uuidString,
                         "class_code": effectiveClassCode,
-                        "mode": routeMode
+                        "mode": routeMode,
+                        "file_name": graphRoute.fileName
                     ],
                     application: req.application,
                     database: req.db,
                     logger: req.logger
                 )
+                for warning in graphRoute.warnings {
+                    await EventPublisher.publish(
+                        type: "route.warning",
+                        payload: [
+                            "job_id": resolvedJob.id.uuidString,
+                            "warning": warning,
+                            "mode": routeMode
+                        ],
+                        application: req.application,
+                        database: req.db,
+                        logger: req.logger
+                    )
+                }
+                if graphRoute.requiresReview,
+                   let flagged = await req.application.appState.flagNeedsReview(
+                    jobId: resolvedJob.id,
+                    reason: "graph_cleanup_needs_review"
+                   ) {
+                    try await JobPersistenceRepository.upsert(job: flagged, on: req.db)
+                    await EventPublisher.publish(
+                        type: "job.needs_review",
+                        payload: [
+                            "job_id": resolvedJob.id.uuidString,
+                            "reason": "graph_cleanup_needs_review"
+                        ],
+                        application: req.application,
+                        database: req.db,
+                        logger: req.logger
+                    )
+                }
             } else if let localRoute = try routeLocalFileIfPossible(
                 job: resolvedJob,
                 resolvedFolder: resolved,

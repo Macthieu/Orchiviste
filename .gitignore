@@ -27,3 +27,5 @@ db.sqlite
 # Env / secrets
 .env
 .env.*
+deploy/mac-mini/orchiviste.macmini.env
+deploy/mac-mini/Caddyfile

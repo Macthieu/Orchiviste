@@ -41,6 +41,7 @@ Docker Compose :
 - Analyse : http://127.0.0.1:28781/v1/analyse
 - Redis : `redis://127.0.0.1:6379`
 - profil worker optionnel : `docker compose --profile worker up --build -d`
+- les variables Graph, webhook et PDF/A sont propagées dans le conteneur API via l'environnement Compose
 
 Scripts d'exploitation locale recommandés :
 - démarrage robuste (daemon Docker + stack + vérification santé) : `./scripts/dev_up.sh`
@@ -52,6 +53,8 @@ Scripts d'exploitation locale recommandés :
 - préflight local (mode rapide/complet) : `./scripts/preflight_local.sh --quick` ou `./scripts/preflight_local.sh --full`
 - validation release en une commande : `./scripts/validate_release.sh`
 - validation release + contournement auth Docker : `./scripts/validate_release.sh --anon-auth`
+- démarrage Mac mini (wrapper env + health checks) : `./scripts/macmini_demo_up.sh --build`
+- backup Mac mini (SQLite volume + configs + runtime routé) : `./scripts/macmini_backup.sh`
 - arrêt propre : `./scripts/dev_down.sh`
 - statut : `docker compose ps`
 - logs API : `docker compose logs -f api`
@@ -62,6 +65,8 @@ Tests fumée MVP :
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
+- test Graph SharePoint simulé (cross-drive/cross-site) : `./scripts/smoke_graph_router.sh`
+- dataset de régression métier : `./scripts/smoke_regression_dataset.sh`
 - contrôle OpenAPI MVP (endpoints + webhook) : `./scripts/check_openapi_mvp.sh`
 - exécution groupée recommandée : `./scripts/preflight_local.sh --full`
 - alias de compatibilité : `./scripts/validate_release.sh`
@@ -156,10 +161,29 @@ Routage SharePoint Graph (optionnel) :
 - `ORCHIVISTE_GRAPH_TENANT_ID`
 - `ORCHIVISTE_GRAPH_CLIENT_ID`
 - `ORCHIVISTE_GRAPH_CLIENT_SECRET`
+- `ORCHIVISTE_GRAPH_BASE_URL` (optionnel, défaut `https://graph.microsoft.com/v1.0`)
+- `ORCHIVISTE_GRAPH_AUTH_BASE_URL` (optionnel, défaut `https://login.microsoftonline.com`)
+- `ORCHIVISTE_GRAPH_COPY_TIMEOUT_MS` (défaut `20000`)
+- `ORCHIVISTE_GRAPH_COPY_POLL_INTERVAL_MS` (défaut `250`)
+- `ORCHIVISTE_GRAPH_DELETE_SOURCE_AFTER_COPY` (`1` par défaut, passe à `0` pour un mode copie)
+- le routage Graph supporte maintenant le renommage cohérent avec les presets et les déplacements cross-drive/cross-site; un échec de nettoyage de la source force `needs_review`
 
 Webhooks HMAC :
 - `ORCHIVISTE_WEBHOOK_URL` (URL recepteur)
 - `ORCHIVISTE_WEBHOOK_SECRET` (secret partage)
+
+## Déploiement Mac mini
+
+Les fichiers d'exemple sont dans `deploy/mac-mini/` :
+- `deploy/mac-mini/orchiviste.macmini.env.example`
+- `deploy/mac-mini/Caddyfile.example`
+- `deploy/mac-mini/README.md`
+
+Flux recommandé pour une démo Mac mini :
+- copier l'env exemple vers `deploy/mac-mini/orchiviste.macmini.env`
+- adapter les secrets et, si requis, les identifiants Graph / webhook
+- démarrer avec `./scripts/macmini_demo_up.sh --build`
+- sauvegarder régulièrement avec `./scripts/macmini_backup.sh`
 
 Configurations (optionnel, lues depuis `./configs`) :
 - Préréglages : `configs/presets/*.json`

@@ -1,0 +1,16 @@
+{
+  "name": "resolution-multi-units",
+  "request": {
+    "file_id": "resolution-lot.pdf",
+    "lang": "fr",
+    "text": "EXTRAIT DU PROCES-VERBAL\nRESOLUTION 2024-001\n2024-03-14\nATTENDU QUE le conseil souhaite autoriser la depense.\nIL EST RESOLU d'autoriser le contrat.\n\nRESOLUTION 2024-002\n2024-03-14\nATTENDU QUE le conseil souhaite autoriser la depense.\nIL EST RESOLU d'autoriser l'avenant."
+  },
+  "expect": {
+    "type_doc": "Resolution",
+    "needs_review": true,
+    "reasons_any": ["multi_document_units"],
+    "field_keys_all": ["resolution_numero", "date_document"],
+    "capture_unit_count_min": 2,
+    "suggested_class_code": "ADM-RES"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "facture-simple",
+  "request": {
+    "file_id": "facture-fac-2024-009.pdf",
+    "lang": "fr",
+    "text": "FACTURE FAC-2024-009\n2024-04-15\nMontant total: 1 245,00\nFournisseur: ACME"
+  },
+  "expect": {
+    "type_doc": "Facture",
+    "needs_review": false,
+    "field_keys_all": ["montant_total", "date_document", "numero"],
+    "capture_unit_count_min": 1,
+    "suggested_class_code": "FIN-001"
+  }
+}

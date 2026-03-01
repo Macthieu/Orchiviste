@@ -1,0 +1,15 @@
+{
+  "name": "proces-verbal-simple",
+  "request": {
+    "file_id": "proces-verbal-conseil.pdf",
+    "lang": "fr",
+    "text": "PROCES-VERBAL\nComite: Conseil municipal\n14 avril 2024\nOrdre du jour\nAdoption du budget"
+  },
+  "expect": {
+    "type_doc": "ProcesVerbal",
+    "needs_review": false,
+    "field_keys_all": ["comite", "date_document"],
+    "capture_unit_count_min": 1,
+    "suggested_class_code": "ADM-PV"
+  }
+}
