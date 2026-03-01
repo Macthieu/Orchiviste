@@ -47,6 +47,7 @@ Scripts d'exploitation locale recommandés :
 - démarrage avec rebuild forcé : `./scripts/dev_up.sh --build`
 - fallback builder classique (si BuildKit instable) : `./scripts/dev_up.sh --build --classic-builder`
 - contournement blocage `docker-credential-desktop` : `./scripts/dev_up.sh --anon-auth`
+- timeout ping daemon Docker : `ORCHIVISTE_DOCKER_INFO_TIMEOUT=8 ./scripts/dev_up.sh`
 - rebuild ciblé plus rapide : `docker compose build api` (ou `analyse`, `worker`)
 - préflight local (mode rapide/complet) : `./scripts/preflight_local.sh --quick` ou `./scripts/preflight_local.sh --full`
 - validation release en une commande : `./scripts/validate_release.sh`
