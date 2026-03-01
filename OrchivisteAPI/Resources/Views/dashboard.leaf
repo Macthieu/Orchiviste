@@ -138,6 +138,80 @@
         .table-wrap {
             overflow-x: auto;
         }
+        .status-strip {
+            margin: 12px 0 8px;
+            display: grid;
+            gap: 8px;
+        }
+        .status-track {
+            display: flex;
+            min-height: 14px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #ece5d8;
+            border: 1px solid var(--border);
+        }
+        .status-segment {
+            min-width: 0;
+        }
+        .status-segment-pending {
+            background: repeating-linear-gradient(
+                135deg,
+                #c6bba5 0,
+                #c6bba5 10px,
+                #d8cfbf 10px,
+                #d8cfbf 20px
+            );
+        }
+        .status-segment-running {
+            background: repeating-linear-gradient(
+                135deg,
+                #6cb7a4 0,
+                #6cb7a4 10px,
+                #8ccbbb 10px,
+                #8ccbbb 20px
+            );
+        }
+        .status-segment-review {
+            background: #d6944e;
+        }
+        .status-segment-completed {
+            background: #0c6b58;
+        }
+        .status-segment-failed {
+            background: #b55454;
+        }
+        .status-segment-cancelled {
+            background: #8e8e8e;
+        }
+        .status-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 4px 8px;
+            background: #fff;
+        }
+        .status-pill-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: 0 0 auto;
+        }
+        .status-pill-pending { background: #c6bba5; }
+        .status-pill-running { background: #6cb7a4; }
+        .status-pill-review { background: #d6944e; }
+        .status-pill-completed { background: #0c6b58; }
+        .status-pill-failed { background: #b55454; }
+        .status-pill-cancelled { background: #8e8e8e; }
         .error {
             color: var(--warning);
             font-weight: 700;
@@ -296,10 +370,11 @@
             <label>Dossier de sortie (optionnel)
                 <div class="path-row">
                     <input id="outputFolderField" type="text" name="output_root" value="#(ingest_default_output_folder)" placeholder="/data/routed">
-                    <button class="path-btn" type="button" onclick="openFolderPicker('outputFolderField')">Choisir</button>
+                    <button class="path-btn" type="button" onclick="openLocalFolderDialog('outputFolderUpload')">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="setServerFolderDefault('outputFolderField', '#(ingest_default_output_folder)', 'outputFolderHint')">Serveur</button>
                 </div>
-                <div id="outputFolderHint" class="help">Le dossier de sortie est un chemin serveur API. "Choisir" parcourt le serveur, "Serveur" remet la valeur par défaut.</div>
+                <input id="outputFolderUpload" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple style="display:none" onchange="handleLocalOutputFolderSelection('outputFolderUpload','outputFolderField','outputFolderHint','#(ingest_default_output_folder)')">
+                <div id="outputFolderHint" class="help">Le bouton "Choisir" ouvre un dossier local et nomme un sous-dossier de sortie côté serveur. "Serveur" remet la valeur serveur par défaut.</div>
             </label>
             <label>Étiquettes (optionnel)
                 <input type="text" name="tags" placeholder="ville, résolution, conseil">
@@ -320,7 +395,7 @@
         #endif
     </section>
 
-    <section class="section-head" style="margin-top: 18px;">
+    <section id="recent-jobs" class="section-head" style="margin-top: 18px;">
         <h2>Tâches récentes</h2>
         <div class="table-actions">
             <form action="/ui/dashboard/recent-jobs/clear" method="post" style="margin:0;">
@@ -338,6 +413,41 @@
     #endif
     #if(dashboard_error):
     <p class="error">#(dashboard_error)</p>
+    #endif
+    #if(recent_total_jobs):
+    <div class="status-strip">
+        <div class="status-track" aria-label="Progression des tâches récentes">
+            #if(recent_pending_jobs):
+            <div class="status-segment status-segment-pending" style="width: calc((#(recent_pending_jobs) / #(recent_total_jobs)) * 100%);"></div>
+            #endif
+            #if(recent_running_jobs):
+            <div class="status-segment status-segment-running" style="width: calc((#(recent_running_jobs) / #(recent_total_jobs)) * 100%);"></div>
+            #endif
+            #if(recent_needs_review_jobs):
+            <div class="status-segment status-segment-review" style="width: calc((#(recent_needs_review_jobs) / #(recent_total_jobs)) * 100%);"></div>
+            #endif
+            #if(recent_completed_jobs):
+            <div class="status-segment status-segment-completed" style="width: calc((#(recent_completed_jobs) / #(recent_total_jobs)) * 100%);"></div>
+            #endif
+            #if(recent_failed_jobs):
+            <div class="status-segment status-segment-failed" style="width: calc((#(recent_failed_jobs) / #(recent_total_jobs)) * 100%);"></div>
+            #endif
+            #if(recent_cancelled_jobs):
+            <div class="status-segment status-segment-cancelled" style="width: calc((#(recent_cancelled_jobs) / #(recent_total_jobs)) * 100%);"></div>
+            #endif
+        </div>
+        <div class="status-legend">
+            <span class="status-pill"><span class="status-pill-dot status-pill-pending"></span>En attente: #(recent_pending_jobs)</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-running"></span>En cours: #(recent_running_jobs)</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-review"></span>Revue: #(recent_needs_review_jobs)</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-completed"></span>Terminées: #(recent_completed_jobs)</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-failed"></span>Échecs: #(recent_failed_jobs)</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-cancelled"></span>Annulées: #(recent_cancelled_jobs)</span>
+        </div>
+        #if(dashboard_has_active_processing):
+        <div class="help">Actualisation automatique active toutes les #(dashboard_auto_refresh_seconds) secondes pendant le traitement.</div>
+        #endif
+    </div>
     #endif
     <div class="table-wrap">
     <table>
@@ -474,6 +584,37 @@ function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
     }
     if (hint) {
         hint.textContent = `Dossier local selectionne: ${folderName} (${supportedCount} document(s) supporte(s)).`;
+    }
+}
+
+function handleLocalOutputFolderSelection(fileInputId, pathInputId, hintId, defaultRoot) {
+    const picker = document.getElementById(fileInputId);
+    const pathInput = document.getElementById(pathInputId);
+    const hint = document.getElementById(hintId);
+    if (!picker) {
+        return;
+    }
+
+    const files = Array.from(picker.files || []);
+    if (!files.length) {
+        if (hint) {
+            hint.textContent = "Aucun dossier local sélectionné pour la sortie.";
+        }
+        return;
+    }
+
+    const firstRelativePath = files[0].webkitRelativePath || files[0].name;
+    const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
+    const normalizedDefaultRoot = (defaultRoot || "").replace(/\/+$/, "");
+    const currentValue = (pathInput && pathInput.value ? pathInput.value : "").replace(/\/+$/, "");
+    const currentBase = currentValue.startsWith(`${normalizedDefaultRoot}/`) ? normalizedDefaultRoot : (currentValue || normalizedDefaultRoot);
+    const resolvedPath = folderName ? `${currentBase}/${folderName}` : currentBase;
+
+    if (pathInput) {
+        pathInput.value = resolvedPath;
+    }
+    if (hint) {
+        hint.textContent = `Sortie serveur ciblée: ${resolvedPath}. Le dossier choisi localement sert à nommer le sous-dossier de sortie côté serveur.`;
     }
 }
 
@@ -618,6 +759,20 @@ function setServerFolderDefault(inputId, defaultValue, hintId) {
             hint.textContent = `Dossier serveur actif: ${defaultValue}.`;
         }
     }
+}
+
+const dashboardAutoRefreshSeconds = Number("#(dashboard_auto_refresh_seconds)");
+if (dashboardAutoRefreshSeconds > 0) {
+    const refreshDashboard = () => {
+        const activeElement = document.activeElement;
+        const isEditingForm = activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName);
+        if (document.hidden || isEditingForm) {
+            window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
+            return;
+        }
+        window.location.reload();
+    };
+    window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
 }
 </script>
 </body>

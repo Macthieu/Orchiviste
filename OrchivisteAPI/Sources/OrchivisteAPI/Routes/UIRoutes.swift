@@ -14,7 +14,17 @@ private struct UIDashboardContext: Encodable {
     let queue_dead_letter_depth: Int
     let recent_jobs: [UIJobSummary]
     let recent_jobs_empty: Bool
+    let recent_jobs_present: Bool
     let recent_jobs_cleared: Bool
+    let recent_total_jobs: Int
+    let recent_pending_jobs: Int
+    let recent_running_jobs: Int
+    let recent_needs_review_jobs: Int
+    let recent_completed_jobs: Int
+    let recent_failed_jobs: Int
+    let recent_cancelled_jobs: Int
+    let dashboard_has_active_processing: Bool
+    let dashboard_auto_refresh_seconds: Int
     let dashboard_notice: String?
     let dashboard_error: String?
     let upload_notice: String?
@@ -163,7 +173,49 @@ private struct UIFolderIngestForm: Content {
     let recursive: String?
     let max_files: String?
     let output_root: String?
-    let folder_files: [File]?
+    let folder_files: [File]
+
+    private enum CodingKeys: String, CodingKey {
+        case input_folder
+        case tags
+        case recursive
+        case max_files
+        case output_root
+        case folder_files
+    }
+
+    init(
+        input_folder: String? = nil,
+        tags: String? = nil,
+        recursive: String? = nil,
+        max_files: String? = nil,
+        output_root: String? = nil,
+        folder_files: [File] = []
+    ) {
+        self.input_folder = input_folder
+        self.tags = tags
+        self.recursive = recursive
+        self.max_files = max_files
+        self.output_root = output_root
+        self.folder_files = folder_files
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        input_folder = try container.decodeIfPresent(String.self, forKey: .input_folder)
+        tags = try container.decodeIfPresent(String.self, forKey: .tags)
+        recursive = try container.decodeIfPresent(String.self, forKey: .recursive)
+        max_files = try container.decodeIfPresent(String.self, forKey: .max_files)
+        output_root = try container.decodeIfPresent(String.self, forKey: .output_root)
+
+        if let multiple = try? container.decode([File].self, forKey: .folder_files) {
+            folder_files = multiple
+        } else if let single = try? container.decode(File.self, forKey: .folder_files) {
+            folder_files = [single]
+        } else {
+            folder_files = []
+        }
+    }
 }
 
 private struct UIPresetCreateForm: Content {
@@ -405,7 +457,7 @@ func registerUIRoutes(_ app: Application) {
             let recursive = parseBooleanFlag(form.recursive, defaultValue: true)
             let maxFiles = parseMaxFiles(form.max_files)
             let tags = parseUploadTags(raw: form.tags)
-            let uploadedFolderFiles = form.folder_files ?? []
+            let uploadedFolderFiles = form.folder_files
 
             var files: [URL] = []
             var sourceLabel = "dossier serveur"
@@ -482,7 +534,7 @@ func registerUIRoutes(_ app: Application) {
             }
 
             let notice = "\(ingested) document(s) ajoute(s) depuis \(sourceLabel)."
-            return req.redirect(to: "/ui?upload_notice=\(urlQueryEncoded(notice))")
+            return req.redirect(to: "/ui?upload_notice=\(urlQueryEncoded(notice))#recent-jobs")
         } catch let abort as AbortError {
             return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded(abort.reason))")
         } catch {
@@ -1053,13 +1105,18 @@ func registerUIRoutes(_ app: Application) {
         let dashboardError = req.query[String.self, at: "dashboard_error"]
 
         let counts = Dictionary(grouping: jobs, by: \.status)
-        let recentJobs = jobs
+        let recentJobRecords = jobs
             .filter { job in
                 guard let recentCutoff else { return true }
                 return job.createdAt > recentCutoff
             }
             .prefix(15)
-            .map(makeUIJobSummary)
+        let recentCounts = Dictionary(grouping: recentJobRecords, by: \.status)
+        let recentJobs = recentJobRecords.map(makeUIJobSummary)
+        let dashboardHasActiveProcessing =
+            (recentCounts[.pending]?.isEmpty == false) ||
+            (recentCounts[.running]?.isEmpty == false) ||
+            queueStats.ingest_depth > 0
         let context = UIDashboardContext(
             total_jobs: jobs.count,
             pending_jobs: counts[.pending]?.count ?? 0,
@@ -1073,7 +1130,17 @@ func registerUIRoutes(_ app: Application) {
             queue_dead_letter_depth: queueStats.dead_letter_depth,
             recent_jobs: recentJobs,
             recent_jobs_empty: recentJobs.isEmpty,
+            recent_jobs_present: !recentJobs.isEmpty,
             recent_jobs_cleared: recentCutoff != nil,
+            recent_total_jobs: recentJobs.count,
+            recent_pending_jobs: recentCounts[.pending]?.count ?? 0,
+            recent_running_jobs: recentCounts[.running]?.count ?? 0,
+            recent_needs_review_jobs: recentCounts[.needs_review]?.count ?? 0,
+            recent_completed_jobs: recentCounts[.completed]?.count ?? 0,
+            recent_failed_jobs: recentCounts[.failed]?.count ?? 0,
+            recent_cancelled_jobs: recentCounts[.cancelled]?.count ?? 0,
+            dashboard_has_active_processing: dashboardHasActiveProcessing,
+            dashboard_auto_refresh_seconds: dashboardHasActiveProcessing ? 4 : 0,
             dashboard_notice: dashboardNotice,
             dashboard_error: dashboardError,
             upload_notice: uploadNotice,

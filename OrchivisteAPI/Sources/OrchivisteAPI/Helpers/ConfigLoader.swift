@@ -194,7 +194,14 @@ enum ConfigLoader {
     }
 
     static func dashboardStateURL() -> URL {
-        baseDir().appendingPathComponent("ui/dashboard.state.json")
+        let stateDirectory: URL
+        if let env = Environment.get("ORCHIVISTE_UI_STATE_DIR") {
+            stateDirectory = URL(fileURLWithPath: env, isDirectory: true)
+        } else {
+            stateDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("orchiviste-ui", isDirectory: true)
+        }
+        return stateDirectory.appendingPathComponent("dashboard.state.json")
     }
 
     static func loadDashboardState() -> UIDashboardState? {
@@ -204,7 +211,7 @@ enum ConfigLoader {
     }
 
     static func saveDashboardState(_ state: UIDashboardState) throws {
-        let dir = baseDir().appendingPathComponent("ui", isDirectory: true)
+        let dir = dashboardStateURL().deletingLastPathComponent()
         try ensureDir(dir)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
