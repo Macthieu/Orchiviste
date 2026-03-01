@@ -7,7 +7,7 @@ on:
 
 jobs:
   swift-and-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -16,7 +16,7 @@ jobs:
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
         with:
-          swift-version: "5.9"
+          swift-version: "5.9.2"
 
       - name: Build and test packages
         shell: bash
