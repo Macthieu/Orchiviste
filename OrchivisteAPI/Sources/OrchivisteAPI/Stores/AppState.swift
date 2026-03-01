@@ -107,7 +107,30 @@ actor AppState {
         job.suggestedClassCode = analysis.suggested_class_code
         job.analysisTypeDoc = analysis.type_doc
         job.analysisSujets = analysis.sujets
-        job.analysisChamps = analysis.champs
+        var mergedAnalysisChamps = analysis.champs
+        if let capture = analysis.capture {
+            mergedAnalysisChamps["capture.strategy"] = capture.strategy
+            mergedAnalysisChamps["capture.unit_count"] = "\(capture.unit_count)"
+            mergedAnalysisChamps["capture.section_titles"] = capture.section_titles.joined(separator: " | ")
+            mergedAnalysisChamps["capture.boundary_markers"] = capture.boundary_markers.joined(separator: " | ")
+            mergedAnalysisChamps["capture.warnings"] = capture.warnings.joined(separator: ";")
+            let fieldSources: String = capture.field_sources
+                .keys
+                .sorted()
+                .compactMap { key in
+                    guard let value = capture.field_sources[key] else { return nil }
+                    return key + ":" + value.source
+                }
+                .joined(separator: ";")
+            mergedAnalysisChamps["capture.field_sources"] = fieldSources
+        }
+        if let review = analysis.review {
+            mergedAnalysisChamps["review.needs_review"] = review.needs_review ? "true" : "false"
+            mergedAnalysisChamps["review.reasons"] = review.reasons.joined(separator: ";")
+            mergedAnalysisChamps["review.missing_fields"] = review.missing_fields.joined(separator: ";")
+            mergedAnalysisChamps["review.ambiguous_fields"] = review.ambiguous_fields.joined(separator: ";")
+        }
+        job.analysisChamps = mergedAnalysisChamps
         job.confidence = analysis.confidence
         job.needsReview = needsReview
         job.status = needsReview ? .needs_review : .completed
@@ -121,6 +144,24 @@ actor AppState {
         } else {
             addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
         }
+        return job
+    }
+
+    func flagNeedsReview(jobId: UUID, reason: String) -> JobRecord? {
+        guard var job = jobs[jobId] else { return nil }
+        let now = Date()
+        job.updatedAt = now
+        job.needsReview = true
+        job.status = .needs_review
+        job.analysisChamps = (job.analysisChamps ?? [:]).merging([
+            "review.pending_reason": reason,
+            "review.pending_at": ISO8601DateFormatter().string(from: now)
+        ]) { _, incoming in incoming }
+        jobs[jobId] = job
+        addEvent(type: "job.needs_review", payload: [
+            "job_id": jobId.uuidString,
+            "reason": reason
+        ])
         return job
     }
 

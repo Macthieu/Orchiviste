@@ -162,6 +162,8 @@
             <dt>Confiance</dt><dd>#(confidence)</dd>
             <dt>Type détecté</dt><dd>#(analysis_type_doc)</dd>
             <dt>Sujets détectés</dt><dd>#(analysis_sujets)</dd>
+            <dt>Capture</dt><dd>#(analysis_capture_strategy)</dd>
+            <dt>Raisons revue</dt><dd>#(analysis_review_reasons)</dd>
             <dt>Validation IDP</dt><dd>#(analysis_validation_flags)</dd>
         </dl>
 
@@ -230,6 +232,12 @@
         </label>
         <label>ID préréglage (optionnel)
             <input id="routePresetId" type="text" value="#(suggested_preset)">
+        </label>
+        <label>Export archivage (optionnel)
+            <select id="routeExportType">
+                <option value="">PDF standard</option>
+                <option value="pdfa">PDF/A-2b</option>
+            </select>
         </label>
         <button class="btn" type="button" onclick="submitRoute()">Appliquer le routage</button>
         #else:
@@ -371,12 +379,14 @@ async function submitRoute() {
     const presetId = document.getElementById("routePresetId")?.value || "";
     const destinationFolder = document.getElementById("routeFolder")?.value || "";
     const nameFormat = document.getElementById("routeNameFormat")?.value || "";
+    const exportType = document.getElementById("routeExportType")?.value || "";
 
     const payload = {
         class_code: classCode.trim() || null,
         preset_id: presetId.trim() || null,
         destination_folder: destinationFolder.trim() || null,
-        name_format: nameFormat.trim() || null
+        name_format: nameFormat.trim() || null,
+        export_type: exportType.trim() || null
     };
 
     const res = await fetch(`/v1/route/${jobId}`, {

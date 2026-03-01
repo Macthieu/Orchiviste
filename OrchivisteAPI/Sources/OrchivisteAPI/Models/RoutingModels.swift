@@ -16,6 +16,7 @@ struct RoutingRequest: Content {
     let preset_id: String?
     let destination_folder: String?
     let name_format: String?
+    let export_type: String?
 }
 
 struct RoutingLocalSettings: Content, Codable {

@@ -57,6 +57,7 @@ Scripts d'exploitation locale recommandés :
 
 Tests fumée MVP :
 - `docker compose up -d`
+- test capture intelligente Analyse : `./scripts/smoke_analyse_semantic.sh`
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
@@ -77,6 +78,11 @@ Preset JSON riche :
 - exemple modifiable sur disque : `OrchivisteAPI/configs/presets/example-resolution.json`
 - recuperation d'un preset : `GET /v1/presets/{id}`
 - apprentissage d'un draft depuis un dossier : `POST /v1/presets/learn`
+
+Analyse semantique / HIL :
+- `POST /v1/analyse` renvoie maintenant, en plus du contrat MVP initial, des blocs optionnels `capture` et `review`
+- `capture` expose la strategie (`native_text_semantic` / `ocr_semantic_assisted`), les unites detectees, les titres de section et la provenance des champs
+- `review` expose `needs_review`, les raisons (`low_confidence`, `multi_document_units`, `missing_required_fields`, etc.) et les champs ambigus/manquants
 
 Tests de renommage PDF (local -> routage) :
 - fichier unique : `./scripts/test_pdf_rename.sh "/chemin/vers/fichier.pdf"`
@@ -140,7 +146,9 @@ Analyse :
 - export PDF/A :
   - `ORCHIVISTE_EXPORT_PDFA_ENABLED` (`0` par défaut, peut etre active par preset)
   - `ORCHIVISTE_EXPORT_PREFERRED_PDF_FORMAT` (`PDF/A-2b`)
+  - `ORCHIVISTE_PDFA_FAILURE_NEEDS_REVIEW` (`0` par défaut; si `1`, un fallback PDF normal force `needs_review`)
   - Ghostscript est requis pour l'export PDF/A (`gs`, installe dans l'image Docker API)
+  - override explicite possible au routage : `POST /v1/route/{file_id}` avec `{ "export_type": "pdfa" }`
 
 Routage SharePoint Graph (optionnel) :
 - `ORCHIVISTE_GRAPH_ENABLED` = `1`

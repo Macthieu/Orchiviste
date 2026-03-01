@@ -7,7 +7,11 @@ struct ArchivalPDFExportResult {
 }
 
 enum ArchivalPDFExporter {
-    static func preferredFormat(preset: Preset?) -> String? {
+    static func preferredFormat(preset: Preset?, requestedExportType: String? = nil) -> String? {
+        if let requestedExportType,
+           requestedExportType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "pdfa" {
+            return "PDF/A-2b"
+        }
         if let presetFormat = preset?.export?.preferred_pdf?.format,
            !presetFormat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return presetFormat
@@ -19,27 +23,31 @@ enum ArchivalPDFExporter {
         return nil
     }
 
-    static func shouldAttemptPDFA(preset: Preset?) -> Bool {
+    static func shouldAttemptPDFA(preset: Preset?, requestedExportType: String? = nil) -> Bool {
         let enabledByPreset = preset?.export?.preferred_pdf?.enabled ?? false
         let enabledByEnv = parseBoolean(Environment.get("ORCHIVISTE_EXPORT_PDFA_ENABLED"))
-        let format = preferredFormat(preset: preset)?
+        let enabledByRequest = requestedExportType?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() == "pdfa"
+        let format = preferredFormat(preset: preset, requestedExportType: requestedExportType)?
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .uppercased()
             .replacingOccurrences(of: " ", with: "")
         let wantsPDFA = format == "PDF/A-2B" || format == "PDFA-2B" || format == "PDF/A2B"
-        return wantsPDFA && (enabledByPreset || enabledByEnv)
+        return wantsPDFA && (enabledByPreset || enabledByEnv || enabledByRequest)
     }
 
     static func convertIfNeeded(
         sourceURL: URL,
         destinationURL: URL,
         preset: Preset?,
+        requestedExportType: String? = nil,
         logger: Logger
     ) -> ArchivalPDFExportResult {
         guard sourceURL.pathExtension.lowercased() == "pdf" else {
             return ArchivalPDFExportResult(converted: false, warnings: [])
         }
-        guard shouldAttemptPDFA(preset: preset) else {
+        guard shouldAttemptPDFA(preset: preset, requestedExportType: requestedExportType) else {
             return ArchivalPDFExportResult(converted: false, warnings: [])
         }
         guard commandExists("gs") else {

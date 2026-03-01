@@ -551,6 +551,13 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "text": ["type": "string"],
                             "source": ["$ref": "#/components/schemas/JobSource"],
                             "lang": ["type": "string"],
+                            "hints": [
+                                "type": "object",
+                                "properties": [
+                                    "session_id": ["type": "string"],
+                                    "agenda_id": ["type": "string"]
+                                ]
+                            ],
                             "preset_id": ["type": "string"],
                             "policy": [
                                 "type": "object",
@@ -571,6 +578,36 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "confidence": ["type": "number"],
                             "suggested_preset": ["type": "string"],
                             "suggested_class_code": ["type": "string"],
+                            "capture": [
+                                "type": "object",
+                                "properties": [
+                                    "strategy": ["type": "string"],
+                                    "unit_count": ["type": "integer"],
+                                    "section_titles": ["type": "array", "items": ["type": "string"]],
+                                    "boundary_markers": ["type": "array", "items": ["type": "string"]],
+                                    "field_sources": [
+                                        "type": "object",
+                                        "additionalProperties": [
+                                            "type": "object",
+                                            "properties": [
+                                                "source": ["type": "string"],
+                                                "confidence": ["type": "number"],
+                                                "evidence": ["type": "string"]
+                                            ]
+                                        ]
+                                    ],
+                                    "warnings": ["type": "array", "items": ["type": "string"]]
+                                ]
+                            ],
+                            "review": [
+                                "type": "object",
+                                "properties": [
+                                    "needs_review": ["type": "boolean"],
+                                    "reasons": ["type": "array", "items": ["type": "string"]],
+                                    "missing_fields": ["type": "array", "items": ["type": "string"]],
+                                    "ambiguous_fields": ["type": "array", "items": ["type": "string"]]
+                                ]
+                            ],
                             "explanations": [
                                 "type": "object",
                                 "properties": [
@@ -602,7 +639,8 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "class_code": ["type": "string"],
                             "preset_id": ["type": "string"],
                             "destination_folder": ["type": "string"],
-                            "name_format": ["type": "string"]
+                            "name_format": ["type": "string"],
+                            "export_type": ["type": "string", "enum": ["pdfa"]]
                         ]
                     ],
                     "RoutingResponse": [
@@ -683,7 +721,9 @@ func registerOpenAPIRoutes(_ app: Application) {
                         ],
                         "parameters": [
                             ["name": "x-orchiviste-signature", "in": "header", "required": true, "schema": ["type": "string"]],
-                            ["name": "x-orchiviste-timestamp", "in": "header", "required": true, "schema": ["type": "string"]]
+                            ["name": "x-orchiviste-timestamp", "in": "header", "required": true, "schema": ["type": "string"]],
+                            ["name": "x-orchiviste-event-type", "in": "header", "required": true, "schema": ["type": "string"]],
+                            ["name": "x-orchiviste-event-id", "in": "header", "required": true, "schema": ["type": "string"]]
                         ],
                         "responses": [
                             "200": ["description": "Webhook reçu"]

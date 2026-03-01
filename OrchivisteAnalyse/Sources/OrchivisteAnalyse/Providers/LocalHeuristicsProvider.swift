@@ -36,13 +36,15 @@ struct LocalHeuristicsProvider: AnalysisProvider {
 
         let hasSignature = containsAny(in: merged, tokens: ["signature", "signe", "signed"])
         let pages = estimatedPages(from: request.text)
-        let extractedFields = extractFields(from: "\(request.file_id)\n\(request.text ?? "")")
+        let extracted = extractFields(from: "\(request.file_id)\n\(request.text ?? "")")
+        let extractedFields = extracted.fields
         let idp = IDPSemanticPipeline.run(
             request: request,
             typeDoc: selected.type,
             baseFields: extractedFields
         )
         let champs = mergeFields(primary: extractedFields, secondary: idp.semanticFields)
+        let fieldSources = extracted.fieldSources.merging(idp.fieldSources) { current, _ in current }
         let confidence = adjustedConfidence(
             baseScore: selected.baseScore,
             completeness: idp.completenessScore,
@@ -60,12 +62,36 @@ struct LocalHeuristicsProvider: AnalysisProvider {
         if idp.hasTableLayout { matchedRules.append("rule_idp_layout_table_detected") }
         if idp.clauseAttenduQueCount > 0 { matchedRules.append("rule_idp_clause_attendu_que") }
         if idp.clauseResoluCount > 0 { matchedRules.append("rule_idp_clause_resolu") }
+        if idp.captureStrategy == "ocr_semantic_assisted" {
+            matchedRules.append("rule_idp_capture_ocr_semantic")
+        }
+        if idp.segmentation.unitCount > 1 {
+            matchedRules.append("rule_idp_multi_document_units")
+        }
         if idp.validationFlags.isEmpty {
             matchedRules.append("rule_idp_validation_complete")
         } else {
             matchedRules.append("rule_idp_validation_flags_present")
         }
+        if idp.review.needsReview {
+            matchedRules.append("rule_idp_review_required")
+        }
         if matchedRules.isEmpty { matchedRules.append("rule_fallback_autre") }
+
+        let capture = AnalysisCapture(
+            strategy: idp.captureStrategy,
+            unit_count: idp.segmentation.unitCount,
+            section_titles: idp.segmentation.sectionTitles,
+            boundary_markers: idp.segmentation.boundaryMarkers,
+            field_sources: fieldSources,
+            warnings: idp.warnings
+        )
+        let review = AnalysisReview(
+            needs_review: idp.review.needsReview,
+            reasons: idp.review.reasons,
+            missing_fields: idp.review.missingFields,
+            ambiguous_fields: idp.review.ambiguousFields
+        )
 
         logger.debug("Analyse heuristique locale terminée.", metadata: [
             "file_id": .string(request.file_id),
@@ -84,7 +110,9 @@ struct LocalHeuristicsProvider: AnalysisProvider {
             suggestedPreset: request.preset_id ?? selected.preset,
             suggestedClassCode: selected.classCode,
             matchedRules: matchedRules,
-            topNodes: [selected.classCode] + Array(idp.titleHints.prefix(2))
+            topNodes: [selected.classCode] + Array(idp.titleHints.prefix(2)),
+            capture: capture,
+            review: review
         )
     }
 
@@ -118,21 +146,34 @@ struct LocalHeuristicsProvider: AnalysisProvider {
         return max(1, min(500, Int(ceil(Double(lineCount) / 45.0))))
     }
 
-    private func extractFields(from text: String) -> [String: String] {
+    private func extractFields(
+        from text: String
+    ) -> (fields: [String: String], fieldSources: [String: AnalysisFieldSource]) {
         let lower = text.lowercased()
         var fields: [String: String] = [:]
+        var fieldSources: [String: AnalysisFieldSource] = [:]
 
         if let number = firstMatch(
             in: text,
             pattern: #"(?i)\b(?:pv|res|r|fac|facture)[-\s]?\d{2,4}(?:[-/]\d+)?\b"#
         ) {
             fields["numero"] = number
+            fieldSources["numero"] = AnalysisFieldSource(
+                source: "regex_primary_document_number",
+                confidence: 0.77,
+                evidence: number
+            )
         }
         if let date = firstMatch(
             in: text,
-            pattern: #"\b(?:20\d{2}[-/]\d{2}[-/]\d{2}|\d{4}-\d{2}-\d{2})\b"#
+            pattern: #"(?i)\b(?:20\d{2}[-/]\d{2}[-/]\d{2}|\d{4}-\d{2}-\d{2}|[0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})\b"#
         ) {
             fields["date"] = date
+            fieldSources["date"] = AnalysisFieldSource(
+                source: "regex_primary_date",
+                confidence: 0.75,
+                evidence: date
+            )
         }
 
         if let committeeName = firstMatch(
@@ -140,11 +181,21 @@ struct LocalHeuristicsProvider: AnalysisProvider {
             pattern: #"(?i)\b(?:comite|comité|committee)\s*[:\-]?\s*([^\n\r,;.]+)"#
         ) {
             fields["comite"] = cleanupCommittee(committeeName)
+            fieldSources["comite"] = AnalysisFieldSource(
+                source: "regex_committee_heading",
+                confidence: 0.72,
+                evidence: committeeName
+            )
         } else if lower.contains("conseil") {
             fields["comite"] = "Conseil"
+            fieldSources["comite"] = AnalysisFieldSource(
+                source: "keyword_conseil",
+                confidence: 0.55,
+                evidence: "Conseil"
+            )
         }
 
-        return fields
+        return (fields, fieldSources)
     }
 
     private func firstMatch(in text: String, pattern: String) -> String? {

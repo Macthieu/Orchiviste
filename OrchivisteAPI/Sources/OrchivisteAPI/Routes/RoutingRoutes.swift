@@ -6,6 +6,7 @@ private struct LocalRouteResult {
     let fileName: String
     let warnings: [String]
     let pdfStrategy: String?
+    let requiresReview: Bool
 }
 
 func registerRoutingRoutes(_ app: Application) {
@@ -164,6 +165,7 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 localSettings: localSettings,
                 preferredFileName: resolvedFileName,
                 preset: selectedPreset,
+                requestedExportType: routeRequest?.export_type,
                 logger: req.logger
             ) {
                 routeMode = "local"
@@ -202,6 +204,23 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                             "job_id": resolvedJob.id.uuidString,
                             "strategy": pdfStrategy,
                             "mode": routeMode
+                        ],
+                        application: req.application,
+                        database: req.db,
+                        logger: req.logger
+                    )
+                }
+                if localRoute.requiresReview,
+                   let flagged = await req.application.appState.flagNeedsReview(
+                    jobId: resolvedJob.id,
+                    reason: "pdfa_fallback_needs_review"
+                   ) {
+                    try await JobPersistenceRepository.upsert(job: flagged, on: req.db)
+                    await EventPublisher.publish(
+                        type: "job.needs_review",
+                        payload: [
+                            "job_id": resolvedJob.id.uuidString,
+                            "reason": "pdfa_fallback_needs_review"
                         ],
                         application: req.application,
                         database: req.db,
@@ -272,6 +291,7 @@ private func routeLocalFileIfPossible(
     localSettings: RoutingLocalSettings?,
     preferredFileName: String?,
     preset: Preset?,
+    requestedExportType: String?,
     logger: Logger
 ) throws -> LocalRouteResult? {
     guard job.source.kind.lowercased() == "local" else {
@@ -311,9 +331,17 @@ private func routeLocalFileIfPossible(
         classCode: classCode,
         originalName: sourceURL.lastPathComponent
     )
+    let shouldAttemptPDFA = ArchivalPDFExporter.shouldAttemptPDFA(
+        preset: preset,
+        requestedExportType: requestedExportType
+    )
+    let shouldConvertOfficeToPDF = shouldAttemptPDFA && ["docx", "xlsx", "pptx"].contains(sourceURL.pathExtension.lowercased())
+    let effectiveDestinationName = shouldConvertOfficeToPDF
+        ? replaceFileExtension(destinationName, with: "pdf")
+        : destinationName
     let destinationURL = uniqueDestinationURL(
         in: destinationDirectory,
-        proposedFileName: destinationName
+        proposedFileName: effectiveDestinationName
     )
 
     if sourceURL.pathExtension.lowercased() == "pdf" {
@@ -337,6 +365,7 @@ private func routeLocalFileIfPossible(
             sourceURL: candidateURL,
             destinationURL: pdfaDestination,
             preset: preset,
+            requestedExportType: requestedExportType,
             logger: logger
         )
         let finalSourceURL = pdfaResult.converted ? pdfaDestination : candidateURL
@@ -370,7 +399,58 @@ private func routeLocalFileIfPossible(
             destinationPath: destinationURL.path,
             fileName: destinationURL.lastPathComponent,
             warnings: pdfaResult.warnings,
-            pdfStrategy: strategy
+            pdfStrategy: strategy,
+            requiresReview: pdfaWarningsRequireReview(pdfaResult.warnings)
+        )
+    }
+
+    if shouldConvertOfficeToPDF,
+       let extracted = DocumentTextExtractor.extract(fileURL: sourceURL, logger: logger),
+       let previewPDFURL = extracted.previewPDFURL {
+        defer {
+            for artifact in extracted.temporaryArtifacts {
+                try? FileManager.default.removeItem(at: artifact)
+            }
+        }
+
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-route-office-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+
+        let pdfaDestination = tempDirectory.appendingPathComponent("archive.pdf")
+        let pdfaResult = ArchivalPDFExporter.convertIfNeeded(
+            sourceURL: previewPDFURL,
+            destinationURL: pdfaDestination,
+            preset: preset,
+            requestedExportType: requestedExportType,
+            logger: logger
+        )
+        let finalSourceURL = pdfaResult.converted ? pdfaDestination : previewPDFURL
+        _ = try moveOrCopyLocalRouteFile(
+            sourceURL: finalSourceURL,
+            destinationURL: destinationURL
+        )
+
+        do {
+            try FileManager.default.removeItem(at: sourceURL)
+        } catch {
+            logger.warning("La suppression de la source apres conversion Office -> PDF a echoue.", metadata: [
+                "job_id": .string(job.id.uuidString),
+                "source_path": .string(sourceURL.path),
+                "error": .string(error.localizedDescription)
+            ])
+        }
+
+        let strategy = pdfaResult.converted ? "office+pdfa" : "office+pdf"
+        return LocalRouteResult(
+            destinationPath: destinationURL.path,
+            fileName: destinationURL.lastPathComponent,
+            warnings: extracted.warnings + pdfaResult.warnings,
+            pdfStrategy: strategy,
+            requiresReview: pdfaWarningsRequireReview(pdfaResult.warnings)
         )
     }
 
@@ -379,7 +459,8 @@ private func routeLocalFileIfPossible(
         destinationPath: destinationURL.path,
         fileName: destinationURL.lastPathComponent,
         warnings: [],
-        pdfStrategy: nil
+        pdfStrategy: nil,
+        requiresReview: false
     )
 }
 
@@ -647,7 +728,9 @@ private func makeAnalysisSnapshot(from job: JobRecord, classCodeFallback: String
         explanations: AnalysisExplanations(
             matched_rules: ["snapshot_persisted_job"],
             top_nodes: safeSujets
-        )
+        ),
+        capture: nil,
+        review: nil
     )
 }
 
@@ -743,4 +826,32 @@ private func uniqueDestinationURL(in directory: URL, proposedFileName: String) -
         suffix += 1
     }
     return candidate
+}
+
+private func replaceFileExtension(_ fileName: String, with newExtension: String) -> String {
+    let url = URL(fileURLWithPath: fileName)
+    let stem = url.deletingPathExtension().lastPathComponent
+    return "\(stem).\(newExtension)"
+}
+
+private func pdfaWarningsRequireReview(_ warnings: [String]) -> Bool {
+    guard parseBooleanEnv("ORCHIVISTE_PDFA_FAILURE_NEEDS_REVIEW") else {
+        return false
+    }
+    let triggers: Set<String> = [
+        "pdfa_requested_but_ghostscript_missing",
+        "pdfa_conversion_failed",
+        "pdfa_move_failed"
+    ]
+    return warnings.contains { triggers.contains($0) }
+}
+
+private func parseBooleanEnv(_ key: String) -> Bool {
+    guard let raw = Environment.get(key)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased(),
+          !raw.isEmpty else {
+        return false
+    }
+    return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
 }

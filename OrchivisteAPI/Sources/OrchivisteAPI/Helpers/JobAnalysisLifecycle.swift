@@ -26,7 +26,7 @@ enum JobAnalysisLifecycle {
         }
 
         let confidenceThreshold = threshold(from: policy)
-        let needsReview = analysis.confidence < confidenceThreshold
+        let needsReview = (analysis.review?.needs_review ?? false) || analysis.confidence < confidenceThreshold
         guard let updatedJob = await application.appState.attachAnalysis(
             jobId: jobId,
             analysis: analysis,
@@ -55,7 +55,8 @@ enum JobAnalysisLifecycle {
             logger.info("Tâche marquee en revue requise.", metadata: [
                 "job_id": .string(jobId.uuidString),
                 "confidence": .string("\(analysis.confidence)"),
-                "threshold": .string("\(confidenceThreshold)")
+                "threshold": .string("\(confidenceThreshold)"),
+                "review_reasons": .string((analysis.review?.reasons ?? []).joined(separator: ","))
             ])
         }
         return updatedJob

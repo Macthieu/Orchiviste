@@ -73,12 +73,13 @@ enum DocumentTextExtractor {
             )
         case "png", "jpg", "jpeg", "tif", "tiff":
             let pages = extractImagePages(fileURL: fileURL, logger: logger)
+            let conversion = convertImageToPDFIfPossible(fileURL: fileURL, logger: logger)
             return ExtractedDocumentText(
                 kind: "image",
                 pages: pages.isEmpty ? [defaultText(for: fileURL)] : pages,
-                previewPDFURL: nil,
-                temporaryArtifacts: [],
-                warnings: []
+                previewPDFURL: conversion.pdfURL,
+                temporaryArtifacts: conversion.temporaryArtifacts,
+                warnings: conversion.warnings
             )
         default:
             return nil
@@ -327,6 +328,52 @@ enum DocumentTextExtractor {
         guard FileManager.default.fileExists(atPath: pdfURL.path) else {
             try? FileManager.default.removeItem(at: tempDir)
             return (nil, [], ["office_preview_pdf_missing"])
+        }
+        return (pdfURL, [tempDir], [])
+    }
+
+    private static func convertImageToPDFIfPossible(
+        fileURL: URL,
+        logger: Logger
+    ) -> (pdfURL: URL?, temporaryArtifacts: [URL], warnings: [String]) {
+        guard ocrEnabled() else {
+            return (nil, [], ["image_preview_pdf_disabled"])
+        }
+        guard commandExists("tesseract") else {
+            return (nil, [], ["image_preview_pdf_unavailable"])
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-image-preview-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            return (nil, [], ["image_preview_pdf_tempdir_failed"])
+        }
+
+        let outputBase = tempDir.appendingPathComponent("preview").path
+        let convert = ShellCommand.run(
+            executable: "tesseract",
+            arguments: [
+                fileURL.path,
+                outputBase,
+                "-l", ocrLanguage(),
+                "pdf"
+            ]
+        )
+        guard convert.exitCode == 0 else {
+            logger.warning("Conversion image -> PDF de preview en echec.", metadata: [
+                "path": .string(fileURL.path),
+                "stderr": .string(convert.stderr)
+            ])
+            try? FileManager.default.removeItem(at: tempDir)
+            return (nil, [], ["image_preview_pdf_failed"])
+        }
+
+        let pdfURL = URL(fileURLWithPath: "\(outputBase).pdf")
+        guard FileManager.default.fileExists(atPath: pdfURL.path) else {
+            try? FileManager.default.removeItem(at: tempDir)
+            return (nil, [], ["image_preview_pdf_missing"])
         }
         return (pdfURL, [tempDir], [])
     }

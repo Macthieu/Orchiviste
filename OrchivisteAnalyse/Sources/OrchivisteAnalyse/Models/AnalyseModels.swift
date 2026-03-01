@@ -37,6 +37,8 @@ struct AnalysisResponse: Content {
     let suggested_preset: String?
     let suggested_class_code: String?
     let explanations: AnalysisExplanations
+    let capture: AnalysisCapture?
+    let review: AnalysisReview?
 }
 
 struct AnalysisStructure: Content {
@@ -47,6 +49,28 @@ struct AnalysisStructure: Content {
 struct AnalysisExplanations: Content {
     let matched_rules: [String]
     let top_nodes: [String]
+}
+
+struct AnalysisCapture: Content {
+    let strategy: String
+    let unit_count: Int
+    let section_titles: [String]
+    let boundary_markers: [String]
+    let field_sources: [String: AnalysisFieldSource]
+    let warnings: [String]
+}
+
+struct AnalysisFieldSource: Content {
+    let source: String
+    let confidence: Double
+    let evidence: String?
+}
+
+struct AnalysisReview: Content {
+    let needs_review: Bool
+    let reasons: [String]
+    let missing_fields: [String]
+    let ambiguous_fields: [String]
 }
 
 struct ProviderCandidate: Sendable {
@@ -61,4 +85,6 @@ struct ProviderCandidate: Sendable {
     let suggestedClassCode: String?
     let matchedRules: [String]
     let topNodes: [String]
+    let capture: AnalysisCapture?
+    let review: AnalysisReview?
 }

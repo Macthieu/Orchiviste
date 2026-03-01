@@ -24,6 +24,31 @@ enum AnalysisStub {
             explanations: AnalysisExplanations(
                 matched_rules: ["stub_rule_title", "stub_rule_keywords"],
                 top_nodes: [classCode ?? preset?.class_code ?? "UNCLASSIFIED"]
+            ),
+            capture: AnalysisCapture(
+                strategy: "fallback_stub",
+                unit_count: 1,
+                section_titles: [],
+                boundary_markers: [],
+                field_sources: [
+                    "numero": AnalysisFieldSource(
+                        source: "stub_default",
+                        confidence: 0.6,
+                        evidence: isResolution ? "R-2024-001" : "PV-2024-001"
+                    )
+                ],
+                warnings: ["analysis_service_unavailable"]
+            ),
+            review: confidence < 0.7 ? AnalysisReview(
+                needs_review: true,
+                reasons: ["low_confidence", "analysis_service_unavailable"],
+                missing_fields: [],
+                ambiguous_fields: []
+            ) : AnalysisReview(
+                needs_review: false,
+                reasons: ["analysis_service_unavailable"],
+                missing_fields: [],
+                ambiguous_fields: []
             )
         )
     }

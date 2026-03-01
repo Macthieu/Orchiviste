@@ -133,6 +133,8 @@ private struct UIJobViewerContext: Encodable {
     let download_searchable_url: String
     let analysis_type_doc: String
     let analysis_sujets: String
+    let analysis_capture_strategy: String
+    let analysis_review_reasons: String
     let analysis_champs_json: String
     let analysis_validation_flags: String
     let class_code_options: [String]
@@ -161,6 +163,12 @@ private struct UIPresetCreateForm: Content {
     let name_format: String
     let class_code: String?
     let postprocess: String?
+}
+
+private struct UIPresetLearnForm: Content {
+    let folder_path: String?
+    let sample_size: String?
+    let extensions: String?
 }
 
 private struct UIRoutingSettingsForm: Content {
@@ -472,6 +480,36 @@ func registerUIRoutes(_ app: Application) {
                 "error": .string(error.localizedDescription)
             ])
             return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant la création du préréglage."))")
+        }
+    }
+
+    app.on(.POST, "ui", "presets", "learn", body: .collect(maxSize: "1mb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UIPresetLearnForm.self)
+            guard let folderPath = nonEmptyString(form.folder_path) else {
+                throw Abort(.badRequest, reason: "Le chemin du dossier source est requis.")
+            }
+            let extensions = parseUploadTags(raw: form.extensions)
+            let response = try PresetLearningService.learn(
+                request: PresetLearnRequest(
+                    folder_path: folderPath,
+                    sample_size: parseOptionalInt(form.sample_size),
+                    extensions: extensions.isEmpty ? nil : extensions
+                ),
+                logger: req.logger
+            )
+            await req.application.appState.upsertPreset(response.preset)
+            let statusLabel = response.needs_review ? "needs_review" : "ok"
+            let notice = "Preset draft sauvegarde: \(response.saved_path) (confidence \(String(format: "%.2f", response.confidence)), \(statusLabel))."
+            return req.redirect(to: "/ui/presets?notice=\(urlQueryEncoded(notice))")
+        } catch let abort as AbortError {
+            let reason = abort.reason.isEmpty ? "Echec de l'apprentissage du preset." : abort.reason
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded(reason))")
+        } catch {
+            req.logger.error("Échec apprentissage preset UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/presets?error=\(urlQueryEncoded("Erreur interne pendant l'apprentissage du preset."))")
         }
     }
 
@@ -1099,6 +1137,8 @@ func registerUIRoutes(_ app: Application) {
             download_searchable_url: "/v1/jobs/\(job.id.uuidString)/download/searchable",
             analysis_type_doc: job.analysisTypeDoc ?? "N/D",
             analysis_sujets: (job.analysisSujets ?? []).isEmpty ? "N/D" : (job.analysisSujets ?? []).joined(separator: ", "),
+            analysis_capture_strategy: extractAnalysisValue(job.analysisChamps, key: "capture.strategy", fallback: "idp_capture_strategy"),
+            analysis_review_reasons: extractAnalysisValue(job.analysisChamps, key: "review.reasons", fallback: "idp_review_reasons"),
             analysis_champs_json: prettyPrintedJSON(job.analysisChamps),
             analysis_validation_flags: extractValidationFlags(job.analysisChamps),
             class_code_options: classCodeOptions,
@@ -1425,6 +1465,23 @@ private func extractValidationFlags(_ dictionary: [String: String]?) -> String {
     }
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? "Aucun" : trimmed
+}
+
+private func extractAnalysisValue(
+    _ dictionary: [String: String]?,
+    key: String,
+    fallback: String? = nil
+) -> String {
+    if let value = dictionary?[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !value.isEmpty {
+        return value
+    }
+    if let fallback,
+       let value = dictionary?[fallback]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !value.isEmpty {
+        return value
+    }
+    return "Aucun"
 }
 
 private func resolveUILocalIngestInboxDirectory() -> URL {

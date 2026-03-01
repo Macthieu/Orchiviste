@@ -321,6 +321,20 @@
             Exemple pret a copier: <a href="/v1/presets/example/download">Telecharger l'exemple JSON</a>.
             Apprentissage auto (endpoint admin): <code>POST /v1/presets/learn</code>.
         </p>
+        <form action="/ui/presets/learn" method="post" style="margin-bottom: 14px;">
+            <div class="form-grid">
+                <label>Dossier source (serveur)
+                    <input type="text" name="folder_path" placeholder="/data/inbox/resolutions" required>
+                </label>
+                <label>Taille echantillon
+                    <input type="number" name="sample_size" min="1" max="200" value="30">
+                </label>
+                <label>Extensions (csv, optionnel)
+                    <input type="text" name="extensions" placeholder="pdf,docx,xlsx,pptx,png,jpg,tiff">
+                </label>
+            </div>
+            <button class="btn" type="submit">Apprendre un preset depuis un dossier</button>
+        </form>
         <form action="/ui/presets" method="post">
             <div class="form-grid">
                 <label>ID
