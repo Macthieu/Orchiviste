@@ -50,9 +50,9 @@ UI :
 
 ## Documentation
 
-- API et exploitation : [OrchivisteAPI/README.md](/Volumes/MAC_HDD/Logiciel%20test/Orchiviste/OrchivisteAPI/README.md)
-- Analyse sémantique : [OrchivisteAnalyse/README.md](/Volumes/MAC_HDD/Logiciel%20test/Orchiviste/OrchivisteAnalyse/README.md)
-- Déploiement Mac mini : [deploy/mac-mini/README.md](/Volumes/MAC_HDD/Logiciel%20test/Orchiviste/deploy/mac-mini/README.md)
+- API et exploitation : [OrchivisteAPI/README.md](OrchivisteAPI/README.md)
+- Analyse sémantique : [OrchivisteAnalyse/README.md](OrchivisteAnalyse/README.md)
+- Déploiement Mac mini : [deploy/mac-mini/README.md](deploy/mac-mini/README.md)
 
 ## Validation recommandée
 
