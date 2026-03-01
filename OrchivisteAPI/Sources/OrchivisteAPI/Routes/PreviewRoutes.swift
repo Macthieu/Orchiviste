@@ -7,10 +7,10 @@ func registerPreviewRoutes(_ app: Application) {
                   let jobId = UUID(uuidString: id) else {
                 throw Abort(.badRequest, reason: "Identifiant d'aperçu invalide.")
             }
-            guard let record = await req.application.appState.preview(jobId: jobId),
-                  let image = record.imagesByPage[1] else {
+            guard let record = try await PreviewLoader.ensurePreview(jobId: jobId, req: req) else {
                 throw Abort(.notFound, reason: "Aperçu non disponible.")
             }
+            let image = record.imagesByPage[1] ?? PreviewHelper.placeholderJPEG()
             return RangeResponse.make(req: req, data: image, contentType: .jpeg)
         }
 
@@ -27,10 +27,10 @@ func registerPreviewRoutes(_ app: Application) {
                   page > 0 else {
                 throw Abort(.badRequest, reason: "Numéro de page d'aperçu invalide.")
             }
-            guard let record = await req.application.appState.preview(jobId: jobId),
-                  let image = record.imagesByPage[page] else {
+            guard let record = try await PreviewLoader.ensurePreview(jobId: jobId, req: req) else {
                 throw Abort(.notFound, reason: "Page d'aperçu introuvable.")
             }
+            let image = record.imagesByPage[page] ?? PreviewHelper.placeholderJPEG()
             return RangeResponse.make(req: req, data: image, contentType: .jpeg)
         }
 
@@ -41,7 +41,7 @@ func registerPreviewRoutes(_ app: Application) {
                   let jobId = UUID(uuidString: id) else {
                 throw Abort(.badRequest, reason: "Identifiant d'aperçu invalide.")
             }
-            guard let record = await req.application.appState.preview(jobId: jobId) else {
+            guard let record = try await PreviewLoader.ensurePreview(jobId: jobId, req: req) else {
                 throw Abort(.notFound, reason: "Aperçu non disponible.")
             }
             let page = (try? req.query.get(Int.self, at: "page")) ?? 1

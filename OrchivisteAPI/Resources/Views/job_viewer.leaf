@@ -87,7 +87,7 @@
             transition: opacity 220ms ease;
         }
         .page img.ready { opacity: 1; }
-        textarea, input {
+        textarea, input, select {
             width: 100%;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -98,6 +98,27 @@
         }
         label { display: block; margin-top: 10px; font-size: 13px; }
         .notice { color: var(--warning); font-weight: 700; }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin: 8px 0;
+        }
+        .tabs button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 7px 10px;
+            background: #fff;
+            color: var(--ink);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .tabs button.active {
+            border-color: var(--accent);
+            background: #ebf8f4;
+            color: var(--accent);
+        }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
         @media (max-width: 960px) {
             .wrap { grid-template-columns: 1fr; }
         }
@@ -108,17 +129,25 @@
     <strong>Visionneuse tâche <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
         <a href="/ui/events">Événements</a>
         <a class="btn" href="#(download_url)">Télécharger (action explicite)</a>
+        <a class="btn" href="#(download_searchable_url)">Télécharger PDF OCR (explicite)</a>
     </nav>
 </header>
 
 <main class="wrap">
     <section class="panel">
         <h3>Aperçu des pages (chargement paresseux)</h3>
+        <p style="margin:0 0 10px; color: var(--muted); font-size: 13px;">
+            Aperçu en images JPG: la sélection de texte se fait via "Texte d'aperçu" ou via "Télécharger PDF OCR".
+        </p>
+        <p style="margin:0 0 10px; color: var(--muted); font-size: 12px;">
+            Si une page ne s'affiche pas, recharge la page puis utilise "Télécharger PDF OCR (explicite)" pour vérifier le rendu texte sélectionnable.
+        </p>
         <div id="pages"></div>
     </section>
 
@@ -131,6 +160,11 @@
             <dt>Préréglage</dt><dd>#(suggested_preset)</dd>
             <dt>Code de classement</dt><dd>#(suggested_class_code)</dd>
             <dt>Confiance</dt><dd>#(confidence)</dd>
+            <dt>Type détecté</dt><dd>#(analysis_type_doc)</dd>
+            <dt>Sujets détectés</dt><dd>#(analysis_sujets)</dd>
+            <dt>Capture</dt><dd>#(analysis_capture_strategy)</dd>
+            <dt>Raisons revue</dt><dd>#(analysis_review_reasons)</dd>
+            <dt>Validation IDP</dt><dd>#(analysis_validation_flags)</dd>
         </dl>
 
         <h4>Texte d'aperçu</h4>
@@ -138,12 +172,48 @@
         <button class="btn" type="button" onclick="loadText()">Charger le texte</button>
         <textarea id="textArea" rows="10" readonly></textarea>
 
+        <h4>Champs extraits (JSON)</h4>
+        <textarea rows="10" readonly>#(analysis_champs_json)</textarea>
+
         #if(can_review):
         <p class="notice">Revue requise : correction obligatoire avant routage.</p>
-        <label>Code de classement corrigé <input id="reviewClass" type="text"></label>
-        <label>Préréglage corrigé <input id="reviewPreset" type="text"></label>
+        <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
+            Corrige le code/préréglage ci-dessous, ajoute un commentaire, puis clique sur "Soumettre la revue".
+        </p>
+        <div class="tabs">
+            <button id="tabSuggestionBtn" type="button" class="active" onclick="switchReviewTab('suggestion')">Proposition IA</button>
+            <button id="tabManualBtn" type="button" onclick="switchReviewTab('manual')">Correction manuelle</button>
+        </div>
+        <div id="tabSuggestion" class="tab-pane active">
+            <label>Code de classement (proposé / sélection)
+                <select id="reviewClassSelect">
+                    <option value="">-- Aucun --</option>
+                    #for(option in class_code_options):
+                    <option value="#(option)">#(option)</option>
+                    #endfor
+                </select>
+            </label>
+            <label>Préréglage (proposé / sélection)
+                <select id="reviewPresetSelect">
+                    <option value="">-- Aucun --</option>
+                    #for(option in preset_options):
+                    <option value="#(option)">#(option)</option>
+                    #endfor
+                </select>
+            </label>
+        </div>
+        <div id="tabManual" class="tab-pane">
+            <label>Code de classement corrigé <input id="reviewClass" type="text" placeholder="ADM-PV"></label>
+            <label>Préréglage corrigé <input id="reviewPreset" type="text" placeholder="preset_pv"></label>
+            <label>Type document corrigé <input id="reviewTypeDoc" type="text" placeholder="ProcesVerbal"></label>
+            <label>Sujets corrigés (csv) <input id="reviewSujets" type="text" placeholder="Comite, Session"></label>
+        </div>
         <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
         <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
+        #else:
+        <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
+            Aucune correction requise pour cette tâche (statut différent de "Revue requise").
+        </p>
         #endif
 
         <h4>Routage et renommage</h4>
@@ -151,6 +221,24 @@
         <p>Déjà routée le <strong>#(routed_at)</strong>.</p>
         #endif
         #if(can_route):
+        <label>Dossier destination (optionnel)
+            <input id="routeFolder" type="text" placeholder="Archives/{year}/{class_code}/{type_doc}/{sujet}">
+        </label>
+        <label>Format de nom (optionnel)
+            <input id="routeNameFormat" type="text" placeholder="{class_code}-{type_doc}-{sujet}-{date}-{numero}">
+        </label>
+        <label>Code de classement (optionnel)
+            <input id="routeClassCode" type="text" value="#(suggested_class_code)">
+        </label>
+        <label>ID préréglage (optionnel)
+            <input id="routePresetId" type="text" value="#(suggested_preset)">
+        </label>
+        <label>Export archivage (optionnel)
+            <select id="routeExportType">
+                <option value="">PDF standard</option>
+                <option value="pdfa">PDF/A-2b</option>
+            </select>
+        </label>
         <button class="btn" type="button" onclick="submitRoute()">Appliquer le routage</button>
         #else:
         #if(route_disabled_reason):
@@ -185,10 +273,57 @@ const observer = new IntersectionObserver((entries) => {
         if (img.dataset.loaded === "1") continue;
         img.src = `/v1/preview/${jobId}/page/${page}.jpg`;
         img.onload = () => { img.classList.add("ready"); img.dataset.loaded = "1"; };
+        img.onerror = () => {
+            img.dataset.loaded = "1";
+            entry.target.style.background = "#f6efe4";
+            entry.target.innerHTML = `<div style="padding:12px;color:#ac5d0c;font-size:12px;">Aperçu image indisponible pour la page ${page}.</div>`;
+        };
     }
 }, { rootMargin: "300px 0px" });
 
 document.querySelectorAll(".page").forEach((node) => observer.observe(node));
+
+const routeClassInput = document.getElementById("routeClassCode");
+if (routeClassInput && routeClassInput.value === "N/D") {
+    routeClassInput.value = "";
+}
+const routePresetInput = document.getElementById("routePresetId");
+if (routePresetInput && routePresetInput.value === "N/D") {
+    routePresetInput.value = "";
+}
+
+const suggestedClassCode = "#(suggested_class_code_raw)";
+const suggestedPreset = "#(suggested_preset_raw)";
+const reviewClassSelect = document.getElementById("reviewClassSelect");
+if (reviewClassSelect && suggestedClassCode && suggestedClassCode !== "N/D") {
+    reviewClassSelect.value = suggestedClassCode;
+}
+const reviewPresetSelect = document.getElementById("reviewPresetSelect");
+if (reviewPresetSelect && suggestedPreset && suggestedPreset !== "N/D") {
+    reviewPresetSelect.value = suggestedPreset;
+}
+const reviewClassManual = document.getElementById("reviewClass");
+if (reviewClassManual && suggestedClassCode && suggestedClassCode !== "N/D") {
+    reviewClassManual.value = suggestedClassCode;
+}
+const reviewPresetManual = document.getElementById("reviewPreset");
+if (reviewPresetManual && suggestedPreset && suggestedPreset !== "N/D") {
+    reviewPresetManual.value = suggestedPreset;
+}
+
+function switchReviewTab(tab) {
+    const suggestionBtn = document.getElementById("tabSuggestionBtn");
+    const manualBtn = document.getElementById("tabManualBtn");
+    const suggestionPane = document.getElementById("tabSuggestion");
+    const manualPane = document.getElementById("tabManual");
+    if (!suggestionBtn || !manualBtn || !suggestionPane || !manualPane) return;
+
+    const suggestionActive = tab === "suggestion";
+    suggestionBtn.classList.toggle("active", suggestionActive);
+    manualBtn.classList.toggle("active", !suggestionActive);
+    suggestionPane.classList.toggle("active", suggestionActive);
+    manualPane.classList.toggle("active", !suggestionActive);
+}
 
 async function loadText() {
     const page = document.getElementById("textPage").value || "1";
@@ -203,9 +338,25 @@ async function loadText() {
 }
 
 async function submitReview() {
+    const selectedClass = document.getElementById("reviewClassSelect")?.value || null;
+    const selectedPreset = document.getElementById("reviewPresetSelect")?.value || null;
+    const manualClass = document.getElementById("reviewClass")?.value || null;
+    const manualPreset = document.getElementById("reviewPreset")?.value || null;
+    const correctedTypeDoc = document.getElementById("reviewTypeDoc")?.value || null;
+    const correctedSujets = document.getElementById("reviewSujets")?.value || null;
+
+    const correctedFields = {};
+    if (correctedTypeDoc && correctedTypeDoc.trim()) {
+        correctedFields.type_doc = correctedTypeDoc.trim();
+    }
+    if (correctedSujets && correctedSujets.trim()) {
+        correctedFields.sujets = correctedSujets.trim();
+    }
+
     const payload = {
-        corrected_class_code: document.getElementById("reviewClass").value || null,
-        corrected_preset: document.getElementById("reviewPreset").value || null,
+        corrected_class_code: (manualClass && manualClass.trim()) ? manualClass.trim() : selectedClass,
+        corrected_preset: (manualPreset && manualPreset.trim()) ? manualPreset.trim() : selectedPreset,
+        corrected_fields: Object.keys(correctedFields).length > 0 ? correctedFields : null,
         comment: document.getElementById("reviewComment").value || null
     };
     const res = await fetch(`/v1/jobs/${jobId}/review`, {
@@ -224,7 +375,25 @@ async function submitReview() {
 async function submitRoute() {
     const output = document.getElementById("routeResult");
     output.value = "Routage en cours...";
-    const res = await fetch(`/v1/route/${jobId}`, { method: "POST" });
+    const classCode = document.getElementById("routeClassCode")?.value || "";
+    const presetId = document.getElementById("routePresetId")?.value || "";
+    const destinationFolder = document.getElementById("routeFolder")?.value || "";
+    const nameFormat = document.getElementById("routeNameFormat")?.value || "";
+    const exportType = document.getElementById("routeExportType")?.value || "";
+
+    const payload = {
+        class_code: classCode.trim() || null,
+        preset_id: presetId.trim() || null,
+        destination_folder: destinationFolder.trim() || null,
+        name_format: nameFormat.trim() || null,
+        export_type: exportType.trim() || null
+    };
+
+    const res = await fetch(`/v1/route/${jobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
     if (!res.ok) {
         const msg = await res.text();
         output.value = `Échec du routage (${res.status}) : ${msg}`;
@@ -233,7 +402,8 @@ async function submitRoute() {
 
     const json = await res.json();
     const destination = json.destination_local_path || json.destination_url || json.resolved_folder || "N/D";
-    output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nDestination: ${destination}`;
+    const filename = json.resolved_file_name || "N/D";
+    output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nFichier: ${filename}\nDestination: ${destination}`;
     setTimeout(() => window.location.reload(), 700);
 }
 </script>
