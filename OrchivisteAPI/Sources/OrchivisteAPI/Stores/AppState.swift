@@ -165,13 +165,23 @@ actor AppState {
         return job
     }
 
-    func markRouted(jobId: UUID, classCode: String?) -> JobRecord? {
+    func markRouted(jobId: UUID, classCode: String?, details: [String: String] = [:]) -> JobRecord? {
         guard var job = jobs[jobId] else { return nil }
         let now = Date()
         job.updatedAt = now
         job.steps.routed = now
         if let classCode, !classCode.isEmpty {
             job.suggestedClassCode = classCode
+        }
+        if !details.isEmpty {
+            var champs = job.analysisChamps ?? [:]
+            for (key, value) in details {
+                let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedKey.isEmpty, !trimmedValue.isEmpty else { continue }
+                champs[trimmedKey] = trimmedValue
+            }
+            job.analysisChamps = champs
         }
         if job.status != .cancelled && job.status != .failed && job.status != .needs_review {
             job.status = .completed

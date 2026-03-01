@@ -134,6 +134,9 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
     var destinationURL: String?
     var movedItemID: String?
     var destinationLocalPath: String?
+    var destinationFolderDisplay: String?
+    var routePDFStrategy: String?
+    var routeOCRState = "n/a"
 
     if let resolvedJob {
         do {
@@ -149,6 +152,12 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 destinationURL = graphRoute.destinationURL
                 movedItemID = graphRoute.movedItemID
                 resolvedFileName = graphRoute.fileName
+                destinationFolderDisplay = routeDestinationFolderDisplay(
+                    mode: routeMode,
+                    target: target,
+                    resolvedFolder: resolved,
+                    destinationLocalPath: nil
+                )
                 await EventPublisher.publish(
                     type: "route.graph_applied",
                     payload: [
@@ -204,6 +213,14 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 routeMode = "local"
                 destinationLocalPath = localRoute.destinationPath
                 resolvedFileName = localRoute.fileName
+                destinationFolderDisplay = routeDestinationFolderDisplay(
+                    mode: routeMode,
+                    target: target,
+                    resolvedFolder: resolved,
+                    destinationLocalPath: localRoute.destinationPath
+                )
+                routePDFStrategy = localRoute.pdfStrategy
+                routeOCRState = routeOCRStatus(for: localRoute.pdfStrategy)
                 await EventPublisher.publish(
                     type: "route.local_applied",
                     payload: [
@@ -277,7 +294,21 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
     }
 
     if let resolvedJobID,
-       let updatedJob = await req.application.appState.markRouted(jobId: resolvedJobID, classCode: effectiveClassCode) {
+       let updatedJob = await req.application.appState.markRouted(
+        jobId: resolvedJobID,
+        classCode: effectiveClassCode,
+        details: buildRouteJobDetails(
+            mode: routeMode,
+            target: target,
+            resolvedFolder: resolved,
+            resolvedFileName: resolvedFileName,
+            destinationURL: destinationURL,
+            destinationLocalPath: destinationLocalPath,
+            destinationFolderDisplay: destinationFolderDisplay,
+            pdfStrategy: routePDFStrategy,
+            ocrStatus: routeOCRState
+        )
+       ) {
         try await JobPersistenceRepository.upsert(job: updatedJob, on: req.db)
         await EventPublisher.publish(
             type: "job.routed",
@@ -315,6 +346,76 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
         destination_local_path: destinationLocalPath,
         resolved_file_name: resolvedFileName
     )
+}
+
+private func buildRouteJobDetails(
+    mode: String,
+    target: RoutingTarget,
+    resolvedFolder: String,
+    resolvedFileName: String?,
+    destinationURL: String?,
+    destinationLocalPath: String?,
+    destinationFolderDisplay: String?,
+    pdfStrategy: String?,
+    ocrStatus: String
+) -> [String: String] {
+    var details: [String: String] = [:]
+    details["route.mode"] = mode
+    if !resolvedFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.resolved_folder"] = resolvedFolder
+    }
+    if let resolvedFileName, !resolvedFileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.resolved_file_name"] = resolvedFileName
+    }
+    if let destinationURL, !destinationURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.destination_url"] = destinationURL
+    }
+    if let destinationLocalPath, !destinationLocalPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.destination_local_path"] = destinationLocalPath
+    }
+    if let destinationFolderDisplay, !destinationFolderDisplay.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.destination_folder_display"] = destinationFolderDisplay
+    }
+    if let pdfStrategy, !pdfStrategy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.pdf_strategy"] = pdfStrategy
+    }
+    details["route.ocr_status"] = ocrStatus
+    details["route.metadata_status"] = routeMetadataStatus(for: target)
+    return details
+}
+
+private func routeDestinationFolderDisplay(
+    mode: String,
+    target: RoutingTarget,
+    resolvedFolder: String,
+    destinationLocalPath: String?
+) -> String {
+    if mode == "local",
+       let destinationLocalPath,
+       !destinationLocalPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return URL(fileURLWithPath: destinationLocalPath).deletingLastPathComponent().path
+    }
+
+    if mode == "graph" {
+        let segments = [target.site, target.library, resolvedFolder]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return segments.isEmpty ? "-" : segments.joined(separator: " / ")
+    }
+
+    return "-"
+}
+
+private func routeMetadataStatus(for target: RoutingTarget) -> String {
+    let metadata = target.metadata ?? [:]
+    return metadata.isEmpty ? "n/a" : "pending"
+}
+
+private func routeOCRStatus(for pdfStrategy: String?) -> String {
+    guard let pdfStrategy else {
+        return "n/a"
+    }
+    return pdfStrategy.contains("searchable") ? "ok" : "n/a"
 }
 
 private func routeLocalFileIfPossible(

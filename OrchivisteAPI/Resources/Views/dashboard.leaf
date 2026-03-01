@@ -54,6 +54,21 @@
         .upload-card {
             margin-top: 12px;
         }
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .section-head h2 {
+            margin: 0;
+        }
+        .table-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
         .upload-form {
             display: grid;
             grid-template-columns: 1fr 1fr auto;
@@ -73,6 +88,10 @@
             padding: 8px;
             font: inherit;
             background: #fff;
+            color: var(--ink);
+        }
+        .upload-form input[readonly] {
+            background: #f7f3ec;
             color: var(--ink);
         }
         .path-row {
@@ -106,6 +125,18 @@
             padding: 9px 12px;
             font-weight: 700;
             cursor: pointer;
+        }
+        .btn-secondary {
+            border: 1px solid var(--border);
+            color: var(--ink);
+            background: #fff;
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .table-wrap {
+            overflow-x: auto;
         }
         .error {
             color: var(--warning);
@@ -141,11 +172,21 @@
             border-bottom: 1px solid var(--border);
             text-align: left;
             font-size: 14px;
+            vertical-align: top;
         }
         th { color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
         .status-needs_review { color: var(--warning); font-weight: 700; }
         .status-completed { color: var(--accent); font-weight: 700; }
         .mono { font-family: "SF Mono", Menlo, monospace; font-size: 12px; }
+        .cell-name, .cell-path {
+            min-width: 180px;
+            max-width: 320px;
+            word-break: break-word;
+        }
+        .empty-state {
+            padding: 18px 12px;
+            color: var(--muted);
+        }
         .picker-overlay {
             position: fixed;
             inset: 0;
@@ -222,8 +263,15 @@
         <h2>Importer un document local</h2>
         <p>L'import est explicite: le fichier est copié côté serveur puis injecté dans la file d'ingestion.</p>
         <form class="upload-form" action="/ui/ingest/local" method="post" enctype="multipart/form-data">
-            <label>Fichier
-                <input type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" required>
+            <label>Fichier (serveur ou local)
+                <div class="path-row">
+                    <input id="singleFileDisplay" type="text" placeholder="Choisir un fichier local ou sélectionner un fichier serveur" readonly>
+                    <input id="singleServerFileField" type="hidden" name="server_file">
+                    <button class="path-btn" type="button" onclick="openLocalFileDialog('singleFileUpload')">Choisir</button>
+                    <button class="path-btn path-btn-server" type="button" onclick="openServerFilePicker('singleServerFileField', 'singleFileDisplay', 'singleFileHint')">Serveur</button>
+                </div>
+                <input id="singleFileUpload" type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" style="display:none" onchange="handleLocalFileSelection('singleFileUpload', 'singleServerFileField', 'singleFileDisplay', 'singleFileHint')">
+                <div id="singleFileHint" class="help">Le bouton "Choisir" ouvre le sélecteur de fichier local. Le bouton "Serveur" parcourt les fichiers visibles par l'API.</div>
             </label>
             <label>Étiquettes (optionnel)
                 <input type="text" name="tags" placeholder="pv, comité, facture">
@@ -248,8 +296,10 @@
             <label>Dossier de sortie (optionnel)
                 <div class="path-row">
                     <input id="outputFolderField" type="text" name="output_root" value="#(ingest_default_output_folder)" placeholder="/data/routed">
-                    <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('outputFolderField')">Serveur</button>
+                    <button class="path-btn" type="button" onclick="openFolderPicker('outputFolderField')">Choisir</button>
+                    <button class="path-btn path-btn-server" type="button" onclick="setServerFolderDefault('outputFolderField', '#(ingest_default_output_folder)', 'outputFolderHint')">Serveur</button>
                 </div>
+                <div id="outputFolderHint" class="help">Le dossier de sortie est un chemin serveur API. "Choisir" parcourt le serveur, "Serveur" remet la valeur par défaut.</div>
             </label>
             <label>Étiquettes (optionnel)
                 <input type="text" name="tags" placeholder="ville, résolution, conseil">
@@ -270,7 +320,26 @@
         #endif
     </section>
 
-    <h2>Tâches récentes</h2>
+    <section class="section-head" style="margin-top: 18px;">
+        <h2>Tâches récentes</h2>
+        <div class="table-actions">
+            <form action="/ui/dashboard/recent-jobs/clear" method="post" style="margin:0;">
+                <button class="btn-secondary" type="submit">Effacer la liste</button>
+            </form>
+            #if(recent_jobs_cleared):
+            <form action="/ui/dashboard/recent-jobs/reset" method="post" style="margin:0;">
+                <button class="btn-secondary" type="submit">Réafficher tout</button>
+            </form>
+            #endif
+        </div>
+    </section>
+    #if(dashboard_notice):
+    <p class="notice">#(dashboard_notice)</p>
+    #endif
+    #if(dashboard_error):
+    <p class="error">#(dashboard_error)</p>
+    #endif
+    <div class="table-wrap">
     <table>
         <thead>
         <tr>
@@ -279,6 +348,10 @@
             <th>Source</th>
             <th>Code</th>
             <th>Confiance</th>
+            <th>OCR OK</th>
+            <th>Nouveau nom</th>
+            <th>Métadonnées OK</th>
+            <th>Dossier enregistré</th>
             <th>Mise à jour</th>
         </tr>
         </thead>
@@ -290,15 +363,31 @@
             <td>#(job.source_kind)</td>
             <td>#(job.suggested_class_code)</td>
             <td>#(job.confidence)</td>
+            <td>#(job.ocr_ok)</td>
+            <td class="cell-name mono">#(job.resolved_file_name)</td>
+            <td>#(job.metadata_ok)</td>
+            <td class="cell-path mono">#(job.saved_folder_path)</td>
             <td>#(job.updated_at)</td>
         </tr>
         #endfor
+        #if(recent_jobs_empty):
+        <tr>
+            <td colspan="10" class="empty-state">
+                #if(recent_jobs_cleared):
+                La liste a été vidée. Les nouvelles tâches créées après ce reset réapparaîtront ici.
+                #else:
+                Aucune tâche récente à afficher.
+                #endif
+            </td>
+        </tr>
+        #endif
         </tbody>
     </table>
+    </div>
 </main>
 <div id="folderPickerOverlay" class="picker-overlay" onclick="closeFolderPicker(event)">
     <div class="picker" onclick="event.stopPropagation()">
-        <h3>Sélectionner un dossier</h3>
+        <h3 id="pickerTitle">Sélectionner un dossier</h3>
         <div class="picker-toolbar">
             <button type="button" onclick="pickerGoParent()">Parent</button>
             <span id="pickerCurrent" class="mono"></span>
@@ -306,16 +395,19 @@
         <div id="pickerRoots" class="picker-toolbar"></div>
         <div id="pickerList" class="picker-list"></div>
         <div class="picker-toolbar">
-            <button type="button" onclick="applyPickedFolder()">Utiliser ce dossier</button>
+            <button id="pickerApplyFolderButton" type="button" onclick="applyPickedFolder()">Utiliser ce dossier</button>
             <button type="button" onclick="closeFolderPicker()">Fermer</button>
         </div>
     </div>
 </div>
 <script>
 let pickerTargetInputId = null;
+let pickerTargetDisplayId = null;
+let pickerTargetHintId = null;
 let pickerCurrentPath = null;
 let pickerParentPath = null;
 let pickerRoots = [];
+let pickerMode = "folder";
 
 function openLocalFolderDialog(fileInputId) {
     const picker = document.getElementById(fileInputId);
@@ -324,6 +416,37 @@ function openLocalFolderDialog(fileInputId) {
     }
     picker.value = "";
     picker.click();
+}
+
+function handleLocalFileSelection(fileInputId, serverInputId, displayInputId, hintId) {
+    const picker = document.getElementById(fileInputId);
+    const serverInput = document.getElementById(serverInputId);
+    const displayInput = document.getElementById(displayInputId);
+    const hint = document.getElementById(hintId);
+    if (!picker) {
+        return;
+    }
+
+    const file = (picker.files || [])[0];
+    if (!file) {
+        if (displayInput) {
+            displayInput.value = "";
+        }
+        if (hint) {
+            hint.textContent = "Aucun fichier local sélectionné.";
+        }
+        return;
+    }
+
+    if (serverInput) {
+        serverInput.value = "";
+    }
+    if (displayInput) {
+        displayInput.value = file.name;
+    }
+    if (hint) {
+        hint.textContent = `Fichier local sélectionné: ${file.name}.`;
+    }
 }
 
 function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
@@ -355,9 +478,27 @@ function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
 }
 
 function openFolderPicker(inputId) {
+    pickerMode = "folder";
     pickerTargetInputId = inputId;
+    pickerTargetDisplayId = null;
+    pickerTargetHintId = null;
     const input = document.getElementById(inputId);
     const startPath = input && input.value ? input.value : "";
+    document.getElementById("pickerTitle").textContent = "Sélectionner un dossier serveur";
+    document.getElementById("pickerApplyFolderButton").style.display = "inline-flex";
+    document.getElementById("folderPickerOverlay").style.display = "flex";
+    loadFolderList(startPath);
+}
+
+function openServerFilePicker(hiddenInputId, displayInputId, hintId) {
+    pickerMode = "file";
+    pickerTargetInputId = hiddenInputId;
+    pickerTargetDisplayId = displayInputId;
+    pickerTargetHintId = hintId;
+    const hiddenInput = document.getElementById(hiddenInputId);
+    const startPath = hiddenInput && hiddenInput.value ? hiddenInput.value : "";
+    document.getElementById("pickerTitle").textContent = "Sélectionner un fichier serveur";
+    document.getElementById("pickerApplyFolderButton").style.display = "none";
     document.getElementById("folderPickerOverlay").style.display = "flex";
     loadFolderList(startPath);
 }
@@ -382,7 +523,7 @@ async function loadFolderList(path) {
     pickerRoots = data.roots || [];
     document.getElementById("pickerCurrent").textContent = pickerCurrentPath;
     renderPickerRoots();
-    renderPickerList(data.directories || []);
+    renderPickerList(data.directories || [], data.files || []);
 }
 
 function renderPickerRoots() {
@@ -397,7 +538,7 @@ function renderPickerRoots() {
     }
 }
 
-function renderPickerList(entries) {
+function renderPickerList(entries, files) {
     const list = document.getElementById("pickerList");
     list.innerHTML = "";
     for (const entry of entries) {
@@ -406,6 +547,19 @@ function renderPickerList(entries) {
         btn.textContent = `${entry.name} (${entry.path})`;
         btn.onclick = () => loadFolderList(entry.path);
         list.appendChild(btn);
+    }
+    if (pickerMode === "file" && files.length) {
+        const heading = document.createElement("div");
+        heading.className = "help";
+        heading.textContent = "Fichiers supportés";
+        list.appendChild(heading);
+        for (const entry of files) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = `${entry.name} (${entry.path})`;
+            btn.onclick = () => applyPickedFile(entry.path);
+            list.appendChild(btn);
+        }
     }
 }
 
@@ -424,6 +578,46 @@ function applyPickedFolder() {
         input.value = pickerCurrentPath;
     }
     closeFolderPicker();
+}
+
+function applyPickedFile(path) {
+    if (!pickerTargetInputId || !path) {
+        return;
+    }
+    const hiddenInput = document.getElementById(pickerTargetInputId);
+    if (hiddenInput) {
+        hiddenInput.value = path;
+    }
+    if (pickerTargetDisplayId) {
+        const displayInput = document.getElementById(pickerTargetDisplayId);
+        if (displayInput) {
+            displayInput.value = path;
+        }
+    }
+    if (pickerTargetHintId) {
+        const hint = document.getElementById(pickerTargetHintId);
+        if (hint) {
+            hint.textContent = `Fichier serveur sélectionné: ${path}.`;
+        }
+    }
+    const uploadInput = document.getElementById("singleFileUpload");
+    if (uploadInput) {
+        uploadInput.value = "";
+    }
+    closeFolderPicker();
+}
+
+function setServerFolderDefault(inputId, defaultValue, hintId) {
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.value = defaultValue;
+    }
+    if (hintId) {
+        const hint = document.getElementById(hintId);
+        if (hint) {
+            hint.textContent = `Dossier serveur actif: ${defaultValue}.`;
+        }
+    }
 }
 </script>
 </body>

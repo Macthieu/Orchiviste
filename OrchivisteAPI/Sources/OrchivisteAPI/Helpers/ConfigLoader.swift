@@ -1,6 +1,10 @@
 import Foundation
 import Vapor
 
+struct UIDashboardState: Codable {
+    var recent_jobs_cleared_at: Date?
+}
+
 enum ConfigLoader {
     static func baseDir() -> URL {
         if let env = Environment.get("ORCHIVISTE_CONFIG_DIR") {
@@ -187,5 +191,24 @@ enum ConfigLoader {
         let dir = baseDir().appendingPathComponent("analysis/routing", isDirectory: true)
         try ensureDir(dir)
         try Data(text.utf8).write(to: renamingGuideURL(), options: [.atomic])
+    }
+
+    static func dashboardStateURL() -> URL {
+        baseDir().appendingPathComponent("ui/dashboard.state.json")
+    }
+
+    static func loadDashboardState() -> UIDashboardState? {
+        let url = dashboardStateURL()
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(UIDashboardState.self, from: data)
+    }
+
+    static func saveDashboardState(_ state: UIDashboardState) throws {
+        let dir = baseDir().appendingPathComponent("ui", isDirectory: true)
+        try ensureDir(dir)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        let data = try encoder.encode(state)
+        try data.write(to: dashboardStateURL(), options: [.atomic])
     }
 }

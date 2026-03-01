@@ -13,6 +13,10 @@ private struct UIDashboardContext: Encodable {
     let queue_ingest_depth: Int
     let queue_dead_letter_depth: Int
     let recent_jobs: [UIJobSummary]
+    let recent_jobs_empty: Bool
+    let recent_jobs_cleared: Bool
+    let dashboard_notice: String?
+    let dashboard_error: String?
     let upload_notice: String?
     let upload_error: String?
     let ingest_default_input_folder: String
@@ -76,6 +80,10 @@ private struct UIJobSummary: Encodable {
     let source_kind: String
     let confidence: String
     let suggested_class_code: String
+    let ocr_ok: String
+    let resolved_file_name: String
+    let metadata_ok: String
+    let saved_folder_path: String
     let updated_at: String
 }
 
@@ -144,7 +152,8 @@ private struct UIJobViewerContext: Encodable {
 }
 
 private struct UILocalIngestForm: Content {
-    let pdf: File
+    let pdf: File?
+    let server_file: String?
     let tags: String?
 }
 
@@ -225,6 +234,7 @@ private struct UIFolderListResponse: Content {
     let parent: String?
     let roots: [String]
     let directories: [UIFolderListEntry]
+    let files: [UIFolderListEntry]
 }
 
 private struct UIWorkerEnrollForm: Content {
@@ -281,6 +291,7 @@ func registerUIRoutes(_ app: Application) {
         let manager = FileManager.default
 
         let directories: [UIFolderListEntry]
+        let files: [UIFolderListEntry]
         do {
             let items = try manager.contentsOfDirectory(
                 at: current,
@@ -296,6 +307,15 @@ func registerUIRoutes(_ app: Application) {
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
                 .prefix(250)
                 .map { $0 }
+            files = items
+                .compactMap { url -> UIFolderListEntry? in
+                    let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                    guard !isDirectory, isSupportedIngestFileName(url.lastPathComponent) else { return nil }
+                    return UIFolderListEntry(name: url.lastPathComponent, path: url.path)
+                }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                .prefix(250)
+                .map { $0 }
         } catch {
             throw Abort(.badRequest, reason: "Impossible de lire ce dossier: \(error.localizedDescription)")
         }
@@ -306,39 +326,54 @@ func registerUIRoutes(_ app: Application) {
             current: current.path,
             parent: parentPath,
             roots: roots.map(\.path),
-            directories: directories
+            directories: directories,
+            files: files
         )
     }
 
     app.on(.POST, "ui", "ingest", "local", body: .collect(maxSize: "48mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UILocalIngestForm.self)
-            let filename = form.pdf.filename.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else {
-                throw Abort(.badRequest, reason: "Aucun fichier fourni.")
-            }
-            guard isSupportedIngestFileName(filename) else {
-                throw Abort(.badRequest, reason: "Format non supporte. Utilise PDF, DOCX, XLSX, PPTX, PNG, JPG ou TIFF.")
-            }
-            guard form.pdf.data.readableBytes > 0 else {
-                throw Abort(.badRequest, reason: "Le fichier est vide.")
-            }
-
-            let inboxDirectory = resolveUILocalIngestInboxDirectory()
-            try FileManager.default.createDirectory(
-                at: inboxDirectory,
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-
-            let safeName = sanitizeUploadFileName(filename)
-            let timestamp = formatUploadTimestamp(Date())
-            let destination = inboxDirectory.appendingPathComponent("\(timestamp)-\(safeName)")
-            try Data(buffer: form.pdf.data).write(to: destination, options: .atomic)
-
             let parsedTags = parseUploadTags(raw: form.tags)
+            let destinationPath: String
+            if let uploadedFile = form.pdf, uploadedFile.data.readableBytes > 0 {
+                let filename = uploadedFile.filename.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !filename.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun fichier fourni.")
+                }
+                guard isSupportedIngestFileName(filename) else {
+                    throw Abort(.badRequest, reason: "Format non supporte. Utilise PDF, DOCX, XLSX, PPTX, PNG, JPG ou TIFF.")
+                }
+
+                let inboxDirectory = resolveUILocalIngestInboxDirectory()
+                try FileManager.default.createDirectory(
+                    at: inboxDirectory,
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+
+                let safeName = sanitizeUploadFileName(filename)
+                let timestamp = formatUploadTimestamp(Date())
+                let destination = inboxDirectory.appendingPathComponent("\(timestamp)-\(safeName)")
+                try Data(buffer: uploadedFile.data).write(to: destination, options: .atomic)
+                destinationPath = destination.path
+            } else if let serverFilePath = nonEmptyString(form.server_file) {
+                let serverURL = URL(fileURLWithPath: serverFilePath)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: serverURL.path, isDirectory: &isDirectory),
+                      !isDirectory.boolValue else {
+                    throw Abort(.badRequest, reason: "Le fichier serveur sélectionné est introuvable.")
+                }
+                guard isSupportedIngestFileName(serverURL.lastPathComponent) else {
+                    throw Abort(.badRequest, reason: "Format non supporte. Utilise PDF, DOCX, XLSX, PPTX, PNG, JPG ou TIFF.")
+                }
+                destinationPath = serverURL.path
+            } else {
+                throw Abort(.badRequest, reason: "Choisis un fichier local ou un fichier serveur.")
+            }
+
             let requestBody = IngestRequest(
-                fileURL: destination.path,
+                fileURL: destinationPath,
                 source: JobSource(kind: "local", url: nil, site: nil, library: nil, itemId: nil),
                 tags: parsedTags.isEmpty ? nil : parsedTags,
                 hints: nil
@@ -455,6 +490,34 @@ func registerUIRoutes(_ app: Application) {
                 "error": .string(error.localizedDescription)
             ])
             return req.redirect(to: "/ui?upload_error=\(urlQueryEncoded("Erreur interne pendant l'import du dossier."))")
+        }
+    }
+
+    app.post("ui", "dashboard", "recent-jobs", "clear") { req async throws -> Response in
+        do {
+            let current = ConfigLoader.loadDashboardState() ?? UIDashboardState(recent_jobs_cleared_at: nil)
+            let updated = UIDashboardState(recent_jobs_cleared_at: Date())
+            if current.recent_jobs_cleared_at != updated.recent_jobs_cleared_at {
+                try ConfigLoader.saveDashboardState(updated)
+            }
+            return req.redirect(to: "/ui?dashboard_notice=\(urlQueryEncoded("La liste des tâches récentes a été vidée."))")
+        } catch {
+            req.logger.error("Échec vidage liste tâches récentes UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui?dashboard_error=\(urlQueryEncoded("Erreur interne pendant le vidage de la liste."))")
+        }
+    }
+
+    app.post("ui", "dashboard", "recent-jobs", "reset") { req async throws -> Response in
+        do {
+            try ConfigLoader.saveDashboardState(UIDashboardState(recent_jobs_cleared_at: nil))
+            return req.redirect(to: "/ui?dashboard_notice=\(urlQueryEncoded("La liste complète des tâches récentes est réaffichée."))")
+        } catch {
+            req.logger.error("Échec réinitialisation liste tâches récentes UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui?dashboard_error=\(urlQueryEncoded("Erreur interne pendant la réinitialisation de la liste."))")
         }
     }
 
@@ -978,26 +1041,41 @@ func registerUIRoutes(_ app: Application) {
     }
 
     app.get("ui") { req async throws -> View in
-        let jobs = try await loadJobs(req: req, limit: 100)
+        let jobs = try await loadJobRecords(req: req, limit: 100)
         let workerCount = try await loadWorkerRecords(req: req).count
         let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
         let routingSettings = ConfigLoader.loadRoutingLocalSettings()
+        let dashboardState = ConfigLoader.loadDashboardState()
+        let recentCutoff = dashboardState?.recent_jobs_cleared_at
         let uploadNotice = req.query[String.self, at: "upload_notice"]
         let uploadError = req.query[String.self, at: "upload_error"]
+        let dashboardNotice = req.query[String.self, at: "dashboard_notice"]
+        let dashboardError = req.query[String.self, at: "dashboard_error"]
 
         let counts = Dictionary(grouping: jobs, by: \.status)
+        let recentJobs = jobs
+            .filter { job in
+                guard let recentCutoff else { return true }
+                return job.createdAt > recentCutoff
+            }
+            .prefix(15)
+            .map(makeUIJobSummary)
         let context = UIDashboardContext(
             total_jobs: jobs.count,
-            pending_jobs: counts["pending"]?.count ?? 0,
-            running_jobs: counts["running"]?.count ?? 0,
-            needs_review_jobs: counts["needs_review"]?.count ?? 0,
-            completed_jobs: counts["completed"]?.count ?? 0,
-            failed_jobs: counts["failed"]?.count ?? 0,
-            cancelled_jobs: counts["cancelled"]?.count ?? 0,
+            pending_jobs: counts[.pending]?.count ?? 0,
+            running_jobs: counts[.running]?.count ?? 0,
+            needs_review_jobs: counts[.needs_review]?.count ?? 0,
+            completed_jobs: counts[.completed]?.count ?? 0,
+            failed_jobs: counts[.failed]?.count ?? 0,
+            cancelled_jobs: counts[.cancelled]?.count ?? 0,
             worker_count: workerCount,
             queue_ingest_depth: queueStats.ingest_depth,
             queue_dead_letter_depth: queueStats.dead_letter_depth,
-            recent_jobs: Array(jobs.prefix(15)),
+            recent_jobs: recentJobs,
+            recent_jobs_empty: recentJobs.isEmpty,
+            recent_jobs_cleared: recentCutoff != nil,
+            dashboard_notice: dashboardNotice,
+            dashboard_error: dashboardError,
             upload_notice: uploadNotice,
             upload_error: uploadError,
             ingest_default_input_folder: resolveUILocalIngestInboxDirectory().path,
@@ -1323,7 +1401,7 @@ private func loadPresets(req: Request) async -> [UIPresetSummary] {
         }
 }
 
-private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
+private func loadJobRecords(req: Request, limit: Int) async throws -> [JobRecord] {
     let jobs: [JobRecord]
     if let persisted = try? await JobPersistenceRepository.listJobs(limit: limit, on: req.db),
        !persisted.isEmpty {
@@ -1331,18 +1409,28 @@ private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
     } else {
         jobs = await req.application.appState.listJobs(limit: limit)
     }
-    return jobs.map { job in
-        UIJobSummary(
-            id: job.id.uuidString,
-            status: job.status.rawValue,
-            status_label: localizedJobStatus(job.status.rawValue),
-            file_url: job.fileURL,
-            source_kind: localizedSourceKind(job.source.kind),
-            confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
-            suggested_class_code: job.suggestedClassCode ?? "N/D",
-            updated_at: formatTimestamp(job.updatedAt)
-        )
-    }
+    return jobs
+}
+
+private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
+    try await loadJobRecords(req: req, limit: limit).map(makeUIJobSummary)
+}
+
+private func makeUIJobSummary(_ job: JobRecord) -> UIJobSummary {
+    UIJobSummary(
+        id: job.id.uuidString,
+        status: job.status.rawValue,
+        status_label: localizedJobStatus(job.status.rawValue),
+        file_url: job.fileURL,
+        source_kind: localizedSourceKind(job.source.kind),
+        confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
+        suggested_class_code: job.suggestedClassCode ?? "N/D",
+        ocr_ok: localizedRouteFlag(routeValue(job, key: "route.ocr_status")),
+        resolved_file_name: routeValue(job, key: "route.resolved_file_name") ?? "-",
+        metadata_ok: localizedMetadataFlag(routeValue(job, key: "route.metadata_status")),
+        saved_folder_path: routeSavedFolderPath(job) ?? "-",
+        updated_at: formatTimestamp(job.updatedAt)
+    )
 }
 
 private func resolveUIJob(jobID: UUID, req: Request) async throws -> JobRecord {
@@ -1397,6 +1485,53 @@ private func localizedSourceKind(_ raw: String) -> String {
     case "sharepoint": return "SharePoint"
     default: return raw
     }
+}
+
+private func routeValue(_ job: JobRecord, key: String) -> String? {
+    guard let value = job.analysisChamps?[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !value.isEmpty else {
+        return nil
+    }
+    return value
+}
+
+private func localizedRouteFlag(_ raw: String?) -> String {
+    switch raw?.lowercased() {
+    case "ok":
+        return "OK"
+    case "pending":
+        return "À faire"
+    case "n/a", "na":
+        return "-"
+    default:
+        return "-"
+    }
+}
+
+private func localizedMetadataFlag(_ raw: String?) -> String {
+    switch raw?.lowercased() {
+    case "ok":
+        return "OK"
+    case "pending":
+        return "À faire"
+    case "n/a", "na":
+        return "-"
+    default:
+        return "-"
+    }
+}
+
+private func routeSavedFolderPath(_ job: JobRecord) -> String? {
+    if let explicit = routeValue(job, key: "route.destination_folder_display") {
+        return explicit
+    }
+    if let localPath = routeValue(job, key: "route.destination_local_path") {
+        return URL(fileURLWithPath: localPath).deletingLastPathComponent().path
+    }
+    if let resolvedFolder = routeValue(job, key: "route.resolved_folder") {
+        return resolvedFolder
+    }
+    return nil
 }
 
 private func parseUploadTags(raw: String?) -> [String] {
@@ -1569,19 +1704,27 @@ private func resolveFolderPickerPath(_ requested: String?, roots: [URL]) throws 
 
     let resolved = URL(fileURLWithPath: requested, isDirectory: true)
     let normalized = resolved.standardizedFileURL
+    let candidateURL: URL
+    var isDirectory: ObjCBool = false
+    if FileManager.default.fileExists(atPath: normalized.path, isDirectory: &isDirectory),
+       !isDirectory.boolValue {
+        candidateURL = normalized.deletingLastPathComponent()
+    } else {
+        candidateURL = normalized
+    }
+
     let isWithinRoot = roots.contains { root in
         let rootPath = root.standardizedFileURL.path
-        return normalized.path == rootPath || normalized.path.hasPrefix(rootPath + "/")
+        return candidateURL.path == rootPath || candidateURL.path.hasPrefix(rootPath + "/")
     }
     guard isWithinRoot else {
         throw Abort(.forbidden, reason: "Accès hors des racines autorisées.")
     }
-    var isDirectory: ObjCBool = false
-    guard FileManager.default.fileExists(atPath: normalized.path, isDirectory: &isDirectory),
+    guard FileManager.default.fileExists(atPath: candidateURL.path, isDirectory: &isDirectory),
           isDirectory.boolValue else {
         throw Abort(.notFound, reason: "Dossier introuvable.")
     }
-    return normalized
+    return candidateURL
 }
 
 private func formatUploadTimestamp(_ date: Date) -> String {
