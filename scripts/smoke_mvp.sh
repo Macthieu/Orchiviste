@@ -298,12 +298,14 @@ echo "OK  conflit idempotent d'ingestion"
 
 job_file="$TMP_DIR/job.json"
 job_status=""
+job_terminal="0"
 deadline=$((SECONDS + TIMEOUT_SECONDS))
 while (( SECONDS < deadline )); do
   job_code="$(http_raw GET "$API_BASE/v1/jobs/$job_id" "$job_file")"
   if [[ "$job_code" == "200" ]]; then
     job_status="$(json_get "$job_file" "status")"
     if [[ "$job_status" == "needs_review" || "$job_status" == "completed" || "$job_status" == "failed" || "$job_status" == "cancelled" ]]; then
+      job_terminal="1"
       break
     fi
   fi
@@ -312,6 +314,11 @@ done
 
 if [[ -z "$job_status" ]]; then
   echo "ECHEC [jobs] statut de tâche introuvable avant expiration" >&2
+  cat "$job_file" >&2
+  exit 1
+fi
+if [[ "$job_terminal" != "1" ]]; then
+  echo "ECHEC [jobs] statut non terminal avant expiration: $job_status" >&2
   cat "$job_file" >&2
   exit 1
 fi

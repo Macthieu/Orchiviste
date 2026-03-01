@@ -4,9 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 
-API_PORT="${ORCHIVISTE_WEBHOOK_TEST_API_PORT:-29780}"
-ANALYSE_PORT="${ORCHIVISTE_WEBHOOK_TEST_ANALYSE_PORT:-29781}"
-WEBHOOK_PORT="${ORCHIVISTE_WEBHOOK_TEST_PORT:-39990}"
+API_PORT="${ORCHIVISTE_WEBHOOK_TEST_API_PORT:-}"
+ANALYSE_PORT="${ORCHIVISTE_WEBHOOK_TEST_ANALYSE_PORT:-}"
+WEBHOOK_PORT="${ORCHIVISTE_WEBHOOK_TEST_PORT:-}"
 WEBHOOK_SECRET="${ORCHIVISTE_WEBHOOK_TEST_SECRET:-orchiviste-smoke-secret}"
 CAPTURE_FILE="$TMP_DIR/webhook_capture.json"
 API_LOG="$TMP_DIR/api.log"
@@ -19,6 +19,17 @@ need_cmd() {
     echo "Commande requise manquante : $cmd" >&2
     exit 1
   fi
+}
+
+pick_port() {
+  python3 - <<'PY'
+import socket
+
+sock = socket.socket()
+sock.bind(("127.0.0.1", 0))
+print(sock.getsockname()[1])
+sock.close()
+PY
 }
 
 cleanup() {
@@ -34,6 +45,16 @@ trap cleanup EXIT
 
 need_cmd python3
 need_cmd curl
+
+if [[ -z "$API_PORT" ]]; then
+  API_PORT="$(pick_port)"
+fi
+if [[ -z "$ANALYSE_PORT" ]]; then
+  ANALYSE_PORT="$(pick_port)"
+fi
+if [[ -z "$WEBHOOK_PORT" ]]; then
+  WEBHOOK_PORT="$(pick_port)"
+fi
 
 echo "== Test fumée webhook HMAC Orchiviste =="
 echo "Port API : $API_PORT, port Analyse : $ANALYSE_PORT, port Webhook : $WEBHOOK_PORT"
@@ -91,6 +112,17 @@ ANALYSE_PID=$!
 API_PID=$!
 
 for _ in $(seq 1 60); do
+  if ! kill -0 "$ANALYSE_PID" >/dev/null 2>&1; then
+    echo "ECHEC : le service Analyse s'est arrêté avant readiness." >&2
+    tail -n 120 "$ANALYSE_LOG" >&2 || true
+    exit 1
+  fi
+  if ! kill -0 "$API_PID" >/dev/null 2>&1; then
+    echo "ECHEC : le service API s'est arrêté avant readiness." >&2
+    tail -n 120 "$API_LOG" >&2 || true
+    tail -n 120 "$ANALYSE_LOG" >&2 || true
+    exit 1
+  fi
   if curl -sS "http://127.0.0.1:$API_PORT/v1/health" >/dev/null 2>&1; then
     break
   fi

@@ -9,6 +9,11 @@ jobs:
   swift-and-smoke:
     runs-on: ubuntu-22.04
     if: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' }}
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
 
     steps:
       - name: Checkout
@@ -58,6 +63,7 @@ jobs:
           ORCHIVISTE_API_PORT=28780 \
           ORCHIVISTE_SQLITE_PATH=/tmp/orchiviste-ci.sqlite \
           ORCHIVISTE_AUTO_MIGRATE=1 \
+          ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379 \
           ORCHIVISTE_ANALYSE_URL=http://127.0.0.1:28781 \
           ./OrchivisteAPI/.build/debug/OrchivisteAPI > /tmp/orchiviste-api.log 2>&1 &
           API_PID=$!

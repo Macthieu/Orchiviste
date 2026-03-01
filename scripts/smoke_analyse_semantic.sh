@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 
-ANALYSE_PORT="${ORCHIVISTE_ANALYSE_TEST_PORT:-29781}"
+ANALYSE_PORT="${ORCHIVISTE_ANALYSE_TEST_PORT:-}"
 ANALYSE_LOG="$TMP_DIR/analyse.log"
 
 cleanup() {
@@ -24,8 +24,22 @@ need_cmd() {
   fi
 }
 
+pick_port() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+}
+
 need_cmd curl
 need_cmd python3
+
+if [[ -z "$ANALYSE_PORT" ]]; then
+  ANALYSE_PORT="$(pick_port)"
+fi
 
 echo "== Test fumee capture intelligente OrchivisteAnalyse =="
 echo "Port Analyse : $ANALYSE_PORT"
@@ -39,6 +53,11 @@ echo "Port Analyse : $ANALYSE_PORT"
 ANALYSE_PID=$!
 
 for _ in $(seq 1 60); do
+  if ! kill -0 "$ANALYSE_PID" >/dev/null 2>&1; then
+    echo "ECHEC : OrchivisteAnalyse s'est arrêté pendant le smoke sémantique." >&2
+    tail -n 120 "$ANALYSE_LOG" >&2 || true
+    exit 1
+  fi
   if curl -sS "http://127.0.0.1:$ANALYSE_PORT/v1/health" >/dev/null 2>&1; then
     break
   fi

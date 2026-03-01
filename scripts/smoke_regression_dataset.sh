@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 
-ANALYSE_PORT="${ORCHIVISTE_ANALYSE_REGRESSION_PORT:-29784}"
+ANALYSE_PORT="${ORCHIVISTE_ANALYSE_REGRESSION_PORT:-}"
 FIXTURES_DIR="${ORCHIVISTE_ANALYSE_REGRESSION_FIXTURES:-$ROOT_DIR/fixtures/regression/analyse}"
 ANALYSE_LOG="$TMP_DIR/analyse.log"
 
@@ -25,8 +25,22 @@ need_cmd() {
   fi
 }
 
+pick_port() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+}
+
 need_cmd curl
 need_cmd python3
+
+if [[ -z "$ANALYSE_PORT" ]]; then
+  ANALYSE_PORT="$(pick_port)"
+fi
 
 if [[ ! -d "$FIXTURES_DIR" ]]; then
   echo "Dossier de fixtures introuvable : $FIXTURES_DIR" >&2
@@ -46,6 +60,11 @@ echo "Fixtures     : $FIXTURES_DIR"
 ANALYSE_PID=$!
 
 for _ in $(seq 1 60); do
+  if ! kill -0 "$ANALYSE_PID" >/dev/null 2>&1; then
+    echo "ECHEC : OrchivisteAnalyse s'est arrêté pendant le dataset de régression." >&2
+    tail -n 120 "$ANALYSE_LOG" >&2 || true
+    exit 1
+  fi
   if curl -sS "http://127.0.0.1:$ANALYSE_PORT/v1/health" >/dev/null 2>&1; then
     break
   fi
