@@ -1092,6 +1092,16 @@ func registerUIRoutes(_ app: Application) {
         return try await req.view.render("events", context)
     }
 
+    app.get("ui", "jobs", ":id", "download-searchable") { req async throws -> Response in
+        guard let id = req.parameters.get("id"),
+              let jobID = UUID(uuidString: id) else {
+            let reason = urlQueryEncoded("Identifiant de tâche invalide.")
+            return req.redirect(to: "/ui/jobs?error=\(reason)")
+        }
+        _ = try await resolveUIJob(jobID: jobID, req: req)
+        return req.redirect(to: "/v1/jobs/\(jobID.uuidString)/download/searchable")
+    }
+
     app.get("ui", "jobs", ":id") { req async throws -> View in
         guard let id = req.parameters.get("id"),
               let jobID = UUID(uuidString: id) else {
@@ -1134,7 +1144,7 @@ func registerUIRoutes(_ app: Application) {
             routed_at: job.steps.routed.map(formatTimestamp),
             preview_pages: max(1, preview?.pages ?? 1),
             download_url: "/v1/jobs/\(job.id.uuidString)/download",
-            download_searchable_url: "/v1/jobs/\(job.id.uuidString)/download/searchable",
+            download_searchable_url: "/ui/jobs/\(job.id.uuidString)/download-searchable",
             analysis_type_doc: job.analysisTypeDoc ?? "N/D",
             analysis_sujets: (job.analysisSujets ?? []).isEmpty ? "N/D" : (job.analysisSujets ?? []).joined(separator: ", "),
             analysis_capture_strategy: extractAnalysisValue(job.analysisChamps, key: "capture.strategy", fallback: "idp_capture_strategy"),
