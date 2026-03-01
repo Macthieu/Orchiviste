@@ -117,6 +117,20 @@
             background: #fff;
             color: var(--muted);
         }
+        .picker-upload-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: 0;
+            padding: 0;
+            opacity: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            clip-path: inset(50%);
+            white-space: nowrap;
+            border: 0;
+            pointer-events: none;
+        }
         .upload-form button {
             border: 1px solid var(--accent);
             color: #fff;
@@ -162,6 +176,8 @@
                 #d8cfbf 10px,
                 #d8cfbf 20px
             );
+            background-size: 200% 100%;
+            animation: statusFlow 2s linear infinite;
         }
         .status-segment-running {
             background: repeating-linear-gradient(
@@ -171,6 +187,8 @@
                 #8ccbbb 10px,
                 #8ccbbb 20px
             );
+            background-size: 200% 100%;
+            animation: statusFlow 1.5s linear infinite;
         }
         .status-segment-review {
             background: #d6944e;
@@ -302,6 +320,10 @@
             background: #fff;
             cursor: pointer;
         }
+        @keyframes statusFlow {
+            from { background-position: 0 0; }
+            to { background-position: 40px 0; }
+        }
         @media (max-width: 980px) {
             .upload-form {
                 grid-template-columns: 1fr;
@@ -344,7 +366,7 @@
                     <button class="path-btn" type="button" onclick="openLocalFileDialog('singleFileUpload')">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openServerFilePicker('singleServerFileField', 'singleFileDisplay', 'singleFileHint')">Serveur</button>
                 </div>
-                <input id="singleFileUpload" type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" style="display:none" onchange="handleLocalFileSelection('singleFileUpload', 'singleServerFileField', 'singleFileDisplay', 'singleFileHint')">
+                    <input id="singleFileUpload" class="picker-upload-input" type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" onchange="handleLocalFileSelection('singleFileUpload', 'singleServerFileField', 'singleFileDisplay', 'singleFileHint')">
                 <div id="singleFileHint" class="help">Le bouton "Choisir" ouvre le sélecteur de fichier local. Le bouton "Serveur" parcourt les fichiers visibles par l'API.</div>
             </label>
             <label>Étiquettes (optionnel)
@@ -358,23 +380,25 @@
         <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
         <h3 style="margin: 0 0 8px;">Importer un dossier local (lot)</h3>
         <form class="upload-form" action="/ui/ingest/folder" method="post" enctype="multipart/form-data">
+            <input id="inputFolderMode" type="hidden" name="input_mode" value="server">
+            <input id="outputFolderMode" type="hidden" name="output_mode" value="server">
             <label>Dossier d'entrée (serveur ou local)
                 <div class="path-row">
                     <input id="inputFolderField" type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox (laisser vide pour un dossier local)">
                     <button class="path-btn" type="button" onclick="openLocalFolderDialog('inputFolderUpload')">Choisir</button>
-                    <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('inputFolderField')">Serveur</button>
+                    <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('inputFolderField', null, 'inputFolderHint', 'inputFolderMode')">Serveur</button>
                 </div>
-                <input id="inputFolderUpload" type="file" name="folder_files" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple style="display:none" onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint')">
+                <input id="inputFolderUpload" class="picker-upload-input" type="file" name="folder_files[]" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint','inputFolderMode')">
                 <div id="inputFolderHint" class="help">Le bouton "Choisir" ouvre le sélecteur de dossier local (ton ordinateur).</div>
             </label>
             <label>Dossier de sortie (optionnel)
                 <div class="path-row">
                     <input id="outputFolderField" type="text" name="output_root" value="#(ingest_default_output_folder)" placeholder="/data/routed">
                     <button class="path-btn" type="button" onclick="openLocalFolderDialog('outputFolderUpload')">Choisir</button>
-                    <button class="path-btn path-btn-server" type="button" onclick="setServerFolderDefault('outputFolderField', '#(ingest_default_output_folder)', 'outputFolderHint')">Serveur</button>
+                    <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('outputFolderField', null, 'outputFolderHint', 'outputFolderMode')">Serveur</button>
                 </div>
-                <input id="outputFolderUpload" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple style="display:none" onchange="handleLocalOutputFolderSelection('outputFolderUpload','outputFolderField','outputFolderHint','#(ingest_default_output_folder)')">
-                <div id="outputFolderHint" class="help">Le bouton "Choisir" ouvre un dossier local et nomme un sous-dossier de sortie côté serveur. "Serveur" remet la valeur serveur par défaut.</div>
+                <input id="outputFolderUpload" class="picker-upload-input" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalOutputFolderSelection('outputFolderUpload','outputFolderField','outputFolderHint','outputFolderMode','#(ingest_default_output_folder)')">
+                <div id="outputFolderHint" class="help">Le bouton "Choisir" ouvre un dossier local et cible un sous-dossier de sortie côté serveur. Le bouton "Serveur" parcourt les dossiers visibles par l'API.</div>
             </label>
             <label>Étiquettes (optionnel)
                 <input type="text" name="tags" placeholder="ville, résolution, conseil">
@@ -414,8 +438,9 @@
     #if(dashboard_error):
     <p class="error">#(dashboard_error)</p>
     #endif
+    <div id="recentJobsPanel">
     #if(recent_jobs_present):
-    <div class="status-strip">
+    <div id="recentJobsStatus" class="status-strip">
         <div class="status-track" aria-label="Progression des tâches récentes">
             #if(recent_pending_jobs):
             <div class="status-segment status-segment-pending" style="width: calc((#(recent_pending_jobs) / #(recent_total_jobs)) * 100%);"></div>
@@ -445,7 +470,7 @@
             <span class="status-pill"><span class="status-pill-dot status-pill-cancelled"></span>Annulées: #(recent_cancelled_jobs)</span>
         </div>
         #if(dashboard_has_active_processing):
-        <div class="help">Actualisation automatique active toutes les #(dashboard_auto_refresh_seconds) secondes pendant le traitement.</div>
+        <div id="recentJobsActiveHint" class="help">Actualisation automatique active toutes les #(dashboard_auto_refresh_seconds) secondes pendant le traitement.</div>
         #endif
     </div>
     #endif
@@ -465,7 +490,7 @@
             <th>Mise à jour</th>
         </tr>
         </thead>
-        <tbody>
+        <tbody id="recentJobsBody">
         #for(job in recent_jobs):
         <tr>
             <td class="mono"><a href="/ui/jobs/#(job.id)">#(job.id)</a></td>
@@ -482,7 +507,7 @@
         #endfor
         #if(recent_jobs_empty):
         <tr>
-            <td colspan="10" class="empty-state">
+            <td id="recentJobsEmptyState" colspan="10" class="empty-state">
                 #if(recent_jobs_cleared):
                 La liste a été vidée. Les nouvelles tâches créées après ce reset réapparaîtront ici.
                 #else:
@@ -493,6 +518,7 @@
         #endif
         </tbody>
     </table>
+    </div>
     </div>
 </main>
 <div id="folderPickerOverlay" class="picker-overlay" onclick="closeFolderPicker(event)">
@@ -514,10 +540,20 @@
 let pickerTargetInputId = null;
 let pickerTargetDisplayId = null;
 let pickerTargetHintId = null;
+let pickerTargetModeId = null;
 let pickerCurrentPath = null;
 let pickerParentPath = null;
 let pickerRoots = [];
 let pickerMode = "folder";
+
+function openLocalFileDialog(fileInputId) {
+    const picker = document.getElementById(fileInputId);
+    if (!picker) {
+        return;
+    }
+    picker.value = "";
+    picker.click();
+}
 
 function openLocalFolderDialog(fileInputId) {
     const picker = document.getElementById(fileInputId);
@@ -559,10 +595,11 @@ function handleLocalFileSelection(fileInputId, serverInputId, displayInputId, hi
     }
 }
 
-function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
+function handleLocalFolderSelection(fileInputId, pathInputId, hintId, modeInputId) {
     const picker = document.getElementById(fileInputId);
     const pathInput = document.getElementById(pathInputId);
     const hint = document.getElementById(hintId);
+    const modeInput = document.getElementById(modeInputId);
     if (!picker) {
         return;
     }
@@ -582,15 +619,19 @@ function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
     if (pathInput) {
         pathInput.value = "";
     }
+    if (modeInput) {
+        modeInput.value = "local";
+    }
     if (hint) {
         hint.textContent = `Dossier local selectionne: ${folderName} (${supportedCount} document(s) supporte(s)).`;
     }
 }
 
-function handleLocalOutputFolderSelection(fileInputId, pathInputId, hintId, defaultRoot) {
+function handleLocalOutputFolderSelection(fileInputId, pathInputId, hintId, modeInputId, defaultRoot) {
     const picker = document.getElementById(fileInputId);
     const pathInput = document.getElementById(pathInputId);
     const hint = document.getElementById(hintId);
+    const modeInput = document.getElementById(modeInputId);
     if (!picker) {
         return;
     }
@@ -613,16 +654,20 @@ function handleLocalOutputFolderSelection(fileInputId, pathInputId, hintId, defa
     if (pathInput) {
         pathInput.value = resolvedPath;
     }
+    if (modeInput) {
+        modeInput.value = "local";
+    }
     if (hint) {
         hint.textContent = `Sortie serveur ciblée: ${resolvedPath}. Le dossier choisi localement sert à nommer le sous-dossier de sortie côté serveur.`;
     }
 }
 
-function openFolderPicker(inputId) {
+function openFolderPicker(inputId, displayId, hintId, modeInputId) {
     pickerMode = "folder";
     pickerTargetInputId = inputId;
-    pickerTargetDisplayId = null;
-    pickerTargetHintId = null;
+    pickerTargetDisplayId = displayId || null;
+    pickerTargetHintId = hintId || null;
+    pickerTargetModeId = modeInputId || null;
     const input = document.getElementById(inputId);
     const startPath = input && input.value ? input.value : "";
     document.getElementById("pickerTitle").textContent = "Sélectionner un dossier serveur";
@@ -636,6 +681,7 @@ function openServerFilePicker(hiddenInputId, displayInputId, hintId) {
     pickerTargetInputId = hiddenInputId;
     pickerTargetDisplayId = displayInputId;
     pickerTargetHintId = hintId;
+    pickerTargetModeId = null;
     const hiddenInput = document.getElementById(hiddenInputId);
     const startPath = hiddenInput && hiddenInput.value ? hiddenInput.value : "";
     document.getElementById("pickerTitle").textContent = "Sélectionner un fichier serveur";
@@ -718,6 +764,24 @@ function applyPickedFolder() {
     if (input) {
         input.value = pickerCurrentPath;
     }
+    if (pickerTargetDisplayId) {
+        const displayInput = document.getElementById(pickerTargetDisplayId);
+        if (displayInput) {
+            displayInput.value = pickerCurrentPath;
+        }
+    }
+    if (pickerTargetHintId) {
+        const hint = document.getElementById(pickerTargetHintId);
+        if (hint) {
+            hint.textContent = `Dossier serveur sélectionné: ${pickerCurrentPath}.`;
+        }
+    }
+    if (pickerTargetModeId) {
+        const modeInput = document.getElementById(pickerTargetModeId);
+        if (modeInput) {
+            modeInput.value = "server";
+        }
+    }
     closeFolderPicker();
 }
 
@@ -748,31 +812,116 @@ function applyPickedFile(path) {
     closeFolderPicker();
 }
 
-function setServerFolderDefault(inputId, defaultValue, hintId) {
-    const input = document.getElementById(inputId);
-    if (input) {
-        input.value = defaultValue;
-    }
-    if (hintId) {
-        const hint = document.getElementById(hintId);
-        if (hint) {
-            hint.textContent = `Dossier serveur actif: ${defaultValue}.`;
-        }
-    }
-}
-
 const dashboardAutoRefreshSeconds = Number("#(dashboard_auto_refresh_seconds)");
 if (dashboardAutoRefreshSeconds > 0) {
-    const refreshDashboard = () => {
+    const refreshDashboard = async () => {
         const activeElement = document.activeElement;
         const isEditingForm = activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName);
         if (document.hidden || isEditingForm) {
             window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
             return;
         }
-        window.location.reload();
+        try {
+            const response = await fetch("/ui/dashboard/recent-jobs", {
+                headers: {
+                    "Accept": "application/json"
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            renderRecentJobs(payload);
+        } catch (error) {
+            console.warn("Échec actualisation tâches récentes", error);
+        }
+        window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
     };
     window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
+}
+
+function renderRecentJobs(payload) {
+    renderRecentJobsStatus(payload);
+    renderRecentJobsTable(payload);
+}
+
+function renderRecentJobsStatus(payload) {
+    const panel = document.getElementById("recentJobsPanel");
+    if (!panel) {
+        return;
+    }
+    let status = document.getElementById("recentJobsStatus");
+    if (!status) {
+        status = document.createElement("div");
+        status.id = "recentJobsStatus";
+        status.className = "status-strip";
+        panel.insertBefore(status, panel.firstChild);
+    }
+    if (!payload.recent_jobs_present) {
+        status.innerHTML = "";
+        return;
+    }
+    const total = Math.max(1, Number(payload.recent_total_jobs) || 1);
+    const segments = [
+        ["pending", payload.recent_pending_jobs],
+        ["running", payload.recent_running_jobs],
+        ["review", payload.recent_needs_review_jobs],
+        ["completed", payload.recent_completed_jobs],
+        ["failed", payload.recent_failed_jobs],
+        ["cancelled", payload.recent_cancelled_jobs]
+    ]
+        .filter(([, count]) => Number(count) > 0)
+        .map(([name, count]) => `<div class="status-segment status-segment-${name}" style="width:${(Number(count) / total) * 100}%"></div>`)
+        .join("");
+    status.innerHTML = `
+        <div class="status-track" aria-label="Progression des tâches récentes">${segments}</div>
+        <div class="status-legend">
+            <span class="status-pill"><span class="status-pill-dot status-pill-pending"></span>En attente: ${payload.recent_pending_jobs}</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-running"></span>En cours: ${payload.recent_running_jobs}</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-review"></span>Revue: ${payload.recent_needs_review_jobs}</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-completed"></span>Terminées: ${payload.recent_completed_jobs}</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-failed"></span>Échecs: ${payload.recent_failed_jobs}</span>
+            <span class="status-pill"><span class="status-pill-dot status-pill-cancelled"></span>Annulées: ${payload.recent_cancelled_jobs}</span>
+        </div>
+        ${payload.dashboard_has_active_processing ? `<div id="recentJobsActiveHint" class="help">Actualisation automatique active toutes les ${payload.dashboard_auto_refresh_seconds} secondes pendant le traitement.</div>` : ""}
+    `;
+}
+
+function renderRecentJobsTable(payload) {
+    const body = document.getElementById("recentJobsBody");
+    if (!body) {
+        return;
+    }
+    if (!payload.recent_jobs || !payload.recent_jobs.length) {
+        const message = payload.recent_jobs_cleared
+            ? "La liste a été vidée. Les nouvelles tâches créées après ce reset réapparaîtront ici."
+            : "Aucune tâche récente à afficher.";
+        body.innerHTML = `<tr><td id="recentJobsEmptyState" colspan="10" class="empty-state">${message}</td></tr>`;
+        return;
+    }
+    body.innerHTML = payload.recent_jobs.map((job) => `
+        <tr>
+            <td class="mono"><a href="/ui/jobs/${job.id}">${job.id}</a></td>
+            <td class="status-${job.status}">${job.status_label}</td>
+            <td>${job.source_kind}</td>
+            <td>${job.suggested_class_code}</td>
+            <td>${job.confidence}</td>
+            <td>${job.ocr_ok}</td>
+            <td class="cell-name mono">${escapeHTML(job.resolved_file_name)}</td>
+            <td>${job.metadata_ok}</td>
+            <td class="cell-path mono">${escapeHTML(job.saved_folder_path)}</td>
+            <td>${job.updated_at}</td>
+        </tr>
+    `).join("");
+}
+
+function escapeHTML(value) {
+    return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#39;");
 }
 </script>
 </body>

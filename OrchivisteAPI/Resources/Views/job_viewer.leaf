@@ -167,6 +167,33 @@
             <dt>Validation IDP</dt><dd>#(analysis_validation_flags)</dd>
         </dl>
 
+        <h4>Résumé génératif</h4>
+        <p style="margin: 0 0 8px; font-weight: 700;">#(analysis_summary_title)</p>
+        <p style="margin: 0 0 8px; color: var(--muted); line-height: 1.5;">#(analysis_summary_text)</p>
+        #if(analysis_summary_points_present):
+        <ul style="margin: 0 0 12px 18px; padding: 0;">
+            #for(point in analysis_summary_points):
+            <li style="margin-bottom: 6px;">#(point)</li>
+            #endfor
+        </ul>
+        #else:
+        <p style="margin: 0 0 12px; color: var(--muted); font-size: 12px;">Aucun point saillant supplémentaire.</p>
+        #endif
+
+        <h4>Métadonnées suggérées</h4>
+        #if(suggested_metadata_present):
+        <dl>
+            #for(item in suggested_metadata):
+            <dt>#(item.label)</dt><dd>#(item.value)</dd>
+            #endfor
+        </dl>
+        #else:
+        <p style="margin: 0 0 8px; color: var(--muted); font-size: 12px;">Aucune métadonnée suggérée disponible.</p>
+        #endif
+        <label>Métadonnées suggérées (JSON)
+            <textarea rows="8" readonly>#(suggested_metadata_json)</textarea>
+        </label>
+
         <h4>Texte d'aperçu</h4>
         <label>Page <input id="textPage" type="number" min="1" value="1"></label>
         <button class="btn" type="button" onclick="loadText()">Charger le texte</button>

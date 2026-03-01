@@ -16,7 +16,19 @@ enum AnalysisStub {
             champs: [
                 "numero": isResolution ? "R-2024-001" : "PV-2024-001",
                 "date": "2024-01-15",
-                "comite": "Conseil"
+                "comite": "Conseil",
+                "summary.title": isResolution ? "Résolution budgétaire" : "Procès-verbal de séance",
+                "summary.generated": isResolution
+                    ? "Résolution municipale suggérée avec numéro, date et comité détectés. Vérifier le contenu exact avant diffusion."
+                    : "Procès-verbal suggéré avec date et comité détectés. Vérifier les décisions et participants avant diffusion.",
+                "summary.highlights": isResolution
+                    ? "Numéro: R-2024-001 | Date: 2024-01-15 | Émetteur: Conseil"
+                    : "Numéro: PV-2024-001 | Date: 2024-01-15 | Comité: Conseil",
+                "metadata.type_document": typeDoc,
+                "metadata.numero_document": isResolution ? "R-2024-001" : "PV-2024-001",
+                "metadata.date_document": "2024-01-15",
+                "metadata.organisme_emetteur": "Conseil",
+                "metadata.objet": isResolution ? "Décision budgétaire municipale" : "Séance du comité"
             ],
             confidence: confidence,
             suggested_preset: preset?.id,

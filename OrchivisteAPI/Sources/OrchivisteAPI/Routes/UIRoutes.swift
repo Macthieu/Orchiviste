@@ -33,6 +33,22 @@ private struct UIDashboardContext: Encodable {
     let ingest_default_output_folder: String
 }
 
+private struct UIDashboardRecentJobsPayload: Content {
+    let recent_jobs: [UIJobSummary]
+    let recent_jobs_empty: Bool
+    let recent_jobs_present: Bool
+    let recent_jobs_cleared: Bool
+    let recent_total_jobs: Int
+    let recent_pending_jobs: Int
+    let recent_running_jobs: Int
+    let recent_needs_review_jobs: Int
+    let recent_completed_jobs: Int
+    let recent_failed_jobs: Int
+    let recent_cancelled_jobs: Int
+    let dashboard_has_active_processing: Bool
+    let dashboard_auto_refresh_seconds: Int
+}
+
 private struct UIJobsContext: Encodable {
     let jobs: [UIJobSummary]
 }
@@ -82,7 +98,7 @@ private struct UIEventSummary: Encodable {
     let payload: String
 }
 
-private struct UIJobSummary: Encodable {
+private struct UIJobSummary: Content {
     let id: String
     let status: String
     let status_label: String
@@ -95,6 +111,11 @@ private struct UIJobSummary: Encodable {
     let metadata_ok: String
     let saved_folder_path: String
     let updated_at: String
+}
+
+private struct UIKeyValueSummary: Encodable {
+    let label: String
+    let value: String
 }
 
 private struct UIWorkerSummary: Encodable {
@@ -153,6 +174,13 @@ private struct UIJobViewerContext: Encodable {
     let analysis_sujets: String
     let analysis_capture_strategy: String
     let analysis_review_reasons: String
+    let analysis_summary_title: String
+    let analysis_summary_text: String
+    let analysis_summary_points: [String]
+    let analysis_summary_points_present: Bool
+    let suggested_metadata: [UIKeyValueSummary]
+    let suggested_metadata_present: Bool
+    let suggested_metadata_json: String
     let analysis_champs_json: String
     let analysis_validation_flags: String
     let class_code_options: [String]
@@ -169,52 +197,79 @@ private struct UILocalIngestForm: Content {
 
 private struct UIFolderIngestForm: Content {
     let input_folder: String?
+    let input_mode: String?
     let tags: String?
     let recursive: String?
     let max_files: String?
     let output_root: String?
+    let output_mode: String?
     let folder_files: [File]
 
     private enum CodingKeys: String, CodingKey {
         case input_folder
+        case input_mode
         case tags
         case recursive
         case max_files
         case output_root
+        case output_mode
         case folder_files
+        case folder_files_bracketed = "folder_files[]"
     }
 
     init(
         input_folder: String? = nil,
+        input_mode: String? = nil,
         tags: String? = nil,
         recursive: String? = nil,
         max_files: String? = nil,
         output_root: String? = nil,
+        output_mode: String? = nil,
         folder_files: [File] = []
     ) {
         self.input_folder = input_folder
+        self.input_mode = input_mode
         self.tags = tags
         self.recursive = recursive
         self.max_files = max_files
         self.output_root = output_root
+        self.output_mode = output_mode
         self.folder_files = folder_files
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         input_folder = try container.decodeIfPresent(String.self, forKey: .input_folder)
+        input_mode = try container.decodeIfPresent(String.self, forKey: .input_mode)
         tags = try container.decodeIfPresent(String.self, forKey: .tags)
         recursive = try container.decodeIfPresent(String.self, forKey: .recursive)
         max_files = try container.decodeIfPresent(String.self, forKey: .max_files)
         output_root = try container.decodeIfPresent(String.self, forKey: .output_root)
+        output_mode = try container.decodeIfPresent(String.self, forKey: .output_mode)
 
-        if let multiple = try? container.decode([File].self, forKey: .folder_files) {
+        if let multiple = try? container.decode([File].self, forKey: .folder_files_bracketed) {
             folder_files = multiple
+        } else if let multiple = try? container.decode([File].self, forKey: .folder_files) {
+            folder_files = multiple
+        } else if let single = try? container.decode(File.self, forKey: .folder_files_bracketed) {
+            folder_files = [single]
         } else if let single = try? container.decode(File.self, forKey: .folder_files) {
             folder_files = [single]
         } else {
             folder_files = []
         }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(input_folder, forKey: .input_folder)
+        try container.encodeIfPresent(input_mode, forKey: .input_mode)
+        try container.encodeIfPresent(tags, forKey: .tags)
+        try container.encodeIfPresent(recursive, forKey: .recursive)
+        try container.encodeIfPresent(max_files, forKey: .max_files)
+        try container.encodeIfPresent(output_root, forKey: .output_root)
+        try container.encodeIfPresent(output_mode, forKey: .output_mode)
+        try container.encode(folder_files, forKey: .folder_files)
     }
 }
 
@@ -383,6 +438,10 @@ func registerUIRoutes(_ app: Application) {
         )
     }
 
+    app.get("ui", "dashboard", "recent-jobs") { req async throws -> UIDashboardRecentJobsPayload in
+        try await buildDashboardRecentJobsPayload(req: req)
+    }
+
     app.on(.POST, "ui", "ingest", "local", body: .collect(maxSize: "48mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UILocalIngestForm.self)
@@ -453,27 +512,21 @@ func registerUIRoutes(_ app: Application) {
     app.on(.POST, "ui", "ingest", "folder", body: .collect(maxSize: "512mb")) { req async throws -> Response in
         do {
             let form = try req.content.decode(UIFolderIngestForm.self)
+            let inputMode = nonEmptyString(form.input_mode)?.lowercased()
             let inputFolderRaw = nonEmptyString(form.input_folder)
             let recursive = parseBooleanFlag(form.recursive, defaultValue: true)
             let maxFiles = parseMaxFiles(form.max_files)
             let tags = parseUploadTags(raw: form.tags)
             let uploadedFolderFiles = form.folder_files
+            let preferredOutputRoot = resolvedRequestedOutputRoot(
+                raw: form.output_root,
+                defaultRoot: ConfigLoader.loadRoutingLocalSettings()?.local_route_root ?? "/data/routed"
+            )
 
             var files: [URL] = []
             var sourceLabel = "dossier serveur"
 
-            if let inputFolderRaw {
-                let inputURL = URL(fileURLWithPath: inputFolderRaw, isDirectory: true)
-                var isDirectory: ObjCBool = false
-                guard FileManager.default.fileExists(atPath: inputURL.path, isDirectory: &isDirectory),
-                      isDirectory.boolValue else {
-                    throw Abort(.badRequest, reason: "Le dossier d'entrée est introuvable sur le serveur API.")
-                }
-                files = try collectSupportedDocumentFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
-                guard !files.isEmpty else {
-                    throw Abort(.badRequest, reason: "Aucun document supporte trouve dans le dossier d'entree.")
-                }
-            } else if !uploadedFolderFiles.isEmpty {
+            if inputMode == "local" || !uploadedFolderFiles.isEmpty {
                 let supportedFiles = uploadedFolderFiles.filter {
                     isSupportedIngestFileName($0.filename) && $0.data.readableBytes > 0
                 }
@@ -502,18 +555,19 @@ func registerUIRoutes(_ app: Application) {
                     files.append(destination)
                 }
                 sourceLabel = "ton ordinateur"
+            } else if let inputFolderRaw {
+                let inputURL = URL(fileURLWithPath: inputFolderRaw, isDirectory: true)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: inputURL.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else {
+                    throw Abort(.badRequest, reason: "Le dossier d'entrée est introuvable sur le serveur API.")
+                }
+                files = try collectSupportedDocumentFiles(in: inputURL, recursive: recursive, maxFiles: maxFiles)
+                guard !files.isEmpty else {
+                    throw Abort(.badRequest, reason: "Aucun document supporte trouve dans le dossier d'entree.")
+                }
             } else {
                 throw Abort(.badRequest, reason: "Sélectionne un dossier serveur ou choisis un dossier local.")
-            }
-
-            if let outputRoot = nonEmptyString(form.output_root) {
-                let existing = ConfigLoader.loadRoutingLocalSettings()
-                let merged = RoutingLocalSettings(
-                    local_route_root: outputRoot,
-                    default_destination_template: existing?.default_destination_template,
-                    default_name_format: existing?.default_name_format
-                )
-                try ConfigLoader.saveRoutingLocalSettings(merged)
             }
 
             var ingested = 0
@@ -524,12 +578,22 @@ func registerUIRoutes(_ app: Application) {
                     tags: tags.isEmpty ? nil : tags,
                     hints: nil
                 )
-                let idempotency = buildFolderIngestIdempotencyKey(fileURL: file)
-                _ = try await enqueueIngest(
+                let idempotency = buildFolderIngestIdempotencyKey(
+                    fileURL: file,
+                    outputRoot: preferredOutputRoot,
+                    sourceMode: inputMode ?? (sourceLabel == "ton ordinateur" ? "local" : "server")
+                )
+                let taskId = try await enqueueIngest(
                     body: requestBody,
                     idempotencyKey: idempotency,
                     req: req
                 )
+                if let merged = await req.application.appState.mergeAnalysisChamps(
+                    jobId: taskId,
+                    values: buildFolderImportRouteHints(outputRoot: preferredOutputRoot)
+                ) {
+                    try await JobPersistenceRepository.upsert(job: merged, on: req.db)
+                }
                 ingested += 1
             }
 
@@ -1097,26 +1161,17 @@ func registerUIRoutes(_ app: Application) {
         let workerCount = try await loadWorkerRecords(req: req).count
         let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
         let routingSettings = ConfigLoader.loadRoutingLocalSettings()
-        let dashboardState = ConfigLoader.loadDashboardState()
-        let recentCutoff = dashboardState?.recent_jobs_cleared_at
         let uploadNotice = req.query[String.self, at: "upload_notice"]
         let uploadError = req.query[String.self, at: "upload_error"]
         let dashboardNotice = req.query[String.self, at: "dashboard_notice"]
         let dashboardError = req.query[String.self, at: "dashboard_error"]
 
         let counts = Dictionary(grouping: jobs, by: \.status)
-        let recentJobRecords = jobs
-            .filter { job in
-                guard let recentCutoff else { return true }
-                return job.createdAt > recentCutoff
-            }
-            .prefix(15)
-        let recentCounts = Dictionary(grouping: recentJobRecords, by: \.status)
-        let recentJobs = recentJobRecords.map(makeUIJobSummary)
-        let dashboardHasActiveProcessing =
-            (recentCounts[.pending]?.isEmpty == false) ||
-            (recentCounts[.running]?.isEmpty == false) ||
-            queueStats.ingest_depth > 0
+        let recentPayload = buildDashboardRecentJobsPayload(
+            jobs: jobs,
+            queueIngestDepth: queueStats.ingest_depth,
+            dashboardState: ConfigLoader.loadDashboardState()
+        )
         let context = UIDashboardContext(
             total_jobs: jobs.count,
             pending_jobs: counts[.pending]?.count ?? 0,
@@ -1128,19 +1183,19 @@ func registerUIRoutes(_ app: Application) {
             worker_count: workerCount,
             queue_ingest_depth: queueStats.ingest_depth,
             queue_dead_letter_depth: queueStats.dead_letter_depth,
-            recent_jobs: recentJobs,
-            recent_jobs_empty: recentJobs.isEmpty,
-            recent_jobs_present: !recentJobs.isEmpty,
-            recent_jobs_cleared: recentCutoff != nil,
-            recent_total_jobs: recentJobs.count,
-            recent_pending_jobs: recentCounts[.pending]?.count ?? 0,
-            recent_running_jobs: recentCounts[.running]?.count ?? 0,
-            recent_needs_review_jobs: recentCounts[.needs_review]?.count ?? 0,
-            recent_completed_jobs: recentCounts[.completed]?.count ?? 0,
-            recent_failed_jobs: recentCounts[.failed]?.count ?? 0,
-            recent_cancelled_jobs: recentCounts[.cancelled]?.count ?? 0,
-            dashboard_has_active_processing: dashboardHasActiveProcessing,
-            dashboard_auto_refresh_seconds: dashboardHasActiveProcessing ? 4 : 0,
+            recent_jobs: recentPayload.recent_jobs,
+            recent_jobs_empty: recentPayload.recent_jobs_empty,
+            recent_jobs_present: recentPayload.recent_jobs_present,
+            recent_jobs_cleared: recentPayload.recent_jobs_cleared,
+            recent_total_jobs: recentPayload.recent_total_jobs,
+            recent_pending_jobs: recentPayload.recent_pending_jobs,
+            recent_running_jobs: recentPayload.recent_running_jobs,
+            recent_needs_review_jobs: recentPayload.recent_needs_review_jobs,
+            recent_completed_jobs: recentPayload.recent_completed_jobs,
+            recent_failed_jobs: recentPayload.recent_failed_jobs,
+            recent_cancelled_jobs: recentPayload.recent_cancelled_jobs,
+            dashboard_has_active_processing: recentPayload.dashboard_has_active_processing,
+            dashboard_auto_refresh_seconds: recentPayload.dashboard_auto_refresh_seconds,
             dashboard_notice: dashboardNotice,
             dashboard_error: dashboardError,
             upload_notice: uploadNotice,
@@ -1274,6 +1329,8 @@ func registerUIRoutes(_ app: Application) {
             canRoute = true
             routeDisabledReason = nil
         }
+        let summaryPoints = analysisSummaryPoints(for: job)
+        let metadataItems = suggestedMetadataItems(for: job)
         let context = UIJobViewerContext(
             id: job.id.uuidString,
             status: localizedJobStatus(job.status.rawValue),
@@ -1294,6 +1351,13 @@ func registerUIRoutes(_ app: Application) {
             analysis_sujets: (job.analysisSujets ?? []).isEmpty ? "N/D" : (job.analysisSujets ?? []).joined(separator: ", "),
             analysis_capture_strategy: extractAnalysisValue(job.analysisChamps, key: "capture.strategy", fallback: "idp_capture_strategy"),
             analysis_review_reasons: extractAnalysisValue(job.analysisChamps, key: "review.reasons", fallback: "idp_review_reasons"),
+            analysis_summary_title: analysisSummaryTitle(for: job),
+            analysis_summary_text: analysisSummaryText(for: job),
+            analysis_summary_points: summaryPoints,
+            analysis_summary_points_present: !summaryPoints.isEmpty,
+            suggested_metadata: metadataItems,
+            suggested_metadata_present: !metadataItems.isEmpty,
+            suggested_metadata_json: suggestedMetadataJSON(for: job),
             analysis_champs_json: prettyPrintedJSON(job.analysisChamps),
             analysis_validation_flags: extractValidationFlags(job.analysisChamps),
             class_code_options: classCodeOptions,
@@ -1483,6 +1547,52 @@ private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
     try await loadJobRecords(req: req, limit: limit).map(makeUIJobSummary)
 }
 
+private func buildDashboardRecentJobsPayload(req: Request) async throws -> UIDashboardRecentJobsPayload {
+    let jobs = try await loadJobRecords(req: req, limit: 100)
+    let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
+    return buildDashboardRecentJobsPayload(
+        jobs: jobs,
+        queueIngestDepth: queueStats.ingest_depth,
+        dashboardState: ConfigLoader.loadDashboardState()
+    )
+}
+
+private func buildDashboardRecentJobsPayload(
+    jobs: [JobRecord],
+    queueIngestDepth: Int,
+    dashboardState: UIDashboardState?
+) -> UIDashboardRecentJobsPayload {
+    let recentCutoff = dashboardState?.recent_jobs_cleared_at
+    let recentJobRecords = jobs
+        .filter { job in
+            guard let recentCutoff else { return true }
+            return job.createdAt > recentCutoff
+        }
+        .prefix(15)
+    let recentCounts = Dictionary(grouping: recentJobRecords, by: \.status)
+    let recentJobs = recentJobRecords.map(makeUIJobSummary)
+    let dashboardHasActiveProcessing =
+        (recentCounts[.pending]?.isEmpty == false) ||
+        (recentCounts[.running]?.isEmpty == false) ||
+        queueIngestDepth > 0
+
+    return UIDashboardRecentJobsPayload(
+        recent_jobs: recentJobs,
+        recent_jobs_empty: recentJobs.isEmpty,
+        recent_jobs_present: !recentJobs.isEmpty,
+        recent_jobs_cleared: recentCutoff != nil,
+        recent_total_jobs: recentJobs.count,
+        recent_pending_jobs: recentCounts[.pending]?.count ?? 0,
+        recent_running_jobs: recentCounts[.running]?.count ?? 0,
+        recent_needs_review_jobs: recentCounts[.needs_review]?.count ?? 0,
+        recent_completed_jobs: recentCounts[.completed]?.count ?? 0,
+        recent_failed_jobs: recentCounts[.failed]?.count ?? 0,
+        recent_cancelled_jobs: recentCounts[.cancelled]?.count ?? 0,
+        dashboard_has_active_processing: dashboardHasActiveProcessing,
+        dashboard_auto_refresh_seconds: dashboardHasActiveProcessing ? 4 : 0
+    )
+}
+
 private func makeUIJobSummary(_ job: JobRecord) -> UIJobSummary {
     UIJobSummary(
         id: job.id.uuidString,
@@ -1492,9 +1602,9 @@ private func makeUIJobSummary(_ job: JobRecord) -> UIJobSummary {
         source_kind: localizedSourceKind(job.source.kind),
         confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
         suggested_class_code: job.suggestedClassCode ?? "N/D",
-        ocr_ok: localizedRouteFlag(routeValue(job, key: "route.ocr_status")),
+        ocr_ok: localizedRouteFlag(ocrStatus(for: job)),
         resolved_file_name: routeValue(job, key: "route.resolved_file_name") ?? "-",
-        metadata_ok: localizedMetadataFlag(routeValue(job, key: "route.metadata_status")),
+        metadata_ok: localizedMetadataFlag(metadataStatus(for: job)),
         saved_folder_path: routeSavedFolderPath(job) ?? "-",
         updated_at: formatTimestamp(job.updatedAt)
     )
@@ -1588,12 +1698,40 @@ private func localizedMetadataFlag(_ raw: String?) -> String {
     }
 }
 
+private func metadataStatus(for job: JobRecord) -> String? {
+    if let explicit = routeValue(job, key: "route.metadata_status") {
+        return explicit
+    }
+    if (job.analysisChamps?.keys.contains { $0.hasPrefix("metadata.") } == true)
+        || nonEmptyString(job.analysisTypeDoc) != nil
+        || !(job.analysisSujets ?? []).isEmpty {
+        return "ok"
+    }
+    return nil
+}
+
+private func ocrStatus(for job: JobRecord) -> String? {
+    if let explicit = routeValue(job, key: "route.ocr_status"),
+       explicit.lowercased() != "n/a",
+       explicit.lowercased() != "na" {
+        return explicit
+    }
+    if let capture = nonEmptyString(job.analysisChamps?["capture.strategy"])?.lowercased(),
+       capture.contains("native_text") || capture.contains("ocr") {
+        return "ok"
+    }
+    return nil
+}
+
 private func routeSavedFolderPath(_ job: JobRecord) -> String? {
     if let explicit = routeValue(job, key: "route.destination_folder_display") {
         return explicit
     }
     if let localPath = routeValue(job, key: "route.destination_local_path") {
         return URL(fileURLWithPath: localPath).deletingLastPathComponent().path
+    }
+    if let requested = routeValue(job, key: "route.requested_output_root") {
+        return requested
     }
     if let resolvedFolder = routeValue(job, key: "route.resolved_folder") {
         return resolvedFolder
@@ -1671,12 +1809,179 @@ private func prettyPrintedJSON(_ dictionary: [String: String]?) -> String {
     return text
 }
 
+private func suggestedMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] {
+    let metadata: [(String, String?)] = [
+        ("Type document", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.type_document", "doc_type_hint"], fallback: "")),
+        ("Numéro document", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.numero_document", "resolution_numero", "numero"], fallback: "")),
+        ("Objet", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.objet", "document_objet", "resolution_titre"], fallback: "")),
+        ("Date document", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_document", "date_document", "date"], fallback: "")),
+        ("Organisme émetteur", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.organisme_emetteur", "organisme_emetteur", "comite"], fallback: "")),
+        ("Sujets", (job.analysisSujets ?? []).isEmpty ? nil : job.analysisSujets?.joined(separator: ", ")),
+        ("Code de classement", nonEmptyString(job.suggestedClassCode)),
+        ("Préréglage", nonEmptyString(job.suggestedPreset))
+    ]
+    return metadata.compactMap { label, value in
+        guard let resolved = nonEmptyString(value), resolved != "N/D" else { return nil }
+        return UIKeyValueSummary(label: label, value: resolved)
+    }
+}
+
+private func suggestedMetadataJSON(for job: JobRecord) -> String {
+    var metadata: [String: String] = [:]
+    for item in suggestedMetadataItems(for: job) {
+        let normalizedKey = item.label
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        guard !normalizedKey.isEmpty else { continue }
+        metadata[normalizedKey] = item.value
+    }
+    return prettyPrintedJSON(metadata)
+}
+
+private func analysisSummaryTitle(for job: JobRecord) -> String {
+    return preferredDisplayAnalysisValue(
+        job.analysisChamps,
+        keys: ["summary.title", "resolution_titre", "metadata.objet", "document_objet"],
+        fallback: nonEmptyString(job.analysisTypeDoc) ?? "Résumé du document"
+    )
+}
+
+private func analysisSummaryText(for job: JobRecord) -> String {
+    if let summary = nonEmptyString(job.analysisChamps?["summary.generated"]) {
+        return summary
+    }
+    let typeDoc = nonEmptyString(job.analysisTypeDoc) ?? "Document"
+    let object = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.objet", "document_objet", "resolution_titre"], fallback: typeDoc)
+    let number = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.numero_document", "resolution_numero", "numero"], fallback: "")
+    let date = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_document", "date_document", "date"], fallback: "")
+    let issuer = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.organisme_emetteur", "organisme_emetteur", "comite"], fallback: "")
+    let subjectText = nonEmptyString((job.analysisSujets ?? []).joined(separator: ", ")) ?? ""
+
+    var parts: [String] = []
+    var intro = typeDoc
+    if !number.isEmpty {
+        intro += " \(number)"
+    }
+    parts.append(intro)
+    parts.append("Objet: \(object).")
+    if !date.isEmpty {
+        parts.append("Date repérée: \(date).")
+    }
+    if !issuer.isEmpty {
+        parts.append("Émetteur ou comité suggéré: \(issuer).")
+    }
+    if !subjectText.isEmpty {
+        parts.append("Sujets détectés: \(subjectText).")
+    }
+    return parts.joined(separator: " ")
+}
+
+private func analysisSummaryPoints(for job: JobRecord) -> [String] {
+    if let raw = nonEmptyString(job.analysisChamps?["summary.highlights"]) {
+        return raw
+            .split(whereSeparator: { $0 == "|" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    return suggestedMetadataItems(for: job)
+        .prefix(4)
+        .map { "\($0.label): \($0.value)" }
+}
+
 private func extractValidationFlags(_ dictionary: [String: String]?) -> String {
     guard let raw = dictionary?["idp_validation_flags"] else {
         return "Aucun"
     }
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? "Aucun" : trimmed
+}
+
+private func preferredAnalysisValue(
+    _ dictionary: [String: String]?,
+    keys: [String],
+    fallback: String = "N/D"
+) -> String {
+    for key in keys {
+        if let value = nonEmptyString(dictionary?[key]) {
+            return value
+        }
+    }
+    return fallback
+}
+
+private func preferredDisplayAnalysisValue(
+    _ dictionary: [String: String]?,
+    keys: [String],
+    fallback: String = "N/D"
+) -> String {
+    for key in keys {
+        if let value = sanitizedAnalysisDisplayValue(dictionary?[key]) {
+            return value
+        }
+    }
+    return fallback
+}
+
+private func sanitizedAnalysisDisplayValue(_ raw: String?) -> String? {
+    guard let value = nonEmptyString(raw) else {
+        return nil
+    }
+    let compacted = value
+        .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !compacted.isEmpty else {
+        return nil
+    }
+    let lowered = compacted
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+    guard !lowered.hasPrefix("file_name:"),
+          !lowered.hasPrefix("tags:"),
+          !looksLikeAnalysisHeaderNoise(lowered, rawValue: compacted) else {
+        return nil
+    }
+    return compacted
+}
+
+private func looksLikeAnalysisHeaderNoise(_ lowered: String, rawValue: String) -> Bool {
+    let invoiceHeaderTokens = [
+        "titulaire du compte",
+        "numero de compte",
+        "date de facturation",
+        "numero du client",
+        "numero client",
+        "page"
+    ]
+    let invoiceHeaderHits = invoiceHeaderTokens.filter { lowered.contains($0) }.count
+    if invoiceHeaderHits >= 3 {
+        return true
+    }
+
+    if rawValue.range(of: #"\S+\s{4,}\S+\s{4,}\S+"#, options: .regularExpression) != nil,
+       (lowered.contains("numero") || lowered.contains("date") || lowered.contains("page")) {
+        return true
+    }
+    return false
+}
+
+private func resolvedRequestedOutputRoot(raw: String?, defaultRoot: String) -> String {
+    let trimmed = nonEmptyString(raw) ?? defaultRoot
+    if trimmed.hasPrefix("/") {
+        return trimmed
+    }
+    return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        .appendingPathComponent(trimmed, isDirectory: true)
+        .path
+}
+
+private func buildFolderImportRouteHints(outputRoot: String) -> [String: String] {
+    [
+        "route.auto_requested": "true",
+        "route.requested_output_root": outputRoot
+    ]
 }
 
 private func extractAnalysisValue(
@@ -1961,11 +2266,11 @@ private func sanitizeTemplateSegment(_ raw: String) -> String {
     return cleaned.isEmpty ? "documents" : cleaned
 }
 
-private func buildFolderIngestIdempotencyKey(fileURL: URL) -> String {
+private func buildFolderIngestIdempotencyKey(fileURL: URL, outputRoot: String, sourceMode: String) -> String {
     let modificationDate = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
         ?? Date.distantPast
     let seconds = Int(modificationDate.timeIntervalSince1970)
-    let raw = "ui-folder-\(fileURL.path)-\(seconds)"
+    let raw = "ui-folder-\(sourceMode)-\(fileURL.path)-\(seconds)-\(outputRoot)"
     return raw
         .replacingOccurrences(of: "[^a-zA-Z0-9._:-]+", with: "-", options: .regularExpression)
         .prefix(200)

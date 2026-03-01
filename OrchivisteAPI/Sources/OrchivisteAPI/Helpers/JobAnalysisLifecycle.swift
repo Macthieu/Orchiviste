@@ -58,6 +58,38 @@ enum JobAnalysisLifecycle {
                 "threshold": .string("\(confidenceThreshold)"),
                 "review_reasons": .string((analysis.review?.reasons ?? []).joined(separator: ","))
             ])
+            return updatedJob
+        }
+
+        do {
+            _ = try await autoRouteIfRequested(
+                job: updatedJob,
+                application: application,
+                database: database,
+                logger: logger
+            )
+        } catch {
+            logger.error("Échec du routage automatique après analyse.", metadata: [
+                "job_id": .string(jobId.uuidString),
+                "error": .string(error.localizedDescription)
+            ])
+            if let flagged = await application.appState.flagNeedsReview(
+                jobId: jobId,
+                reason: "auto_route_failed"
+            ) {
+                try await JobPersistenceRepository.upsert(job: flagged, on: database)
+                await EventPublisher.publish(
+                    type: "job.needs_review",
+                    payload: [
+                        "job_id": jobId.uuidString,
+                        "reason": "auto_route_failed"
+                    ],
+                    application: application,
+                    database: database,
+                    logger: logger
+                )
+                return flagged
+            }
         }
         return updatedJob
     }

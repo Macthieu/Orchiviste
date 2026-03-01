@@ -97,6 +97,18 @@ enum IDPSemanticPipeline {
             missingFields: missingFields,
             ambiguousFields: ambiguousFields
         )
+        let metadata = buildSuggestedMetadata(
+            rawText: rawText,
+            typeDoc: typeDoc,
+            baseFields: baseFields,
+            semanticFields: extracted.fields
+        )
+        let summary = buildGeneratedSummary(
+            typeDoc: typeDoc,
+            metadata: metadata,
+            sujets: inferSummarySubjects(baseFields: baseFields, semanticFields: extracted.fields),
+            review: review
+        )
 
         var fields = extracted.fields
         fields["idp_pages_pertinentes"] = relevantPages.map(String.init).joined(separator: ",")
@@ -115,6 +127,9 @@ enum IDPSemanticPipeline {
         fields["idp_review_missing_fields"] = review.missingFields.joined(separator: ";")
         fields["idp_review_ambiguous_fields"] = review.ambiguousFields.joined(separator: ";")
         fields["idp_warnings"] = warnings.joined(separator: ";")
+        fields["summary.title"] = summary.title
+        fields["summary.generated"] = summary.text
+        fields["summary.highlights"] = summary.highlights.joined(separator: " | ")
         fields["idp_field_sources"] = extracted.fieldSources
             .keys
             .sorted()
@@ -130,6 +145,9 @@ enum IDPSemanticPipeline {
             segmentation: segmentation,
             review: review
         )
+        for (key, value) in metadata {
+            fields["metadata.\(key)"] = value
+        }
 
         return IDPPipelineOutput(
             relevantPages: relevantPages,
@@ -166,7 +184,10 @@ enum IDPSemanticPipeline {
         text
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+            .filter {
+                guard !$0.isEmpty else { return false }
+                return !matches($0, pattern: #"(?i)^\s*(file_name|tags)\s*:"#)
+            }
     }
 
     private static func detectCaptureStrategy(
@@ -392,6 +413,15 @@ enum IDPSemanticPipeline {
             confidence: 0.72,
             into: &extracted
         )
+        if extracted.fields["document_objet"] == nil,
+           let derivedObject = inferDocumentObject(rawText: rawText, typeDoc: typeDoc) {
+            extracted.fields["document_objet"] = derivedObject
+            extracted.fieldSources["document_objet"] = AnalysisFieldSource(
+                source: "semantic_heading_object",
+                confidence: 0.68,
+                evidence: clippedEvidence(derivedObject)
+            )
+        }
 
         if extracted.fields["doc_type_hint"] == nil {
             extracted.fields["doc_type_hint"] = typeDoc
@@ -690,6 +720,191 @@ enum IDPSemanticPipeline {
             return trimmed
         }
         return String(trimmed.prefix(120))
+    }
+
+    private static func inferDocumentObject(rawText: String, typeDoc: String) -> String? {
+        let lines = cleanedLines(from: rawText)
+        guard !lines.isEmpty else { return nil }
+
+        if typeDoc == "Resolution" {
+            for (index, line) in lines.enumerated() {
+                if matches(line, pattern: #"(?i)\br[eé]solution\b"#) {
+                    let window = lines.dropFirst(index + 1).prefix(4)
+                    let candidates = window.filter { candidate in
+                        candidate.count >= 18 && candidate.count <= 180
+                    }
+                    if !candidates.isEmpty {
+                        let joined = candidates
+                            .prefix(2)
+                            .joined(separator: " ")
+                            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let joined = sanitizedSemanticDisplayValue(joined) {
+                            return joined
+                        }
+                    }
+                }
+            }
+        }
+
+        return lines
+            .first(where: { line in
+                line.count >= 18 &&
+                line.count <= 160 &&
+                !matches(line, pattern: #"(?i)^\s*(ville|municipalite|municipalité|mrc|conseil)\b"#) &&
+                !matches(line, pattern: #"(?i)^\s*(r[eé]solution|proc[eè]s[- ]verbal|facture)\b"#)
+            })
+            .flatMap(sanitizedSemanticDisplayValue)
+    }
+
+    private static func buildSuggestedMetadata(
+        rawText: String,
+        typeDoc: String,
+        baseFields: [String: String],
+        semanticFields: [String: String]
+    ) -> [String: String] {
+        let number = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["resolution_numero"]))
+            ?? sanitizedSemanticDisplayValue(nonEmpty(baseFields["numero"]))
+        let object = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["document_objet"]))
+            ?? sanitizedSemanticDisplayValue(nonEmpty(semanticFields["resolution_titre"]))
+        let date = nonEmpty(baseFields["date"])
+            ?? nonEmpty(semanticFields["date_document"])
+        let issuer = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["organisme_emetteur"]))
+            ?? sanitizedSemanticDisplayValue(nonEmpty(baseFields["comite"]))
+        let keywords = orderedUnique(cleanedLines(from: rawText).prefix(12).flatMap { line in
+            line
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+                .filter { token in
+                    token.count >= 5 && !token.allSatisfy(\.isNumber)
+                }
+        }).prefixing(5)
+
+        var metadata: [String: String] = [
+            "type_document": typeDoc
+        ]
+        if let number { metadata["numero_document"] = number }
+        if let object { metadata["objet"] = object }
+        if let date { metadata["date_document"] = date }
+        if let issuer { metadata["organisme_emetteur"] = issuer }
+        if !keywords.isEmpty {
+            metadata["mots_cles"] = keywords.joined(separator: ", ")
+        }
+        return metadata
+    }
+
+    private static func inferSummarySubjects(
+        baseFields: [String: String],
+        semanticFields: [String: String]
+    ) -> [String] {
+        let values = [
+            sanitizedSemanticDisplayValue(nonEmpty(baseFields["comite"])),
+            sanitizedSemanticDisplayValue(nonEmpty(semanticFields["organisme_emetteur"])),
+            sanitizedSemanticDisplayValue(nonEmpty(semanticFields["document_objet"]))
+        ].compactMap { $0 }
+        return orderedUnique(values).prefixing(3)
+    }
+
+    private static func buildGeneratedSummary(
+        typeDoc: String,
+        metadata: [String: String],
+        sujets: [String],
+        review: IDPReviewAssessment
+    ) -> (title: String, text: String, highlights: [String]) {
+        let title = nonEmpty(metadata["objet"])
+            ?? nonEmpty(metadata["numero_document"])
+            ?? nonEmpty(typeDoc)
+            ?? "Document"
+        let number = nonEmpty(metadata["numero_document"])
+        let date = nonEmpty(metadata["date_document"])
+        let issuer = nonEmpty(metadata["organisme_emetteur"])
+
+        var firstSentence = typeDoc
+        if let number {
+            firstSentence += " \(number)"
+        }
+        if let issuer {
+            firstSentence += " émis par \(issuer)"
+        }
+        if let date {
+            firstSentence += " daté du \(date)"
+        }
+        firstSentence += "."
+
+        var summaryParts = [firstSentence]
+        if let object = nonEmpty(metadata["objet"]) {
+            summaryParts.append("Objet suggéré: \(object).")
+        }
+        if !sujets.isEmpty {
+            summaryParts.append("Axes détectés: \(sujets.joined(separator: ", ")).")
+        }
+        if review.needsReview {
+            summaryParts.append("Une revue humaine est recommandée avant le routage.")
+        }
+
+        var highlights: [String] = []
+        if let number {
+            highlights.append("Numéro: \(number)")
+        }
+        if let object = nonEmpty(metadata["objet"]) {
+            highlights.append("Objet: \(object)")
+        }
+        if let date {
+            highlights.append("Date: \(date)")
+        }
+        if let issuer {
+            highlights.append("Émetteur: \(issuer)")
+        }
+        return (
+            title: title,
+            text: summaryParts.joined(separator: " "),
+            highlights: orderedUnique(highlights).prefixing(4)
+        )
+    }
+
+    private static func sanitizedSemanticDisplayValue(_ raw: String?) -> String? {
+        guard let value = nonEmpty(raw) else {
+            return nil
+        }
+        let compacted = value
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compacted.isEmpty else {
+            return nil
+        }
+        guard !matches(compacted, pattern: #"(?i)^\s*(file_name|tags)\s*:"#) else {
+            return nil
+        }
+        guard !looksLikeStructuredHeaderNoise(compacted) else {
+            return nil
+        }
+        return compacted
+    }
+
+    private static func looksLikeStructuredHeaderNoise(_ value: String) -> Bool {
+        let lowered = value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+
+        let invoiceHeaderTokens = [
+            "titulaire du compte",
+            "numero de compte",
+            "date de facturation",
+            "numero du client",
+            "numero client",
+            "page"
+        ]
+        let invoiceHeaderHits = invoiceHeaderTokens.filter { lowered.contains($0) }.count
+        if invoiceHeaderHits >= 3 {
+            return true
+        }
+
+        if value.range(of: #"\S+\s{4,}\S+\s{4,}\S+"#, options: .regularExpression) != nil,
+           lowered.contains("numero") || lowered.contains("date") || lowered.contains("page") {
+            return true
+        }
+        return false
     }
 }
 

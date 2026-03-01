@@ -5,7 +5,7 @@ func registerAnalyseRoutes(_ app: Application) {
         ["status": "ok"]
     }
 
-    app.post("v1", "analyse") { req async throws -> AnalysisResponse in
+    app.on(.POST, "v1", "analyse", body: .collect(maxSize: analysisRequestBodyLimit())) { req async throws -> AnalysisResponse in
         let body = try req.content.decode(AnalysisRequest.self)
         let baseResult = await req.application.analysisFusionEngine.analyze(
             request: body,
@@ -24,6 +24,12 @@ func registerAnalyseRoutes(_ app: Application) {
         }
         return result
     }
+}
+
+private func analysisRequestBodyLimit() -> ByteCount {
+    let raw = Environment.get("ORCHIVISTE_ANALYSE_BODY_MAX")
+        ?? "8mb"
+    return ByteCount(stringLiteral: raw)
 }
 
 private func applyPolicyReview(

@@ -107,7 +107,13 @@ actor AppState {
         job.suggestedClassCode = analysis.suggested_class_code
         job.analysisTypeDoc = analysis.type_doc
         job.analysisSujets = analysis.sujets
-        var mergedAnalysisChamps = analysis.champs
+        var mergedAnalysisChamps = job.analysisChamps ?? [:]
+        for (rawKey, rawValue) in analysis.champs {
+            let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty, !value.isEmpty else { continue }
+            mergedAnalysisChamps[key] = value
+        }
         if let capture = analysis.capture {
             mergedAnalysisChamps["capture.strategy"] = capture.strategy
             mergedAnalysisChamps["capture.unit_count"] = "\(capture.unit_count)"
@@ -144,6 +150,21 @@ actor AppState {
         } else {
             addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
         }
+        return job
+    }
+
+    func mergeAnalysisChamps(jobId: UUID, values: [String: String]) -> JobRecord? {
+        guard var job = jobs[jobId] else { return nil }
+        var champs = job.analysisChamps ?? [:]
+        for (rawKey, rawValue) in values {
+            let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty, !value.isEmpty else { continue }
+            champs[key] = value
+        }
+        job.analysisChamps = champs
+        job.updatedAt = Date()
+        jobs[jobId] = job
         return job
     }
 

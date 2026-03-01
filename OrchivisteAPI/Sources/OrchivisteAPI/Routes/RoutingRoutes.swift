@@ -1,4 +1,5 @@
 import Foundation
+import Fluent
 import Vapor
 
 private struct LocalRouteResult {
@@ -19,10 +20,51 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
     guard let fileId = req.parameters.get("file_id") else {
         throw Abort(.badRequest, reason: "file_id est requis.")
     }
+    let routeRequest = try? req.content.decode(RoutingRequest.self)
+    return try await executeRouting(
+        fileId: fileId,
+        routeRequest: routeRequest,
+        req: req,
+        application: req.application,
+        database: req.db,
+        logger: req.logger
+    )
+}
+
+func autoRouteIfRequested(
+    job: JobRecord,
+    application: Application,
+    database: Database,
+    logger: Logger
+) async throws -> RoutingResponse? {
+    let requested = job.analysisChamps?["route.auto_requested"]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    guard requested == "true" || requested == "1" else {
+        return nil
+    }
+    guard job.steps.routed == nil else {
+        return nil
+    }
+    return try await executeRouting(
+        fileId: job.id.uuidString,
+        routeRequest: nil,
+        req: nil,
+        application: application,
+        database: database,
+        logger: logger
+    )
+}
+
+private func executeRouting(
+    fileId: String,
+    routeRequest: RoutingRequest?,
+    req: Request?,
+    application: Application,
+    database: Database,
+    logger: Logger
+) async throws -> RoutingResponse {
     guard let routing = ConfigLoader.loadRoutingMap() else {
         throw Abort(.notFound, reason: "Table de routage introuvable.")
     }
-    let routeRequest = try? req.content.decode(RoutingRequest.self)
     let localSettings = ConfigLoader.loadRoutingLocalSettings()
     let routingRules = ConfigLoader.loadRoutingRules()
     let presets = ConfigLoader.loadPresets()
@@ -31,10 +73,10 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
     var resolvedJobID: UUID?
     var resolvedJob: JobRecord?
     if let jobId = UUID(uuidString: fileId) {
-        let inMemory = await req.application.appState.job(id: jobId)
-        let persisted = try await JobPersistenceRepository.fetchJob(id: jobId, on: req.db)
+        let inMemory = await application.appState.job(id: jobId)
+        let persisted = try await JobPersistenceRepository.fetchJob(id: jobId, on: database)
         if let job = inMemory ?? persisted {
-            await req.application.appState.cacheJob(job)
+            await application.appState.cacheJob(job)
             if job.status == .needs_review {
                 throw Abort(.conflict, reason: "La tâche exige une revue humaine avant le routage.")
             }
@@ -49,11 +91,16 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
 
     var analysis: AnalysisResponse?
     if let resolvedJobID {
-        analysis = await req.application.appState.analysis(jobId: resolvedJobID)
+        analysis = await application.appState.analysis(jobId: resolvedJobID)
     }
     if analysis == nil, let resolvedJob {
         analysis = makeAnalysisSnapshot(from: resolvedJob, classCodeFallback: resolvedJob.suggestedClassCode)
     }
+
+    let effectiveLocalSettings = mergedLocalRoutingSettings(
+        base: localSettings,
+        requestedRoot: nonEmpty(resolvedJob?.analysisChamps?["route.requested_output_root"])
+    )
 
     let provisionalRule = selectRoutingRule(
         rules: routingRules?.rules ?? [],
@@ -103,7 +150,7 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
 
     let folderTemplate = nonEmpty(routeRequest?.destination_folder)
         ?? nonEmpty(selectedRule?.destination_template)
-        ?? nonEmpty(localSettings?.default_destination_template)
+        ?? nonEmpty(effectiveLocalSettings?.default_destination_template)
         ?? target.folder_expr
     let resolved = resolveFolderTemplate(
         template: folderTemplate,
@@ -118,7 +165,7 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
         let effectiveNameFormat = nonEmpty(routeRequest?.name_format)
             ?? nonEmpty(selectedRule?.name_format)
             ?? nonEmpty(selectedPreset?.name_format)
-            ?? nonEmpty(localSettings?.default_name_format)
+            ?? nonEmpty(effectiveLocalSettings?.default_name_format)
         resolvedFileName = buildRoutedFileName(
             classCode: effectiveClassCode,
             originalName: originalName,
@@ -140,7 +187,8 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
 
     if let resolvedJob {
         do {
-            if let graphRoute = try await SharePointGraphRouter.routeIfEnabled(
+            if let req,
+               let graphRoute = try await SharePointGraphRouter.routeIfEnabled(
                 job: resolvedJob,
                 target: target,
                 resolvedFolder: resolved,
@@ -166,9 +214,9 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                         "mode": routeMode,
                         "file_name": graphRoute.fileName
                     ],
-                    application: req.application,
-                    database: req.db,
-                    logger: req.logger
+                    application: application,
+                    database: database,
+                    logger: logger
                 )
                 for warning in graphRoute.warnings {
                     await EventPublisher.publish(
@@ -178,37 +226,37 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                             "warning": warning,
                             "mode": routeMode
                         ],
-                        application: req.application,
-                        database: req.db,
-                        logger: req.logger
+                        application: application,
+                        database: database,
+                        logger: logger
                     )
                 }
                 if graphRoute.requiresReview,
-                   let flagged = await req.application.appState.flagNeedsReview(
+                   let flagged = await application.appState.flagNeedsReview(
                     jobId: resolvedJob.id,
                     reason: "graph_cleanup_needs_review"
                    ) {
-                    try await JobPersistenceRepository.upsert(job: flagged, on: req.db)
+                    try await JobPersistenceRepository.upsert(job: flagged, on: database)
                     await EventPublisher.publish(
                         type: "job.needs_review",
                         payload: [
                             "job_id": resolvedJob.id.uuidString,
                             "reason": "graph_cleanup_needs_review"
                         ],
-                        application: req.application,
-                        database: req.db,
-                        logger: req.logger
+                        application: application,
+                        database: database,
+                        logger: logger
                     )
                 }
             } else if let localRoute = try routeLocalFileIfPossible(
                 job: resolvedJob,
                 resolvedFolder: resolved,
                 classCode: effectiveClassCode,
-                localSettings: localSettings,
+                localSettings: effectiveLocalSettings,
                 preferredFileName: resolvedFileName,
                 preset: selectedPreset,
                 requestedExportType: routeRequest?.export_type,
-                logger: req.logger
+                logger: logger
             ) {
                 routeMode = "local"
                 destinationLocalPath = localRoute.destinationPath
@@ -230,9 +278,9 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                         "file_name": localRoute.fileName,
                         "destination_path": localRoute.destinationPath
                     ],
-                    application: req.application,
-                    database: req.db,
-                    logger: req.logger
+                    application: application,
+                    database: database,
+                    logger: logger
                 )
                 for warning in localRoute.warnings {
                     await EventPublisher.publish(
@@ -242,9 +290,9 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                             "warning": warning,
                             "mode": routeMode
                         ],
-                        application: req.application,
-                        database: req.db,
-                        logger: req.logger
+                        application: application,
+                        database: database,
+                        logger: logger
                     )
                 }
                 if let pdfStrategy = localRoute.pdfStrategy {
@@ -255,26 +303,26 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                             "strategy": pdfStrategy,
                             "mode": routeMode
                         ],
-                        application: req.application,
-                        database: req.db,
-                        logger: req.logger
+                        application: application,
+                        database: database,
+                        logger: logger
                     )
                 }
                 if localRoute.requiresReview,
-                   let flagged = await req.application.appState.flagNeedsReview(
+                   let flagged = await application.appState.flagNeedsReview(
                     jobId: resolvedJob.id,
                     reason: "pdfa_fallback_needs_review"
                    ) {
-                    try await JobPersistenceRepository.upsert(job: flagged, on: req.db)
+                    try await JobPersistenceRepository.upsert(job: flagged, on: database)
                     await EventPublisher.publish(
                         type: "job.needs_review",
                         payload: [
                             "job_id": resolvedJob.id.uuidString,
                             "reason": "pdfa_fallback_needs_review"
                         ],
-                        application: req.application,
-                        database: req.db,
-                        logger: req.logger
+                        application: application,
+                        database: database,
+                        logger: logger
                     )
                 }
             }
@@ -285,16 +333,16 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                     "job_id": resolvedJob.id.uuidString,
                     "class_code": effectiveClassCode
                 ],
-                application: req.application,
-                database: req.db,
-                logger: req.logger
+                application: application,
+                database: database,
+                logger: logger
             )
             throw error
         }
     }
 
     if let resolvedJobID,
-       let updatedJob = await req.application.appState.markRouted(
+       let updatedJob = await application.appState.markRouted(
         jobId: resolvedJobID,
         classCode: effectiveClassCode,
         details: buildRouteJobDetails(
@@ -309,7 +357,7 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
             ocrStatus: routeOCRState
         )
        ) {
-        try await JobPersistenceRepository.upsert(job: updatedJob, on: req.db)
+        try await JobPersistenceRepository.upsert(job: updatedJob, on: database)
         await EventPublisher.publish(
             type: "job.routed",
             payload: [
@@ -317,9 +365,9 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 "class_code": effectiveClassCode,
                 "mode": routeMode
             ],
-            application: req.application,
-            database: req.db,
-            logger: req.logger
+            application: application,
+            database: database,
+            logger: logger
         )
     } else {
         await EventPublisher.publish(
@@ -329,9 +377,9 @@ private func handleRouteRequest(req: Request) async throws -> RoutingResponse {
                 "class_code": effectiveClassCode,
                 "mode": routeMode
             ],
-            application: req.application,
-            database: req.db,
-            logger: req.logger
+            application: application,
+            database: database,
+            logger: logger
         )
     }
 
@@ -630,6 +678,20 @@ private func resolveLocalFileURL(raw: String) -> URL? {
     }
     let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     return cwd.appendingPathComponent(raw)
+}
+
+private func mergedLocalRoutingSettings(
+    base: RoutingLocalSettings?,
+    requestedRoot: String?
+) -> RoutingLocalSettings? {
+    guard let requestedRoot = nonEmpty(requestedRoot) else {
+        return base
+    }
+    return RoutingLocalSettings(
+        local_route_root: requestedRoot,
+        default_destination_template: base?.default_destination_template,
+        default_name_format: base?.default_name_format
+    )
 }
 
 private func localRoutingRootDirectory(settings: RoutingLocalSettings?) -> URL {
