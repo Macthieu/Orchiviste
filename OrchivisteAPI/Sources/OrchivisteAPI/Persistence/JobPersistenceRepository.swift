@@ -5,6 +5,8 @@ import Vapor
 enum JobPersistenceRepository {
     static func upsert(job: JobRecord, on db: Database) async throws {
         let tagsJSON = try encodeJSONString(job.tags)
+        let analysisSujetsJSON = try job.analysisSujets.map(encodeJSONString)
+        let analysisChampsJSON = try job.analysisChamps.map(encodeJSONString)
         if let existing = try await JobRow.find(job.id, on: db) {
             existing.status = job.status.rawValue
             existing.fileURL = job.fileURL
@@ -23,6 +25,9 @@ enum JobPersistenceRepository {
             existing.completedAt = job.steps.completed
             existing.suggestedPreset = job.suggestedPreset
             existing.suggestedClassCode = job.suggestedClassCode
+            existing.analysisTypeDoc = job.analysisTypeDoc
+            existing.analysisSujetsJSON = analysisSujetsJSON
+            existing.analysisChampsJSON = analysisChampsJSON
             existing.confidence = job.confidence
             existing.needsReview = job.needsReview
             try await existing.update(on: db)
@@ -30,6 +35,8 @@ enum JobPersistenceRepository {
         }
 
         let row = JobRow(record: job, tagsJSON: tagsJSON)
+        row.analysisSujetsJSON = analysisSujetsJSON
+        row.analysisChampsJSON = analysisChampsJSON
         try await row.create(on: db)
     }
 
@@ -166,6 +173,46 @@ enum JobPersistenceRepository {
         return approved
     }
 
+    static func pauseWorker(id: UUID, on db: Database) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var paused = existing
+        paused.status = .paused
+        try await upsertWorker(paused, on: db)
+        return paused
+    }
+
+    static func resumeWorker(id: UUID, on db: Database) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var resumed = existing
+        resumed.status = .approved
+        try await upsertWorker(resumed, on: db)
+        return resumed
+    }
+
+    static func configureWorker(
+        id: UUID,
+        payload: WorkerConfigUpdateRequest,
+        on db: Database
+    ) async throws -> WorkerRecord? {
+        guard let existing = try await fetchWorker(id: id, on: db) else {
+            return nil
+        }
+        var configured = existing
+        if let capabilities = payload.capabilities {
+            configured.capabilities = capabilities
+        }
+        if let version = payload.version?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !version.isEmpty {
+            configured.version = version
+        }
+        try await upsertWorker(configured, on: db)
+        return configured
+    }
+
     static func heartbeatWorker(
         id: UUID,
         payload: WorkerHeartbeatRequest,
@@ -239,6 +286,8 @@ enum JobPersistenceRepository {
     private static func jobRecord(from row: JobRow) throws -> JobRecord {
         let id = row.id ?? UUID()
         let tags: [String] = (try? decodeJSONValue(row.tagsJSON)) ?? []
+        let analysisSujets: [String]? = row.analysisSujetsJSON.flatMap { try? decodeJSONValue($0) }
+        let analysisChamps: [String: String]? = row.analysisChampsJSON.flatMap { try? decodeJSONValue($0) }
         let status = JobStatus(rawValue: row.status) ?? .pending
         return JobRecord(
             id: id,
@@ -263,6 +312,9 @@ enum JobPersistenceRepository {
             ),
             suggestedPreset: row.suggestedPreset,
             suggestedClassCode: row.suggestedClassCode,
+            analysisTypeDoc: row.analysisTypeDoc,
+            analysisSujets: analysisSujets,
+            analysisChamps: analysisChamps,
             confidence: row.confidence,
             needsReview: row.needsReview
         )

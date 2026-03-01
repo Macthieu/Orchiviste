@@ -58,6 +58,15 @@ final class JobRow: Model, @unchecked Sendable {
     @OptionalField(key: "suggested_class_code")
     var suggestedClassCode: String?
 
+    @OptionalField(key: "analysis_type_doc")
+    var analysisTypeDoc: String?
+
+    @OptionalField(key: "analysis_sujets_json")
+    var analysisSujetsJSON: String?
+
+    @OptionalField(key: "analysis_champs_json")
+    var analysisChampsJSON: String?
+
     @OptionalField(key: "confidence")
     var confidence: Double?
 
@@ -85,6 +94,9 @@ final class JobRow: Model, @unchecked Sendable {
         self.completedAt = record.steps.completed
         self.suggestedPreset = record.suggestedPreset
         self.suggestedClassCode = record.suggestedClassCode
+        self.analysisTypeDoc = record.analysisTypeDoc
+        self.analysisSujetsJSON = nil
+        self.analysisChampsJSON = nil
         self.confidence = record.confidence
         self.needsReview = record.needsReview
     }

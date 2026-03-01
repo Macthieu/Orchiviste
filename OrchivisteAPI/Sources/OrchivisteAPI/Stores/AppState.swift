@@ -39,6 +39,9 @@ actor AppState {
             steps: JobStepTimestamps(ingestReceived: now, previewReady: nil, analysed: nil, routed: nil, completed: nil),
             suggestedPreset: nil,
             suggestedClassCode: nil,
+            analysisTypeDoc: nil,
+            analysisSujets: nil,
+            analysisChamps: nil,
             confidence: nil,
             needsReview: false
         )
@@ -102,6 +105,32 @@ actor AppState {
         job.steps.analysed = Date()
         job.suggestedPreset = analysis.suggested_preset
         job.suggestedClassCode = analysis.suggested_class_code
+        job.analysisTypeDoc = analysis.type_doc
+        job.analysisSujets = analysis.sujets
+        var mergedAnalysisChamps = analysis.champs
+        if let capture = analysis.capture {
+            mergedAnalysisChamps["capture.strategy"] = capture.strategy
+            mergedAnalysisChamps["capture.unit_count"] = "\(capture.unit_count)"
+            mergedAnalysisChamps["capture.section_titles"] = capture.section_titles.joined(separator: " | ")
+            mergedAnalysisChamps["capture.boundary_markers"] = capture.boundary_markers.joined(separator: " | ")
+            mergedAnalysisChamps["capture.warnings"] = capture.warnings.joined(separator: ";")
+            let fieldSources: String = capture.field_sources
+                .keys
+                .sorted()
+                .compactMap { key in
+                    guard let value = capture.field_sources[key] else { return nil }
+                    return key + ":" + value.source
+                }
+                .joined(separator: ";")
+            mergedAnalysisChamps["capture.field_sources"] = fieldSources
+        }
+        if let review = analysis.review {
+            mergedAnalysisChamps["review.needs_review"] = review.needs_review ? "true" : "false"
+            mergedAnalysisChamps["review.reasons"] = review.reasons.joined(separator: ";")
+            mergedAnalysisChamps["review.missing_fields"] = review.missing_fields.joined(separator: ";")
+            mergedAnalysisChamps["review.ambiguous_fields"] = review.ambiguous_fields.joined(separator: ";")
+        }
+        job.analysisChamps = mergedAnalysisChamps
         job.confidence = analysis.confidence
         job.needsReview = needsReview
         job.status = needsReview ? .needs_review : .completed
@@ -115,6 +144,24 @@ actor AppState {
         } else {
             addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
         }
+        return job
+    }
+
+    func flagNeedsReview(jobId: UUID, reason: String) -> JobRecord? {
+        guard var job = jobs[jobId] else { return nil }
+        let now = Date()
+        job.updatedAt = now
+        job.needsReview = true
+        job.status = .needs_review
+        job.analysisChamps = (job.analysisChamps ?? [:]).merging([
+            "review.pending_reason": reason,
+            "review.pending_at": ISO8601DateFormatter().string(from: now)
+        ]) { _, incoming in incoming }
+        jobs[jobId] = job
+        addEvent(type: "job.needs_review", payload: [
+            "job_id": jobId.uuidString,
+            "reason": reason
+        ])
         return job
     }
 
@@ -142,12 +189,53 @@ actor AppState {
         job.needsReview = false
         job.status = .completed
         job.steps.completed = job.steps.completed ?? now
+        var champs = job.analysisChamps ?? [:]
+
         if let correctedClassCode = request.corrected_class_code, !correctedClassCode.isEmpty {
             job.suggestedClassCode = correctedClassCode
+            champs["review.corrected.class_code"] = correctedClassCode
         }
         if let correctedPreset = request.corrected_preset, !correctedPreset.isEmpty {
             job.suggestedPreset = correctedPreset
+            champs["review.corrected.preset"] = correctedPreset
         }
+        if let correctedFields = request.corrected_fields {
+            for (rawKey, rawValue) in correctedFields {
+                let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !key.isEmpty, !value.isEmpty else { continue }
+                champs["review.corrected.\(key)"] = value
+                switch key.lowercased() {
+                case "type_doc":
+                    job.analysisTypeDoc = value
+                case "sujets", "sujet":
+                    let sujets = value
+                        .split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "|" })
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    if !sujets.isEmpty {
+                        job.analysisSujets = sujets
+                    }
+                case "class_code":
+                    if request.corrected_class_code?.isEmpty != false {
+                        job.suggestedClassCode = value
+                    }
+                case "preset", "preset_id":
+                    if request.corrected_preset?.isEmpty != false {
+                        job.suggestedPreset = value
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        if let comment = request.comment?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !comment.isEmpty {
+            champs["review.comment"] = comment
+        }
+        champs["review.reviewed_at"] = ISO8601DateFormatter().string(from: now)
+        job.analysisChamps = champs
+
         jobs[jobId] = job
         addEvent(type: "job.reviewed", payload: ["job_id": jobId.uuidString])
         addEvent(type: "job.completed", payload: ["job_id": jobId.uuidString])
@@ -156,6 +244,10 @@ actor AppState {
 
     func preview(jobId: UUID) -> PreviewRecord? {
         previews[jobId]
+    }
+
+    func cachePreview(_ preview: PreviewRecord) {
+        previews[preview.jobId] = preview
     }
 
     func analysis(jobId: UUID) -> AnalysisResponse? {
@@ -219,6 +311,36 @@ actor AppState {
         return worker
     }
 
+    func pauseWorker(id: UUID) -> WorkerRecord? {
+        guard var worker = workers[id] else { return nil }
+        worker.status = .paused
+        workers[id] = worker
+        addEvent(type: "worker.paused", payload: ["worker_id": id.uuidString])
+        return worker
+    }
+
+    func resumeWorker(id: UUID) -> WorkerRecord? {
+        guard var worker = workers[id] else { return nil }
+        worker.status = .approved
+        workers[id] = worker
+        addEvent(type: "worker.resumed", payload: ["worker_id": id.uuidString])
+        return worker
+    }
+
+    func configureWorker(id: UUID, payload: WorkerConfigUpdateRequest) -> WorkerRecord? {
+        guard var worker = workers[id] else { return nil }
+        if let capabilities = payload.capabilities {
+            worker.capabilities = capabilities
+        }
+        if let version = payload.version?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !version.isEmpty {
+            worker.version = version
+        }
+        workers[id] = worker
+        addEvent(type: "worker.configured", payload: ["worker_id": id.uuidString])
+        return worker
+    }
+
     func worker(id: UUID) -> WorkerRecord? {
         workers[id]
     }
@@ -235,6 +357,7 @@ actor AppState {
 
     func heartbeatWorker(id: UUID, payload: WorkerHeartbeatRequest) -> WorkerRecord? {
         guard var worker = workers[id] else { return nil }
+        guard worker.status == .approved else { return nil }
         worker.lastSeen = Date()
         worker.version = payload.version ?? worker.version
         worker.load = payload.load ?? worker.load

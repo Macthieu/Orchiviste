@@ -32,9 +32,10 @@ enum IngestPipelineProcessor {
                 )
             }
 
+            let analysisFileID = analysisFileIdentity(for: job)
             let analysisRequest = AnalysisRequest(
-                file_id: job.id.uuidString,
-                text: preview.textPages[1],
+                file_id: analysisFileID,
+                text: analysisText(preview: preview, job: job),
                 source: job.source,
                 lang: nil,
                 hints: nil,
@@ -88,6 +89,58 @@ enum IngestPipelineProcessor {
             return persisted
         }
         return nil
+    }
+
+    private static func mergedPreviewText(_ preview: PreviewRecord) -> String? {
+        let ordered = preview.textPages
+            .sorted { $0.key < $1.key }
+            .map(\.value)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.localizedCaseInsensitiveContains("Texte d'aperçu indisponible") }
+            .filter { !$0.isEmpty }
+        guard !ordered.isEmpty else {
+            return nil
+        }
+        let merged = ordered.joined(separator: "\n\u{000C}\n")
+        return String(merged.prefix(analysisTextLimit()))
+    }
+
+    private static func analysisText(preview: PreviewRecord, job: JobRecord) -> String? {
+        let mergedPreview = mergedPreviewText(preview)
+        let fileName = URL(fileURLWithPath: job.fileURL).lastPathComponent
+        let tags = job.tags.joined(separator: " ")
+        let context = [
+            nonEmptyText("file_name: \(fileName)"),
+            nonEmptyText("tags: \(tags)"),
+            mergedPreview
+        ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !context.isEmpty else {
+            return nil
+        }
+        return String(context.prefix(analysisTextLimit()))
+    }
+
+    private static func analysisFileIdentity(for job: JobRecord) -> String {
+        let fileName = URL(fileURLWithPath: job.fileURL).lastPathComponent
+        guard !fileName.isEmpty else {
+            return job.id.uuidString
+        }
+        return fileName
+    }
+
+    private static func analysisTextLimit() -> Int {
+        max(2_000, Int(Environment.get("ORCHIVISTE_ANALYSE_TEXT_MAX_CHARS") ?? "120000") ?? 120000)
+    }
+
+    private static func nonEmptyText(_ raw: String?) -> String? {
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 }
 

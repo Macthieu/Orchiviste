@@ -1,0 +1,5 @@
+{
+  "default_destination_template" : "Archives/{year}/{class_code}/{type_doc}",
+  "local_route_root" : "/data/routed",
+  "default_name_format" : "{class_code}-{type_doc}-{sujet}-{date}-{numero}"
+}
