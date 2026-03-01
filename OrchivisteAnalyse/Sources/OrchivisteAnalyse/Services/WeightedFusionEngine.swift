@@ -35,6 +35,20 @@ struct WeightedFusionEngine: Sendable {
                 explanations: AnalysisExplanations(
                     matched_rules: ["fusion_no_provider_output"],
                     top_nodes: ["GEN-000"]
+                ),
+                capture: AnalysisCapture(
+                    strategy: "fallback_without_provider",
+                    unit_count: 1,
+                    section_titles: [],
+                    boundary_markers: [],
+                    field_sources: [:],
+                    warnings: ["no_provider_output"]
+                ),
+                review: AnalysisReview(
+                    needs_review: true,
+                    reasons: ["no_provider_output"],
+                    missing_fields: [],
+                    ambiguous_fields: []
                 )
             )
         }
@@ -45,6 +59,8 @@ struct WeightedFusionEngine: Sendable {
 
         let allRules = candidates.flatMap(\.matchedRules)
         let allNodes = candidates.flatMap(\.topNodes)
+        let mergedReview = mergeReview(candidates: candidates)
+        let mergedCapture = mergeCapture(selected: selected, candidates: candidates)
 
         return AnalysisResponse(
             type_doc: selected.typeDoc,
@@ -60,7 +76,9 @@ struct WeightedFusionEngine: Sendable {
             explanations: AnalysisExplanations(
                 matched_rules: allRules + ["fusion_selected_\(selected.provider)"],
                 top_nodes: allNodes.isEmpty ? (selected.suggestedClassCode.map { [$0] } ?? ["GEN-000"]) : allNodes
-            )
+            ),
+            capture: mergedCapture,
+            review: mergedReview
         )
     }
 
@@ -69,5 +87,55 @@ struct WeightedFusionEngine: Sendable {
             return candidate.confidence
         }
         return candidate.confidence * provider.weight
+    }
+
+    private func mergeReview(candidates: [ProviderCandidate]) -> AnalysisReview? {
+        let reviews = candidates.compactMap(\.review)
+        guard !reviews.isEmpty else {
+            return nil
+        }
+        let reasons = orderedUnique(reviews.flatMap(\.reasons))
+        let missingFields = orderedUnique(reviews.flatMap(\.missing_fields))
+        let ambiguousFields = orderedUnique(reviews.flatMap(\.ambiguous_fields))
+        return AnalysisReview(
+            needs_review: reviews.contains(where: \.needs_review),
+            reasons: reasons,
+            missing_fields: missingFields,
+            ambiguous_fields: ambiguousFields
+        )
+    }
+
+    private func mergeCapture(
+        selected: ProviderCandidate,
+        candidates: [ProviderCandidate]
+    ) -> AnalysisCapture? {
+        guard let selectedCapture = selected.capture else {
+            return candidates.compactMap(\.capture).first
+        }
+        let warnings = orderedUnique(candidates.compactMap(\.capture).flatMap(\.warnings))
+        let fieldSources = candidates.compactMap(\.capture).reduce(into: selectedCapture.field_sources) { partial, capture in
+            for (key, value) in capture.field_sources where partial[key] == nil {
+                partial[key] = value
+            }
+        }
+        return AnalysisCapture(
+            strategy: selectedCapture.strategy,
+            unit_count: selectedCapture.unit_count,
+            section_titles: selectedCapture.section_titles,
+            boundary_markers: selectedCapture.boundary_markers,
+            field_sources: fieldSources,
+            warnings: warnings
+        )
+    }
+
+    private func orderedUnique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            if seen.insert(value).inserted {
+                result.append(value)
+            }
+        }
+        return result
     }
 }

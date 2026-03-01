@@ -148,7 +148,9 @@ private func buildCandidate(
         suggestedPreset: response.suggested_preset,
         suggestedClassCode: response.suggested_class_code,
         matchedRules: rules,
-        topNodes: response.explanations.top_nodes
+        topNodes: response.explanations.top_nodes,
+        capture: response.capture,
+        review: response.review
     )
 }
 
