@@ -97,6 +97,7 @@ else
 fi
 
 ./scripts/check_openapi_mvp.sh
+./scripts/smoke_analyse_semantic.sh
 ./scripts/smoke_mvp.sh
 ./scripts/smoke_metrics.sh
 

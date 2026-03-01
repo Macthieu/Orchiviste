@@ -27,7 +27,12 @@ UI (SSR Leaf) :
 - alias : http://127.0.0.1:28780/u
 - agents : http://127.0.0.1:28780/ui/workers
 - préréglages : http://127.0.0.1:28780/ui/presets
+- téléchargement de l'exemple de preset : `GET /v1/presets/example/download`
 - la visionneuse utilise l'aperçu lazy-load (`/v1/preview/...`) et ne télécharge que sur action explicite
+- important : l'aperçu est une image JPG (sélection de texte impossible directement dans la page).  
+  Le texte OCR est disponible via `GET /v1/preview/{id}/text`, et les PDF routés peuvent être régénérés en PDF sélectionnable.
+- téléchargement PDF OCR explicite : `GET /v1/jobs/{id}/download/searchable` (bouton dans la page tâche `/ui/jobs/{id}`)
+- apprentissage d'un preset depuis un dossier : `POST /v1/presets/learn`
 
 Docker Compose :
 - démarrage standard : `docker compose up -d`
@@ -42,6 +47,7 @@ Scripts d'exploitation locale recommandés :
 - démarrage avec rebuild forcé : `./scripts/dev_up.sh --build`
 - fallback builder classique (si BuildKit instable) : `./scripts/dev_up.sh --build --classic-builder`
 - contournement blocage `docker-credential-desktop` : `./scripts/dev_up.sh --anon-auth`
+- timeout ping daemon Docker : `ORCHIVISTE_DOCKER_INFO_TIMEOUT=8 ./scripts/dev_up.sh`
 - rebuild ciblé plus rapide : `docker compose build api` (ou `analyse`, `worker`)
 - préflight local (mode rapide/complet) : `./scripts/preflight_local.sh --quick` ou `./scripts/preflight_local.sh --full`
 - validation release en une commande : `./scripts/validate_release.sh`
@@ -52,17 +58,46 @@ Scripts d'exploitation locale recommandés :
 
 Tests fumée MVP :
 - `docker compose up -d`
+- test capture intelligente Analyse : `./scripts/smoke_analyse_semantic.sh`
 - `./scripts/smoke_mvp.sh`
 - surcharge optionnelle : `ORCHIVISTE_API_BASE=http://127.0.0.1:28780 ./scripts/smoke_mvp.sh`
 - test webhook HMAC bout en bout : `./scripts/smoke_webhook_hmac.sh`
 - contrôle OpenAPI MVP (endpoints + webhook) : `./scripts/check_openapi_mvp.sh`
 - exécution groupée recommandée : `./scripts/preflight_local.sh --full`
 - alias de compatibilité : `./scripts/validate_release.sh`
+- alias OpenAPI racine : `GET /openapi.json` (conserve aussi `GET /v1/openapi.json`)
+
+Support multi-formats MVP :
+- PDF : preview image + texte natif, OCR fallback si necessaire
+- Word / Excel / PowerPoint (`.docx`, `.xlsx`, `.pptx`) : extraction texte OOXML sans dependance lourde, conversion preview Office -> PDF si `soffice` est disponible
+- Images (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`) : OCR direct + preview image/placeholder selon la plateforme
+- l'ingestion UI locale et par dossier accepte maintenant ces formats
+
+Preset JSON riche :
+- lecture/ecriture compatible avec l'ancien format `id/name/name_format/class_code/postprocess`
+- support du format enrichi (`preset_id`, `detect`, `extract`, `naming`, `classification`, `export`, `review`)
+- exemple modifiable sur disque : `OrchivisteAPI/configs/presets/example-resolution.json`
+- recuperation d'un preset : `GET /v1/presets/{id}`
+- apprentissage d'un draft depuis un dossier : `POST /v1/presets/learn`
+
+Analyse semantique / HIL :
+- `POST /v1/analyse` renvoie maintenant, en plus du contrat MVP initial, des blocs optionnels `capture` et `review`
+- `capture` expose la strategie (`native_text_semantic` / `ocr_semantic_assisted`), les unites detectees, les titres de section et la provenance des champs
+- `review` expose `needs_review`, les raisons (`low_confidence`, `multi_document_units`, `missing_required_fields`, etc.) et les champs ambigus/manquants
 
 Tests de renommage PDF (local -> routage) :
 - fichier unique : `./scripts/test_pdf_rename.sh "/chemin/vers/fichier.pdf"`
 - lot de fichiers ou dossier : `./scripts/test_pdf_rename_batch.sh "/chemin/dossier-ou-fichier"`
 - rapport CSV batch (optionnel) : `ORCHIVISTE_BATCH_REPORT=/tmp/rename-report.csv ./scripts/test_pdf_rename_batch.sh "/chemin/dossier"`
+- surcharge dossier/nom à la volée : `ORCHIVISTE_ROUTE_DESTINATION_FOLDER='Archives/{year}/{class_code}/{type_doc}/{sujet}' ORCHIVISTE_ROUTE_NAME_FORMAT='{class_code}-{type_doc}-{sujet}-{date}-{numero}' ./scripts/test_pdf_rename.sh "/chemin/fichier.pdf"`
+- règles automatiques par type/sujet :
+  - formulaire guidé UI : `http://127.0.0.1:28780/ui/presets` section **Ajouter une règle type/sujet**
+  - mode JSON avancé : section **Règles automatiques type/sujet (JSON)** (`configs/analysis/routing/local.rules.json`)
+  - en Docker, ces fichiers sont persistés sur l'hôte via le montage `./OrchivisteAPI/configs:/app/OrchivisteAPI/configs`
+- chemin des PDF traités (hôte) : `${ORCHIVISTE_ROUTED_EXPORT_DIR:-./runtime/routed}`
+- récupération des anciens PDF stockés dans le volume Docker : `./scripts/recover_routed_from_volume.sh`
+- lister les derniers fichiers réellement routés (côté hôte) : `./scripts/show_routed_files.sh 50`
+- les scripts `test_pdf_rename*.sh` fonctionnent depuis n'importe quel dossier (pas besoin d'être à la racine)
 
 Dépannage Docker :
 - en cas de blocage sur `error getting credentials` ou `docker-credential-desktop get`, exécuter : `ORCHIVISTE_DOCKER_ANON_AUTH=1 ./scripts/dev_up.sh --build`
@@ -88,6 +123,33 @@ Analyse :
 - `ORCHIVISTE_ANALYSE_HOST` (defaut `127.0.0.1`, utiliser `0.0.0.0` en Docker)
 - `ORCHIVISTE_ANALYSE_URL` (URL cible de proxy pour l'API)
 - `ORCHIVISTE_ANALYSE_PORT` (defaut `28781`)
+- fournisseur Coginov (optionnel) :
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_ENABLED` (`0`/`1`)
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_URL`
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_TOKEN`
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_TIMEOUT_MS`
+  - `ORCHIVISTE_ANALYSE_PROVIDER_COGINOV_MODEL`
+- OCR fallback (API) :
+  - `ORCHIVISTE_OCR_ENABLED` (`1` par défaut)
+  - `ORCHIVISTE_OCR_LANG` (`fra+eng` par défaut)
+  - `ORCHIVISTE_OCR_MAX_PAGES` (`12` par défaut)
+  - `ORCHIVISTE_OCR_DPI` (`220` par défaut)
+  - `ORCHIVISTE_OCR_MIN_TEXT_CHARS` (`140` par défaut; sous ce seuil, OCR tenté)
+- OCR PDF sélectionnable au routage local :
+  - `ORCHIVISTE_ROUTE_OCR_SEARCHABLE_PDF` (`1` par défaut)
+  - `ORCHIVISTE_ROUTE_OCR_LANG` (hérite de `ORCHIVISTE_OCR_LANG` par défaut)
+  - `ORCHIVISTE_ROUTE_OCR_MAX_PAGES` (hérite de `ORCHIVISTE_OCR_MAX_PAGES`)
+  - `ORCHIVISTE_ROUTE_OCR_DPI` (hérite de `ORCHIVISTE_OCR_DPI`)
+  - `ORCHIVISTE_ROUTE_OCR_MIN_TEXT_CHARS` (hérite de `ORCHIVISTE_OCR_MIN_TEXT_CHARS`)
+- conversion Office optionnelle :
+  - `ORCHIVISTE_OFFICE_CONVERSION_ENABLED` (`1` par défaut)
+  - installer `soffice` / LibreOffice si vous voulez un preview PDF reel pour `docx/xlsx/pptx`
+- export PDF/A :
+  - `ORCHIVISTE_EXPORT_PDFA_ENABLED` (`0` par défaut, peut etre active par preset)
+  - `ORCHIVISTE_EXPORT_PREFERRED_PDF_FORMAT` (`PDF/A-2b`)
+  - `ORCHIVISTE_PDFA_FAILURE_NEEDS_REVIEW` (`0` par défaut; si `1`, un fallback PDF normal force `needs_review`)
+  - Ghostscript est requis pour l'export PDF/A (`gs`, installe dans l'image Docker API)
+  - override explicite possible au routage : `POST /v1/route/{file_id}` avec `{ "export_type": "pdfa" }`
 
 Routage SharePoint Graph (optionnel) :
 - `ORCHIVISTE_GRAPH_ENABLED` = `1`

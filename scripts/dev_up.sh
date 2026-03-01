@@ -11,6 +11,7 @@ FALLBACK_CLASSIC_BUILDER="${ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER:-1}"
 ANON_AUTH="${ORCHIVISTE_DOCKER_ANON_AUTH:-0}"
 DOCKER_CONFIG_ORIGINAL="${DOCKER_CONFIG:-}"
 DOCKER_CONFIG_OVERRIDE=""
+DOCKER_INFO_TIMEOUT="${ORCHIVISTE_DOCKER_INFO_TIMEOUT:-8}"
 
 usage() {
   cat <<'EOF'
@@ -28,6 +29,7 @@ Variables d'environnement:
   ORCHIVISTE_DEV_CLASSIC_BUILDER=1
   ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER=0|1
   ORCHIVISTE_DEV_START_TIMEOUT=120
+  ORCHIVISTE_DOCKER_INFO_TIMEOUT=8
   ORCHIVISTE_DOCKER_ANON_AUTH=1
 EOF
 }
@@ -67,10 +69,31 @@ need_cmd() {
   fi
 }
 
+docker_info_ok() {
+  local timeout_seconds="${1:-8}"
+  python3 - "$timeout_seconds" <<'PY'
+import subprocess
+import sys
+
+timeout = max(1, int(sys.argv[1]))
+try:
+    subprocess.run(
+        ["docker", "info"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=timeout,
+        check=True,
+    )
+except Exception:
+    sys.exit(1)
+sys.exit(0)
+PY
+}
+
 wait_for_docker_daemon() {
   local deadline=$((SECONDS + START_TIMEOUT))
 
-  if docker info >/dev/null 2>&1; then
+  if docker_info_ok "$DOCKER_INFO_TIMEOUT"; then
     return 0
   fi
 
@@ -80,7 +103,7 @@ wait_for_docker_daemon() {
   fi
 
   while (( SECONDS < deadline )); do
-    if docker info >/dev/null 2>&1; then
+    if docker_info_ok "$DOCKER_INFO_TIMEOUT"; then
       return 0
     fi
     sleep 2

@@ -24,6 +24,7 @@ with open(doc_path, "r", encoding="utf-8") as f:
     spec = json.load(f)
 
 required_paths = {
+    "/openapi.json": ["get"],
     "/v1/ingest": ["post"],
     "/v1/jobs/{id}": ["get"],
     "/v1/jobs/{id}/cancel": ["post"],
@@ -31,6 +32,9 @@ required_paths = {
     "/v1/workers/{id}/approve": ["post"],
     "/v1/workers/{id}/heartbeat": ["post"],
     "/v1/presets": ["get", "post"],
+    "/v1/presets/{id}": ["get"],
+    "/v1/presets/example/download": ["get"],
+    "/v1/presets/learn": ["post"],
     "/v1/analyse": ["post"],
     "/v1/preview/{id}/thumbnail": ["get"],
     "/v1/preview/{id}/page/{n}.jpg": ["get"],
@@ -81,7 +85,12 @@ else:
         errors.append("parameters du webhook invalides")
         params = []
     names = {str(p.get("name", "")).lower() for p in params if isinstance(p, dict)}
-    for header in ("x-orchiviste-signature", "x-orchiviste-timestamp"):
+    for header in (
+        "x-orchiviste-signature",
+        "x-orchiviste-timestamp",
+        "x-orchiviste-event-type",
+        "x-orchiviste-event-id",
+    ):
         if header not in names:
             errors.append(f"header webhook manquant: {header}")
         else:
