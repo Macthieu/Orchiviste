@@ -75,6 +75,29 @@
             background: #fff;
             color: var(--ink);
         }
+        .path-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .path-row input {
+            flex: 1;
+        }
+        .path-btn {
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            background: #ebf8f4;
+            color: var(--accent);
+            font-weight: 700;
+            padding: 8px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .path-btn-server {
+            border-color: var(--border);
+            background: #fff;
+            color: var(--muted);
+        }
         .upload-form button {
             border: 1px solid var(--accent);
             color: #fff;
@@ -88,6 +111,16 @@
             color: var(--warning);
             font-weight: 700;
             margin-top: 10px;
+        }
+        .notice {
+            color: var(--accent);
+            font-weight: 700;
+            margin-top: 10px;
+        }
+        .help {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 8px;
         }
         .kpi {
             font-size: 28px;
@@ -113,6 +146,47 @@
         .status-needs_review { color: var(--warning); font-weight: 700; }
         .status-completed { color: var(--accent); font-weight: 700; }
         .mono { font-family: "SF Mono", Menlo, monospace; font-size: 12px; }
+        .picker-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(25, 25, 25, 0.3);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .picker {
+            width: min(900px, 94vw);
+            max-height: 80vh;
+            overflow: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .picker-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .picker-toolbar button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 9px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .picker-list button {
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 6px;
+            background: #fff;
+            cursor: pointer;
+        }
         @media (max-width: 980px) {
             .upload-form {
                 grid-template-columns: 1fr;
@@ -125,6 +199,7 @@
     <strong>Orchiviste MVP</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
@@ -144,17 +219,52 @@
     </section>
 
     <section class="card upload-card">
-        <h2>Importer un PDF local</h2>
+        <h2>Importer un document local</h2>
         <p>L'import est explicite: le fichier est copié côté serveur puis injecté dans la file d'ingestion.</p>
         <form class="upload-form" action="/ui/ingest/local" method="post" enctype="multipart/form-data">
-            <label>Fichier PDF
-                <input type="file" name="pdf" accept="application/pdf" required>
+            <label>Fichier
+                <input type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" required>
             </label>
             <label>Étiquettes (optionnel)
                 <input type="text" name="tags" placeholder="pv, comité, facture">
             </label>
             <button type="submit">Importer et analyser</button>
         </form>
+        <div class="help">
+            Mode Docker: le serveur lit les dossiers montés, par défaut <code>/data/inbox</code> (entrée) et <code>/data/routed</code> (sortie).
+        </div>
+        <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
+        <h3 style="margin: 0 0 8px;">Importer un dossier local (lot)</h3>
+        <form class="upload-form" action="/ui/ingest/folder" method="post" enctype="multipart/form-data">
+            <label>Dossier d'entrée (serveur ou local)
+                <div class="path-row">
+                    <input id="inputFolderField" type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox (laisser vide pour un dossier local)">
+                    <button class="path-btn" type="button" onclick="openLocalFolderDialog('inputFolderUpload')">Choisir</button>
+                    <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('inputFolderField')">Serveur</button>
+                </div>
+                <input id="inputFolderUpload" type="file" name="folder_files" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple style="display:none" onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint')">
+                <div id="inputFolderHint" class="help">Le bouton "Choisir" ouvre le sélecteur de dossier local (ton ordinateur).</div>
+            </label>
+            <label>Dossier de sortie (optionnel)
+                <div class="path-row">
+                    <input id="outputFolderField" type="text" name="output_root" value="#(ingest_default_output_folder)" placeholder="/data/routed">
+                    <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('outputFolderField')">Serveur</button>
+                </div>
+            </label>
+            <label>Étiquettes (optionnel)
+                <input type="text" name="tags" placeholder="ville, résolution, conseil">
+            </label>
+            <label>Maximum de fichiers
+                <input type="number" name="max_files" min="1" max="500" value="50">
+            </label>
+            <label>Récursif
+                <input type="checkbox" name="recursive" value="1" checked>
+            </label>
+            <button type="submit">Importer le dossier</button>
+        </form>
+        #if(upload_notice):
+        <p class="notice">#(upload_notice)</p>
+        #endif
         #if(upload_error):
         <p class="error">#(upload_error)</p>
         #endif
@@ -186,5 +296,135 @@
         </tbody>
     </table>
 </main>
+<div id="folderPickerOverlay" class="picker-overlay" onclick="closeFolderPicker(event)">
+    <div class="picker" onclick="event.stopPropagation()">
+        <h3>Sélectionner un dossier</h3>
+        <div class="picker-toolbar">
+            <button type="button" onclick="pickerGoParent()">Parent</button>
+            <span id="pickerCurrent" class="mono"></span>
+        </div>
+        <div id="pickerRoots" class="picker-toolbar"></div>
+        <div id="pickerList" class="picker-list"></div>
+        <div class="picker-toolbar">
+            <button type="button" onclick="applyPickedFolder()">Utiliser ce dossier</button>
+            <button type="button" onclick="closeFolderPicker()">Fermer</button>
+        </div>
+    </div>
+</div>
+<script>
+let pickerTargetInputId = null;
+let pickerCurrentPath = null;
+let pickerParentPath = null;
+let pickerRoots = [];
+
+function openLocalFolderDialog(fileInputId) {
+    const picker = document.getElementById(fileInputId);
+    if (!picker) {
+        return;
+    }
+    picker.value = "";
+    picker.click();
+}
+
+function handleLocalFolderSelection(fileInputId, pathInputId, hintId) {
+    const picker = document.getElementById(fileInputId);
+    const pathInput = document.getElementById(pathInputId);
+    const hint = document.getElementById(hintId);
+    if (!picker) {
+        return;
+    }
+
+    const files = Array.from(picker.files || []);
+    if (!files.length) {
+        if (hint) {
+            hint.textContent = "Aucun dossier local sélectionné.";
+        }
+        return;
+    }
+
+    const supportedCount = files.filter((file) => /\.(pdf|docx|xlsx|pptx|png|jpe?g|tiff?)$/i.test(file.name)).length;
+    const firstRelativePath = files[0].webkitRelativePath || files[0].name;
+    const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
+
+    if (pathInput) {
+        pathInput.value = "";
+    }
+    if (hint) {
+        hint.textContent = `Dossier local selectionne: ${folderName} (${supportedCount} document(s) supporte(s)).`;
+    }
+}
+
+function openFolderPicker(inputId) {
+    pickerTargetInputId = inputId;
+    const input = document.getElementById(inputId);
+    const startPath = input && input.value ? input.value : "";
+    document.getElementById("folderPickerOverlay").style.display = "flex";
+    loadFolderList(startPath);
+}
+
+function closeFolderPicker(event) {
+    if (event && event.target && event.target.id !== "folderPickerOverlay") {
+        return;
+    }
+    document.getElementById("folderPickerOverlay").style.display = "none";
+}
+
+async function loadFolderList(path) {
+    const query = path ? `?path=${encodeURIComponent(path)}` : "";
+    const res = await fetch(`/ui/fs/list${query}`);
+    if (!res.ok) {
+        alert(`Impossible de lister les dossiers (${res.status}).`);
+        return;
+    }
+    const data = await res.json();
+    pickerCurrentPath = data.current;
+    pickerParentPath = data.parent || null;
+    pickerRoots = data.roots || [];
+    document.getElementById("pickerCurrent").textContent = pickerCurrentPath;
+    renderPickerRoots();
+    renderPickerList(data.directories || []);
+}
+
+function renderPickerRoots() {
+    const rootContainer = document.getElementById("pickerRoots");
+    rootContainer.innerHTML = "";
+    for (const root of pickerRoots) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `Racine: ${root}`;
+        btn.onclick = () => loadFolderList(root);
+        rootContainer.appendChild(btn);
+    }
+}
+
+function renderPickerList(entries) {
+    const list = document.getElementById("pickerList");
+    list.innerHTML = "";
+    for (const entry of entries) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `${entry.name} (${entry.path})`;
+        btn.onclick = () => loadFolderList(entry.path);
+        list.appendChild(btn);
+    }
+}
+
+function pickerGoParent() {
+    if (pickerParentPath) {
+        loadFolderList(pickerParentPath);
+    }
+}
+
+function applyPickedFolder() {
+    if (!pickerTargetInputId || !pickerCurrentPath) {
+        return;
+    }
+    const input = document.getElementById(pickerTargetInputId);
+    if (input) {
+        input.value = pickerCurrentPath;
+    }
+    closeFolderPicker();
+}
+</script>
 </body>
 </html>

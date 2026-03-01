@@ -2,6 +2,13 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+#if canImport(PDFKit) && canImport(AppKit)
+import PDFKit
+import AppKit
+#endif
+#if canImport(Vision)
+import Vision
+#endif
 import NIOCore
 import NIOPosix
 import RediStack
@@ -21,6 +28,8 @@ private struct WorkerConfiguration {
     let queueKey: String
     let redisURL: URL?
     let simulatedProcessingSeconds: Double
+    let ocrMode: String
+    let ocrArtifactDirectory: String?
 
     static func fromEnvironment(_ env: [String: String]) -> WorkerConfiguration {
         let apiBase = env["ORCHIVISTE_API_BASE"] ?? "http://127.0.0.1:28780"
@@ -44,9 +53,15 @@ private struct WorkerConfiguration {
         let autoApprove = env["ORCHIVISTE_WORKER_AUTO_APPROVE"] == "1"
         let waitForApproval = env["ORCHIVISTE_WORKER_WAIT_FOR_APPROVAL"] != "0"
         let enableQueue = env["ORCHIVISTE_WORKER_ENABLE_QUEUE"] == "1"
-        let queueKey = env["ORCHIVISTE_WORKER_QUEUE_KEY"] ?? "orchiviste:worker:ingest"
+        let queueKey = env["ORCHIVISTE_WORKER_QUEUE_KEY"] ?? "orchiviste:ingest"
         let redisURL = env["ORCHIVISTE_REDIS_URL"].flatMap(URL.init(string:))
         let simulatedProcessingSeconds = Double(env["ORCHIVISTE_WORKER_SIMULATED_PROCESSING_SECONDS"] ?? "1.0") ?? 1.0
+        let rawOCRMode = (env["ORCHIVISTE_WORKER_OCR_MODE"] ?? "auto")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let allowedOCRModes: Set<String> = ["off", "auto", "pdf", "vision"]
+        let ocrMode = allowedOCRModes.contains(rawOCRMode) ? rawOCRMode : "auto"
+        let ocrArtifactDirectory = nonEmpty(env["ORCHIVISTE_WORKER_OCR_ARTIFACT_DIR"])
 
         return WorkerConfiguration(
             apiBaseURL: apiBaseURL,
@@ -61,7 +76,9 @@ private struct WorkerConfiguration {
             enableQueue: enableQueue,
             queueKey: queueKey,
             redisURL: redisURL,
-            simulatedProcessingSeconds: simulatedProcessingSeconds
+            simulatedProcessingSeconds: simulatedProcessingSeconds,
+            ocrMode: ocrMode,
+            ocrArtifactDirectory: ocrArtifactDirectory
         )
     }
 
@@ -285,6 +302,150 @@ private enum WorkerStateStore {
     }
 }
 
+private struct OCRPageArtifact: Codable {
+    let page: Int
+    let source: String
+    let text: String
+}
+
+private struct OCRExtractionArtifact: Codable {
+    let job_id: String
+    let file_url: String
+    let mode: String
+    let extracted_at: Date
+    let pages: [OCRPageArtifact]
+}
+
+private enum WorkerOCR {
+    static func extract(fileURLString: String, mode: String) -> [OCRPageArtifact]? {
+        guard mode != "off" else {
+            return nil
+        }
+        guard let fileURL = resolveInputFileURL(raw: fileURLString),
+              FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        guard fileURL.pathExtension.lowercased() == "pdf" else {
+            return nil
+        }
+
+        #if canImport(PDFKit) && canImport(AppKit)
+        guard let document = PDFDocument(url: fileURL) else {
+            return nil
+        }
+        let pages = max(1, document.pageCount)
+        var results: [OCRPageArtifact] = []
+        for index in 0..<pages {
+            let pageNumber = index + 1
+            guard let page = document.page(at: index) else {
+                results.append(OCRPageArtifact(page: pageNumber, source: "none", text: ""))
+                continue
+            }
+
+            var extracted = ""
+            var source = "none"
+
+            if mode == "auto" || mode == "pdf" {
+                if let text = page.string?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                   !text.isEmpty {
+                    extracted = text
+                    source = "pdf_text"
+                }
+            }
+
+            if extracted.isEmpty && (mode == "auto" || mode == "vision") {
+                if let ocr = recognizeTextWithVision(page: page),
+                   !ocr.isEmpty {
+                    extracted = ocr
+                    source = "vision_ocr"
+                }
+            }
+
+            results.append(
+                OCRPageArtifact(
+                    page: pageNumber,
+                    source: source,
+                    text: extracted
+                )
+            )
+        }
+        return results
+        #else
+        return nil
+        #endif
+    }
+
+    static func persist(
+        artifact: OCRExtractionArtifact,
+        directory: String
+    ) {
+        do {
+            let dirURL = URL(fileURLWithPath: directory, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: dirURL,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+            let outURL = dirURL.appendingPathComponent("\(artifact.job_id).ocr.json")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(artifact)
+            try data.write(to: outURL, options: .atomic)
+        } catch {
+            print("WARN: unable to persist OCR artifact: \(error)")
+        }
+    }
+
+    private static func resolveInputFileURL(raw: String) -> URL? {
+        if let parsed = URL(string: raw), parsed.isFileURL {
+            return parsed
+        }
+        if raw.hasPrefix("/") {
+            return URL(fileURLWithPath: raw)
+        }
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        return cwd.appendingPathComponent(raw)
+    }
+
+    #if canImport(PDFKit) && canImport(AppKit) && canImport(Vision)
+    private static func recognizeTextWithVision(page: PDFPage) -> String? {
+        let pageBounds = page.bounds(for: .mediaBox)
+        let safeWidth = max(1, pageBounds.width)
+        let ratio = max(0.2, pageBounds.height / safeWidth)
+        let size = NSSize(width: 1600, height: max(600, 1600 * ratio))
+        let image = page.thumbnail(of: size, for: .mediaBox)
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+
+        let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+        do {
+            try handler.perform([request])
+            guard let observations = request.results else {
+                return nil
+            }
+            let lines = observations.compactMap { observation in
+                observation.topCandidates(1).first?.string
+            }
+            let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
+        } catch {
+            return nil
+        }
+    }
+    #else
+    private static func recognizeTextWithVision(page: Any) -> String? {
+        nil
+    }
+    #endif
+}
+
 private final class OptionalQueueConsumer {
     private let key: RedisKey
     private let eventLoopGroup: MultiThreadedEventLoopGroup
@@ -405,7 +566,36 @@ struct Worker {
                 do {
                     if let ingest = try queueConsumer.popNext(timeoutSeconds: 2) {
                         let tags = (ingest.tags ?? []).joined(separator: ",")
-                        print("INFO: simulated process job=\(ingest.taskId.uuidString) source=\(ingest.source) tags=[\(tags)]")
+                        print(
+                            "INFO: simulated process job=\(ingest.taskId.uuidString) source=\(ingest.source) " +
+                            "tags=[\(tags)] ocr_mode=\(config.ocrMode)"
+                        )
+
+                        let extractedPages = WorkerOCR.extract(
+                            fileURLString: ingest.fileURL,
+                            mode: config.ocrMode
+                        )
+                        if let extractedPages {
+                            let nonEmptyPages = extractedPages.filter { !$0.text.isEmpty }.count
+                            print(
+                                "INFO: OCR extraction job=\(ingest.taskId.uuidString) pages=\(extractedPages.count) " +
+                                "non_empty=\(nonEmptyPages)"
+                            )
+
+                            if let outputDirectory = config.ocrArtifactDirectory {
+                                let artifact = OCRExtractionArtifact(
+                                    job_id: ingest.taskId.uuidString,
+                                    file_url: ingest.fileURL,
+                                    mode: config.ocrMode,
+                                    extracted_at: Date(),
+                                    pages: extractedPages
+                                )
+                                WorkerOCR.persist(artifact: artifact, directory: outputDirectory)
+                            }
+                        } else if config.ocrMode != "off" {
+                            print("INFO: OCR skipped job=\(ingest.taskId.uuidString) reason=file_unavailable_or_not_supported")
+                        }
+
                         let delay = UInt64(max(0.0, config.simulatedProcessingSeconds) * 1_000_000_000)
                         try? await Task.sleep(nanoseconds: delay)
                     }

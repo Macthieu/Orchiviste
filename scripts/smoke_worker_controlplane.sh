@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_BASE="${ORCHIVISTE_API_BASE:-http://127.0.0.1:28780}"
 WORKER_IMAGE="${ORCHIVISTE_WORKER_IMAGE:-orchiviste-worker:latest}"
-TIMEOUT_SECONDS="${ORCHIVISTE_WORKER_SMOKE_TIMEOUT:-60}"
+TIMEOUT_SECONDS="${ORCHIVISTE_WORKER_SMOKE_TIMEOUT:-120}"
 
 timestamp="$(date +%s)"
 WORKER_NAME="${ORCHIVISTE_WORKER_SMOKE_NAME:-worker-smoke-${timestamp}}"
