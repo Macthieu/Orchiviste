@@ -8,6 +8,7 @@ on:
 jobs:
   swift-and-smoke:
     runs-on: ubuntu-22.04
+    if: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' }}
 
     steps:
       - name: Checkout
