@@ -414,7 +414,7 @@
     #if(dashboard_error):
     <p class="error">#(dashboard_error)</p>
     #endif
-    #if(recent_total_jobs):
+    #if(recent_jobs_present):
     <div class="status-strip">
         <div class="status-track" aria-label="Progression des tâches récentes">
             #if(recent_pending_jobs):
