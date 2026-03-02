@@ -358,12 +358,12 @@
     <section class="card upload-card">
         <h2>Importer un document local</h2>
         <p>L'import est explicite: le fichier est copié côté serveur puis injecté dans la file d'ingestion.</p>
-        <form class="upload-form" action="/ui/ingest/local" method="post" enctype="multipart/form-data">
+        <form id="singleIngestForm" class="upload-form" action="/ui/ingest/local" method="post" enctype="multipart/form-data">
             <label>Fichier (serveur ou local)
                 <div class="path-row">
                     <input id="singleFileDisplay" type="text" placeholder="Choisir un fichier local ou sélectionner un fichier serveur" readonly>
                     <input id="singleServerFileField" type="hidden" name="server_file">
-                    <button class="path-btn" type="button" onclick="openLocalFileDialog('singleFileUpload')">Choisir</button>
+                    <button class="path-btn" type="button" onclick="openSingleLocalFilePicker()">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openServerFilePicker('singleServerFileField', 'singleFileDisplay', 'singleFileHint')">Serveur</button>
                 </div>
                     <input id="singleFileUpload" class="picker-upload-input" type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" onchange="handleLocalFileSelection('singleFileUpload', 'singleServerFileField', 'singleFileDisplay', 'singleFileHint')">
@@ -379,13 +379,13 @@
         </div>
         <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
         <h3 style="margin: 0 0 8px;">Importer un dossier local (lot)</h3>
-        <form class="upload-form" action="/ui/ingest/folder" method="post" enctype="multipart/form-data">
+        <form id="folderIngestForm" class="upload-form" action="/ui/ingest/folder" method="post" enctype="multipart/form-data">
             <input id="inputFolderMode" type="hidden" name="input_mode" value="server">
             <input id="outputFolderMode" type="hidden" name="output_mode" value="server">
             <label>Dossier d'entrée (serveur ou local)
                 <div class="path-row">
                     <input id="inputFolderField" type="text" name="input_folder" value="#(ingest_default_input_folder)" placeholder="/data/inbox (laisser vide pour un dossier local)">
-                    <button class="path-btn" type="button" onclick="openLocalFolderDialog('inputFolderUpload')">Choisir</button>
+                    <button class="path-btn" type="button" onclick="openInputLocalFolderPicker()">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('inputFolderField', null, 'inputFolderHint', 'inputFolderMode')">Serveur</button>
                 </div>
                 <input id="inputFolderUpload" class="picker-upload-input" type="file" name="folder_files[]" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint','inputFolderMode')">
@@ -394,7 +394,7 @@
             <label>Dossier de sortie (optionnel)
                 <div class="path-row">
                     <input id="outputFolderField" type="text" name="output_root" value="#(ingest_default_output_folder)" placeholder="/data/routed">
-                    <button class="path-btn" type="button" onclick="openLocalFolderDialog('outputFolderUpload')">Choisir</button>
+                    <button class="path-btn" type="button" onclick="openOutputLocalFolderPicker()">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('outputFolderField', null, 'outputFolderHint', 'outputFolderMode')">Serveur</button>
                 </div>
                 <input id="outputFolderUpload" class="picker-upload-input" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalOutputFolderSelection('outputFolderUpload','outputFolderField','outputFolderHint','outputFolderMode','#(ingest_default_output_folder)')">
@@ -545,6 +545,88 @@ let pickerCurrentPath = null;
 let pickerParentPath = null;
 let pickerRoots = [];
 let pickerMode = "folder";
+let selectedSingleLocalFile = null;
+let selectedInputFolderFiles = [];
+
+function supportedUploadExtensions() {
+    return [".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg", ".tif", ".tiff"];
+}
+
+function isSupportedUploadFileName(name) {
+    const lowered = String(name || "").toLowerCase();
+    return supportedUploadExtensions().some((ext) => lowered.endsWith(ext));
+}
+
+function setSingleLocalFileSelection(file) {
+    const serverInput = document.getElementById("singleServerFileField");
+    const displayInput = document.getElementById("singleFileDisplay");
+    const hint = document.getElementById("singleFileHint");
+
+    selectedSingleLocalFile = file || null;
+    if (serverInput) {
+        serverInput.value = "";
+    }
+    if (displayInput) {
+        displayInput.value = file ? file.name : "";
+    }
+    if (hint) {
+        hint.textContent = file
+            ? `Fichier local sélectionné: ${file.name}.`
+            : "Aucun fichier local sélectionné.";
+    }
+}
+
+function setInputFolderSelection(entries, folderName) {
+    const pathInput = document.getElementById("inputFolderField");
+    const hint = document.getElementById("inputFolderHint");
+    const modeInput = document.getElementById("inputFolderMode");
+    const supportedEntries = (entries || []).filter((entry) => isSupportedUploadFileName(entry.file?.name || entry.file?.filename || entry.relativePath || ""));
+    selectedInputFolderFiles = supportedEntries;
+
+    if (pathInput) {
+        pathInput.value = folderName || "";
+    }
+    if (modeInput) {
+        modeInput.value = "local";
+    }
+    if (hint) {
+        hint.textContent = supportedEntries.length
+            ? `Dossier local sélectionné: ${folderName || "dossier-local"} (${supportedEntries.length} document(s) supporté(s)).`
+            : "Aucun document supporté trouvé dans le dossier local.";
+    }
+}
+
+function setOutputFolderSelection(folderName, pathInputId, hintId, modeInputId, defaultRoot) {
+    const pathInput = document.getElementById(pathInputId);
+    const hint = document.getElementById(hintId);
+    const modeInput = document.getElementById(modeInputId);
+    const normalizedDefaultRoot = String(defaultRoot || "").replace(/\/+$/, "");
+    const currentValue = (pathInput && pathInput.value ? pathInput.value : "").replace(/\/+$/, "");
+    const currentBase = currentValue.startsWith(`${normalizedDefaultRoot}/`) ? normalizedDefaultRoot : (currentValue || normalizedDefaultRoot);
+    const resolvedPath = folderName ? `${currentBase}/${folderName}` : currentBase;
+
+    if (pathInput) {
+        pathInput.value = resolvedPath;
+    }
+    if (modeInput) {
+        modeInput.value = "local";
+    }
+    if (hint) {
+        hint.textContent = `Sortie serveur ciblée: ${resolvedPath}. Le dossier choisi localement sert à nommer le sous-dossier de sortie côté serveur.`;
+    }
+}
+
+function openSingleLocalFilePicker() {
+    openLocalFileDialog("singleFileUpload");
+}
+
+function openInputLocalFolderPicker() {
+    openLocalFolderDialog("inputFolderUpload");
+}
+
+function openOutputLocalFolderPicker() {
+    openLocalFolderDialog("outputFolderUpload");
+}
 
 function openLocalFileDialog(fileInputId) {
     const picker = document.getElementById(fileInputId);
@@ -566,78 +648,49 @@ function openLocalFolderDialog(fileInputId) {
 
 function handleLocalFileSelection(fileInputId, serverInputId, displayInputId, hintId) {
     const picker = document.getElementById(fileInputId);
-    const serverInput = document.getElementById(serverInputId);
-    const displayInput = document.getElementById(displayInputId);
-    const hint = document.getElementById(hintId);
     if (!picker) {
         return;
     }
 
     const file = (picker.files || [])[0];
     if (!file) {
-        if (displayInput) {
-            displayInput.value = "";
-        }
-        if (hint) {
-            hint.textContent = "Aucun fichier local sélectionné.";
-        }
+        setSingleLocalFileSelection(null);
         return;
     }
 
-    if (serverInput) {
-        serverInput.value = "";
-    }
-    if (displayInput) {
-        displayInput.value = file.name;
-    }
-    if (hint) {
-        hint.textContent = `Fichier local sélectionné: ${file.name}.`;
-    }
+    setSingleLocalFileSelection(file);
 }
 
 function handleLocalFolderSelection(fileInputId, pathInputId, hintId, modeInputId) {
     const picker = document.getElementById(fileInputId);
-    const pathInput = document.getElementById(pathInputId);
-    const hint = document.getElementById(hintId);
-    const modeInput = document.getElementById(modeInputId);
     if (!picker) {
         return;
     }
 
     const files = Array.from(picker.files || []);
     if (!files.length) {
-        if (hint) {
-            hint.textContent = "Aucun dossier local sélectionné.";
-        }
+        setInputFolderSelection([], "");
         return;
     }
 
-    const supportedCount = files.filter((file) => /\.(pdf|docx|xlsx|pptx|png|jpe?g|tiff?)$/i.test(file.name)).length;
     const firstRelativePath = files[0].webkitRelativePath || files[0].name;
     const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
-
-    if (pathInput) {
-        pathInput.value = "";
-    }
-    if (modeInput) {
-        modeInput.value = "local";
-    }
-    if (hint) {
-        hint.textContent = `Dossier local selectionne: ${folderName} (${supportedCount} document(s) supporte(s)).`;
-    }
+    const entries = files.map((file) => ({
+        file,
+        relativePath: file.webkitRelativePath || file.name
+    }));
+    setInputFolderSelection(entries, folderName);
 }
 
 function handleLocalOutputFolderSelection(fileInputId, pathInputId, hintId, modeInputId, defaultRoot) {
     const picker = document.getElementById(fileInputId);
-    const pathInput = document.getElementById(pathInputId);
-    const hint = document.getElementById(hintId);
-    const modeInput = document.getElementById(modeInputId);
     if (!picker) {
         return;
     }
 
     const files = Array.from(picker.files || []);
     if (!files.length) {
+        const hint = document.getElementById(hintId);
         if (hint) {
             hint.textContent = "Aucun dossier local sélectionné pour la sortie.";
         }
@@ -646,20 +699,7 @@ function handleLocalOutputFolderSelection(fileInputId, pathInputId, hintId, mode
 
     const firstRelativePath = files[0].webkitRelativePath || files[0].name;
     const folderName = firstRelativePath.includes("/") ? firstRelativePath.split("/")[0] : firstRelativePath;
-    const normalizedDefaultRoot = (defaultRoot || "").replace(/\/+$/, "");
-    const currentValue = (pathInput && pathInput.value ? pathInput.value : "").replace(/\/+$/, "");
-    const currentBase = currentValue.startsWith(`${normalizedDefaultRoot}/`) ? normalizedDefaultRoot : (currentValue || normalizedDefaultRoot);
-    const resolvedPath = folderName ? `${currentBase}/${folderName}` : currentBase;
-
-    if (pathInput) {
-        pathInput.value = resolvedPath;
-    }
-    if (modeInput) {
-        modeInput.value = "local";
-    }
-    if (hint) {
-        hint.textContent = `Sortie serveur ciblée: ${resolvedPath}. Le dossier choisi localement sert à nommer le sous-dossier de sortie côté serveur.`;
-    }
+    setOutputFolderSelection(folderName, pathInputId, hintId, modeInputId, defaultRoot);
 }
 
 function openFolderPicker(inputId, displayId, hintId, modeInputId) {
@@ -782,6 +822,9 @@ function applyPickedFolder() {
             modeInput.value = "server";
         }
     }
+    if (pickerTargetInputId === "inputFolderField") {
+        selectedInputFolderFiles = [];
+    }
     closeFolderPicker();
 }
 
@@ -805,11 +848,120 @@ function applyPickedFile(path) {
             hint.textContent = `Fichier serveur sélectionné: ${path}.`;
         }
     }
+    selectedSingleLocalFile = null;
     const uploadInput = document.getElementById("singleFileUpload");
     if (uploadInput) {
         uploadInput.value = "";
     }
     closeFolderPicker();
+}
+
+function resolveSelectedFolderEntries() {
+    if (selectedInputFolderFiles.length) {
+        return selectedInputFolderFiles;
+    }
+    const input = document.getElementById("inputFolderUpload");
+    const files = Array.from(input?.files || []);
+    return files.map((file) => ({
+        file,
+        relativePath: file.webkitRelativePath || file.name
+    }));
+}
+
+async function submitMultipartForm(action, formData) {
+    const response = await fetch(action, {
+        method: "POST",
+        body: formData,
+        redirect: "follow"
+    });
+    if (response.redirected) {
+        window.location.href = response.url;
+        return;
+    }
+    if (response.ok) {
+        const html = await response.text();
+        document.open();
+        document.write(html);
+        document.close();
+        return;
+    }
+    const message = await response.text();
+    throw new Error(message || `HTTP ${response.status}`);
+}
+
+const singleIngestForm = document.getElementById("singleIngestForm");
+if (singleIngestForm) {
+    singleIngestForm.addEventListener("submit", async (event) => {
+        if (!selectedSingleLocalFile) {
+            return;
+        }
+        event.preventDefault();
+        const formData = new FormData();
+        formData.append("pdf", selectedSingleLocalFile, selectedSingleLocalFile.name);
+        const tags = singleIngestForm.querySelector('input[name="tags"]')?.value || "";
+        if (tags.trim()) {
+            formData.append("tags", tags.trim());
+        }
+        try {
+            await submitMultipartForm(singleIngestForm.action, formData);
+        } catch (error) {
+            alert(`Échec de l'import local (${error.message || error})`);
+        }
+    });
+}
+
+const folderIngestForm = document.getElementById("folderIngestForm");
+if (folderIngestForm) {
+    folderIngestForm.addEventListener("submit", async (event) => {
+        const inputMode = document.getElementById("inputFolderMode")?.value || "server";
+        if (inputMode !== "local") {
+            return;
+        }
+
+        const entries = resolveSelectedFolderEntries().filter((entry) => isSupportedUploadFileName(entry.file?.name || entry.relativePath));
+        if (!entries.length) {
+            event.preventDefault();
+            alert("Sélectionne un dossier local contenant des documents supportés.");
+            return;
+        }
+
+        event.preventDefault();
+        const formData = new FormData();
+        const appendField = (selector) => {
+            const element = folderIngestForm.querySelector(selector);
+            if (!element || typeof element.value !== "string") {
+                return;
+            }
+            const value = element.value.trim();
+            if (!value) {
+                return;
+            }
+            formData.append(element.name, value);
+        };
+
+        appendField('input[name="input_folder"]');
+        appendField('input[name="input_mode"]');
+        appendField('input[name="tags"]');
+        appendField('input[name="max_files"]');
+        appendField('input[name="output_root"]');
+        appendField('input[name="output_mode"]');
+
+        const recursiveField = folderIngestForm.querySelector('input[name="recursive"]');
+        if (recursiveField && recursiveField.checked) {
+            formData.append("recursive", recursiveField.value || "1");
+        }
+
+        for (const entry of entries) {
+            const fileName = entry.relativePath || entry.file.name;
+            formData.append("folder_files[]", entry.file, fileName);
+        }
+
+        try {
+            await submitMultipartForm(folderIngestForm.action, formData);
+        } catch (error) {
+            alert(`Échec de l'import du dossier (${error.message || error})`);
+        }
+    });
 }
 
 const dashboardAutoRefreshSeconds = Number("#(dashboard_auto_refresh_seconds)");

@@ -165,8 +165,11 @@ private struct UIJobViewerContext: Encodable {
     let needs_review: Bool
     let can_review: Bool
     let can_route: Bool
+    let can_route_after_review: Bool
+    let show_routing_form: Bool
     let route_disabled_reason: String?
     let routed_at: String?
+    let saved_folder_path: String
     let preview_pages: Int
     let download_url: String
     let download_searchable_url: String
@@ -1312,6 +1315,7 @@ func registerUIRoutes(_ app: Application) {
         let classCodeOptions = await loadClassCodeOptions(req: req, include: job.suggestedClassCode)
         let presetOptions = await loadPresetIDs(req: req, include: job.suggestedPreset)
         let canRoute: Bool
+        let canRouteAfterReview = job.status == .needs_review
         let routeDisabledReason: String?
         if job.status == .needs_review {
             canRoute = false
@@ -1342,8 +1346,11 @@ func registerUIRoutes(_ app: Application) {
             needs_review: job.needsReview,
             can_review: job.status == .needs_review,
             can_route: canRoute,
-            route_disabled_reason: routeDisabledReason,
+            can_route_after_review: canRouteAfterReview,
+            show_routing_form: canRoute || canRouteAfterReview,
+            route_disabled_reason: (canRoute || canRouteAfterReview) ? nil : routeDisabledReason,
             routed_at: job.steps.routed.map(formatTimestamp),
+            saved_folder_path: routeSavedFolderPath(job) ?? "-",
             preview_pages: max(1, preview?.pages ?? 1),
             download_url: "/v1/jobs/\(job.id.uuidString)/download",
             download_searchable_url: "/ui/jobs/\(job.id.uuidString)/download-searchable",
@@ -1603,7 +1610,9 @@ private func makeUIJobSummary(_ job: JobRecord) -> UIJobSummary {
         confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
         suggested_class_code: job.suggestedClassCode ?? "N/D",
         ocr_ok: localizedRouteFlag(ocrStatus(for: job)),
-        resolved_file_name: routeValue(job, key: "route.resolved_file_name") ?? "-",
+        resolved_file_name: routeValue(job, key: "route.resolved_file_name")
+            ?? routeValue(job, key: "route.review_staging_file_name")
+            ?? "-",
         metadata_ok: localizedMetadataFlag(metadataStatus(for: job)),
         saved_folder_path: routeSavedFolderPath(job) ?? "-",
         updated_at: formatTimestamp(job.updatedAt)
@@ -1724,11 +1733,25 @@ private func ocrStatus(for job: JobRecord) -> String? {
 }
 
 private func routeSavedFolderPath(_ job: JobRecord) -> String? {
+    if job.status == .completed {
+        if let explicit = routeValue(job, key: "route.destination_folder_display") {
+            return explicit
+        }
+        if let localPath = routeValue(job, key: "route.destination_local_path") {
+            return URL(fileURLWithPath: localPath).deletingLastPathComponent().path
+        }
+    }
     if let explicit = routeValue(job, key: "route.destination_folder_display") {
         return explicit
     }
     if let localPath = routeValue(job, key: "route.destination_local_path") {
         return URL(fileURLWithPath: localPath).deletingLastPathComponent().path
+    }
+    if let reviewFolder = routeValue(job, key: "route.review_staging_folder") {
+        return reviewFolder
+    }
+    if let reviewPath = routeValue(job, key: "route.review_staging_path") {
+        return URL(fileURLWithPath: reviewPath).deletingLastPathComponent().path
     }
     if let requested = routeValue(job, key: "route.requested_output_root") {
         return requested

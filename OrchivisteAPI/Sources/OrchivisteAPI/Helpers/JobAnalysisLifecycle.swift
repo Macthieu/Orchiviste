@@ -34,8 +34,9 @@ enum JobAnalysisLifecycle {
         ) else {
             return nil
         }
+        var currentJob = updatedJob
 
-        try await JobPersistenceRepository.upsert(job: updatedJob, on: database)
+        try await JobPersistenceRepository.upsert(job: currentJob, on: database)
         await EventPublisher.publish(
             type: "job.analysed",
             payload: ["job_id": jobId.uuidString],
@@ -52,18 +53,52 @@ enum JobAnalysisLifecycle {
         )
 
         if needsReview {
+            let requestedRoot = currentJob.analysisChamps?["route.requested_output_root"]
+            let localSettings = mergedLocalRoutingSettings(
+                base: ConfigLoader.loadRoutingLocalSettings(),
+                requestedRoot: requestedRoot
+            )
+            do {
+                if let staging = try stageReviewFileIfNeeded(
+                    job: currentJob,
+                    localSettings: localSettings,
+                    logger: logger
+                ),
+                   let stagedJob = await application.appState.mergeAnalysisChamps(
+                    jobId: jobId,
+                    values: buildReviewStagingJobDetails(staging)
+                   ) {
+                    try await JobPersistenceRepository.upsert(job: stagedJob, on: database)
+                    currentJob = stagedJob
+                    await EventPublisher.publish(
+                        type: "route.review_staged",
+                        payload: [
+                            "job_id": jobId.uuidString,
+                            "destination_path": staging.destinationPath
+                        ],
+                        application: application,
+                        database: database,
+                        logger: logger
+                    )
+                }
+            } catch {
+                logger.warning("Échec de la copie en quarantaine de revue.", metadata: [
+                    "job_id": .string(jobId.uuidString),
+                    "error": .string(error.localizedDescription)
+                ])
+            }
             logger.info("Tâche marquee en revue requise.", metadata: [
                 "job_id": .string(jobId.uuidString),
                 "confidence": .string("\(analysis.confidence)"),
                 "threshold": .string("\(confidenceThreshold)"),
                 "review_reasons": .string((analysis.review?.reasons ?? []).joined(separator: ","))
             ])
-            return updatedJob
+            return currentJob
         }
 
         do {
             _ = try await autoRouteIfRequested(
-                job: updatedJob,
+                job: currentJob,
                 application: application,
                 database: database,
                 logger: logger
@@ -91,6 +126,6 @@ enum JobAnalysisLifecycle {
                 return flagged
             }
         }
-        return updatedJob
+        return currentJob
     }
 }

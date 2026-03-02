@@ -239,6 +239,7 @@ actor AppState {
                 switch key.lowercased() {
                 case "type_doc":
                     job.analysisTypeDoc = value
+                    champs["metadata.type_document"] = value
                 case "sujets", "sujet":
                     let sujets = value
                         .split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "|" })
@@ -247,6 +248,19 @@ actor AppState {
                     if !sujets.isEmpty {
                         job.analysisSujets = sujets
                     }
+                case "numero", "numero_document":
+                    champs["numero"] = value
+                    champs["metadata.numero_document"] = value
+                case "objet", "document_objet":
+                    champs["document_objet"] = value
+                    champs["metadata.objet"] = value
+                case "date", "date_document":
+                    champs["date"] = value
+                    champs["metadata.date_document"] = value
+                case "organisme_emetteur", "emetteur", "comite":
+                    champs["comite"] = value
+                    champs["organisme_emetteur"] = value
+                    champs["metadata.organisme_emetteur"] = value
                 case "class_code":
                     if request.corrected_class_code?.isEmpty != false {
                         job.suggestedClassCode = value

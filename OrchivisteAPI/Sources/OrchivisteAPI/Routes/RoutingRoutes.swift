@@ -10,6 +10,12 @@ private struct LocalRouteResult {
     let requiresReview: Bool
 }
 
+struct ReviewStagingResult {
+    let destinationPath: String
+    let destinationFolder: String
+    let fileName: String
+}
+
 func registerRoutingRoutes(_ app: Application) {
     app.group("v1") { v1 in
         v1.post("route", ":file_id", use: handleRouteRequest)
@@ -432,6 +438,15 @@ private func buildRouteJobDetails(
     return details
 }
 
+func buildReviewStagingJobDetails(_ staging: ReviewStagingResult) -> [String: String] {
+    [
+        "route.review_staging_status": "staged",
+        "route.review_staging_path": staging.destinationPath,
+        "route.review_staging_folder": staging.destinationFolder,
+        "route.review_staging_file_name": staging.fileName
+    ]
+}
+
 private func routeDestinationFolderDisplay(
     mode: String,
     target: RoutingTarget,
@@ -457,6 +472,70 @@ private func routeDestinationFolderDisplay(
 private func routeMetadataStatus(for target: RoutingTarget) -> String {
     let metadata = target.metadata ?? [:]
     return metadata.isEmpty ? "n/a" : "pending"
+}
+
+func stageReviewFileIfNeeded(
+    job: JobRecord,
+    localSettings: RoutingLocalSettings?,
+    logger: Logger
+) throws -> ReviewStagingResult? {
+    guard job.source.kind.lowercased() == "local" else {
+        return nil
+    }
+
+    if let existingPath = nonEmpty(job.analysisChamps?["route.review_staging_path"]),
+       let existingFolder = nonEmpty(job.analysisChamps?["route.review_staging_folder"]),
+       let existingName = nonEmpty(job.analysisChamps?["route.review_staging_file_name"]),
+       FileManager.default.fileExists(atPath: existingPath) {
+        return ReviewStagingResult(
+            destinationPath: existingPath,
+            destinationFolder: existingFolder,
+            fileName: existingName
+        )
+    }
+
+    guard let sourceURL = resolveLocalFileURL(raw: job.fileURL) else {
+        logger.warning("Quarantaine revue ignorée: chemin source non valide.", metadata: [
+            "job_id": .string(job.id.uuidString)
+        ])
+        return nil
+    }
+    guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+        logger.warning("Quarantaine revue ignorée: fichier source introuvable.", metadata: [
+            "job_id": .string(job.id.uuidString),
+            "path": .string(sourceURL.path)
+        ])
+        return nil
+    }
+
+    let reviewDate = formatDate(Date(), pattern: "yyyy-MM-dd")
+    let reviewRoot = localRoutingRootDirectory(settings: localSettings)
+        .appendingPathComponent("A_reviser", isDirectory: true)
+        .appendingPathComponent(reviewDate, isDirectory: true)
+    try FileManager.default.createDirectory(
+        at: reviewRoot,
+        withIntermediateDirectories: true,
+        attributes: nil
+    )
+
+    let destinationURL = uniqueDestinationURL(
+        in: reviewRoot,
+        proposedFileName: sourceURL.lastPathComponent
+    )
+    do {
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+    } catch {
+        throw Abort(
+            .internalServerError,
+            reason: "Échec de la copie en quarantaine de revue: \(error.localizedDescription)"
+        )
+    }
+
+    return ReviewStagingResult(
+        destinationPath: destinationURL.path,
+        destinationFolder: reviewRoot.path,
+        fileName: destinationURL.lastPathComponent
+    )
 }
 
 private func routeOCRStatus(for pdfStrategy: String?) -> String {
@@ -680,7 +759,7 @@ private func resolveLocalFileURL(raw: String) -> URL? {
     return cwd.appendingPathComponent(raw)
 }
 
-private func mergedLocalRoutingSettings(
+func mergedLocalRoutingSettings(
     base: RoutingLocalSettings?,
     requestedRoot: String?
 ) -> RoutingLocalSettings? {

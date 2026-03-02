@@ -157,6 +157,7 @@
             <dt>Statut</dt><dd>#(status)</dd>
             <dt>Source</dt><dd>#(source_kind)</dd>
             <dt>Fichier</dt><dd>#(file_url)</dd>
+            <dt>Dossier enregistré</dt><dd>#(saved_folder_path)</dd>
             <dt>Préréglage</dt><dd>#(suggested_preset)</dd>
             <dt>Code de classement</dt><dd>#(suggested_class_code)</dd>
             <dt>Confiance</dt><dd>#(confidence)</dd>
@@ -205,7 +206,7 @@
         #if(can_review):
         <p class="notice">Revue requise : correction obligatoire avant routage.</p>
         <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
-            Corrige le code/préréglage ci-dessous, ajoute un commentaire, puis clique sur "Soumettre la revue".
+            Corrige le code, le préréglage et les métadonnées utiles, puis valide la revue. Tu peux aussi lancer le routage final dans la même action.
         </p>
         <div class="tabs">
             <button id="tabSuggestionBtn" type="button" class="active" onclick="switchReviewTab('suggestion')">Proposition IA</button>
@@ -234,6 +235,10 @@
             <label>Préréglage corrigé <input id="reviewPreset" type="text" placeholder="preset_pv"></label>
             <label>Type document corrigé <input id="reviewTypeDoc" type="text" placeholder="ProcesVerbal"></label>
             <label>Sujets corrigés (csv) <input id="reviewSujets" type="text" placeholder="Comite, Session"></label>
+            <label>Numéro document corrigé <input id="reviewDocumentNumber" type="text" placeholder="2026-28"></label>
+            <label>Objet corrigé <input id="reviewDocumentObject" type="text" placeholder="Objet principal du document"></label>
+            <label>Date document corrigée <input id="reviewDocumentDate" type="text" placeholder="2026-02-02"></label>
+            <label>Organisme émetteur corrigé <input id="reviewDocumentIssuer" type="text" placeholder="Ville d'Amos"></label>
         </div>
         <label>Commentaire <textarea id="reviewComment" rows="3"></textarea></label>
         <button class="btn" type="button" onclick="submitReview()">Soumettre la revue</button>
@@ -247,7 +252,7 @@
         #if(routed_at):
         <p>Déjà routée le <strong>#(routed_at)</strong>.</p>
         #endif
-        #if(can_route):
+        #if(show_routing_form):
         <label>Dossier destination (optionnel)
             <input id="routeFolder" type="text" placeholder="Archives/{year}/{class_code}/{type_doc}/{sujet}">
         </label>
@@ -266,7 +271,15 @@
                 <option value="pdfa">PDF/A-2b</option>
             </select>
         </label>
+        #if(can_route_after_review):
+        <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
+            Le fichier sera d'abord validé, puis routé avec les paramètres ci-dessous.
+        </p>
+        <button class="btn" type="button" onclick="submitReview(true)">Valider et router</button>
+        #endif
+        #if(can_route):
         <button class="btn" type="button" onclick="submitRoute()">Appliquer le routage</button>
+        #endif
         #else:
         #if(route_disabled_reason):
         <p class="notice">#(route_disabled_reason)</p>
@@ -352,6 +365,29 @@ function switchReviewTab(tab) {
     manualPane.classList.toggle("active", !suggestionActive);
 }
 
+function resolvedReviewedClassCode() {
+    const selectedClass = document.getElementById("reviewClassSelect")?.value || "";
+    const manualClass = document.getElementById("reviewClass")?.value || "";
+    return manualClass.trim() || selectedClass.trim() || "";
+}
+
+function resolvedReviewedPreset() {
+    const selectedPreset = document.getElementById("reviewPresetSelect")?.value || "";
+    const manualPreset = document.getElementById("reviewPreset")?.value || "";
+    return manualPreset.trim() || selectedPreset.trim() || "";
+}
+
+function syncRouteFieldsFromReview() {
+    const routeClassInput = document.getElementById("routeClassCode");
+    const routePresetInput = document.getElementById("routePresetId");
+    if (routeClassInput) {
+        routeClassInput.value = resolvedReviewedClassCode() || routeClassInput.value || "";
+    }
+    if (routePresetInput) {
+        routePresetInput.value = resolvedReviewedPreset() || routePresetInput.value || "";
+    }
+}
+
 async function loadText() {
     const page = document.getElementById("textPage").value || "1";
     const res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
@@ -364,13 +400,16 @@ async function loadText() {
     area.value = json.text || "";
 }
 
-async function submitReview() {
-    const selectedClass = document.getElementById("reviewClassSelect")?.value || null;
-    const selectedPreset = document.getElementById("reviewPresetSelect")?.value || null;
-    const manualClass = document.getElementById("reviewClass")?.value || null;
-    const manualPreset = document.getElementById("reviewPreset")?.value || null;
+async function submitReview(routeAfterReview = false) {
+    const output = document.getElementById("routeResult");
+    const resolvedClassCode = resolvedReviewedClassCode();
+    const resolvedPresetId = resolvedReviewedPreset();
     const correctedTypeDoc = document.getElementById("reviewTypeDoc")?.value || null;
     const correctedSujets = document.getElementById("reviewSujets")?.value || null;
+    const correctedDocumentNumber = document.getElementById("reviewDocumentNumber")?.value || null;
+    const correctedDocumentObject = document.getElementById("reviewDocumentObject")?.value || null;
+    const correctedDocumentDate = document.getElementById("reviewDocumentDate")?.value || null;
+    const correctedDocumentIssuer = document.getElementById("reviewDocumentIssuer")?.value || null;
 
     const correctedFields = {};
     if (correctedTypeDoc && correctedTypeDoc.trim()) {
@@ -379,43 +418,76 @@ async function submitReview() {
     if (correctedSujets && correctedSujets.trim()) {
         correctedFields.sujets = correctedSujets.trim();
     }
+    if (correctedDocumentNumber && correctedDocumentNumber.trim()) {
+        correctedFields.numero_document = correctedDocumentNumber.trim();
+    }
+    if (correctedDocumentObject && correctedDocumentObject.trim()) {
+        correctedFields.objet = correctedDocumentObject.trim();
+    }
+    if (correctedDocumentDate && correctedDocumentDate.trim()) {
+        correctedFields.date_document = correctedDocumentDate.trim();
+    }
+    if (correctedDocumentIssuer && correctedDocumentIssuer.trim()) {
+        correctedFields.organisme_emetteur = correctedDocumentIssuer.trim();
+    }
 
     const payload = {
-        corrected_class_code: (manualClass && manualClass.trim()) ? manualClass.trim() : selectedClass,
-        corrected_preset: (manualPreset && manualPreset.trim()) ? manualPreset.trim() : selectedPreset,
+        corrected_class_code: resolvedClassCode || null,
+        corrected_preset: resolvedPresetId || null,
         corrected_fields: Object.keys(correctedFields).length > 0 ? correctedFields : null,
         comment: document.getElementById("reviewComment").value || null
     };
+
+    if (output) {
+        output.value = routeAfterReview ? "Validation en cours avant routage..." : "Validation de la revue en cours...";
+    }
     const res = await fetch(`/v1/jobs/${jobId}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
     if (res.ok) {
+        if (routeAfterReview) {
+            syncRouteFieldsFromReview();
+            try {
+                await submitRouteRequest();
+                window.location.reload();
+                return;
+            } catch (error) {
+                if (output) {
+                    output.value = error.message;
+                }
+                return;
+            }
+        }
         window.location.reload();
         return;
     }
     const msg = await res.text();
+    if (output) {
+        output.value = `Échec de la revue (${res.status}) : ${msg}`;
+    }
     alert(`Échec de la revue (${res.status}) : ${msg}`);
 }
 
-async function submitRoute() {
-    const output = document.getElementById("routeResult");
-    output.value = "Routage en cours...";
+function collectRoutePayload() {
     const classCode = document.getElementById("routeClassCode")?.value || "";
     const presetId = document.getElementById("routePresetId")?.value || "";
     const destinationFolder = document.getElementById("routeFolder")?.value || "";
     const nameFormat = document.getElementById("routeNameFormat")?.value || "";
     const exportType = document.getElementById("routeExportType")?.value || "";
 
-    const payload = {
+    return {
         class_code: classCode.trim() || null,
         preset_id: presetId.trim() || null,
         destination_folder: destinationFolder.trim() || null,
         name_format: nameFormat.trim() || null,
         export_type: exportType.trim() || null
     };
+}
 
+async function submitRouteRequest() {
+    const payload = collectRoutePayload();
     const res = await fetch(`/v1/route/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -423,15 +495,25 @@ async function submitRoute() {
     });
     if (!res.ok) {
         const msg = await res.text();
-        output.value = `Échec du routage (${res.status}) : ${msg}`;
-        return;
+        throw new Error(`Échec du routage (${res.status}) : ${msg}`);
     }
 
     const json = await res.json();
-    const destination = json.destination_local_path || json.destination_url || json.resolved_folder || "N/D";
-    const filename = json.resolved_file_name || "N/D";
-    output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nFichier: ${filename}\nDestination: ${destination}`;
-    setTimeout(() => window.location.reload(), 700);
+    return json;
+}
+
+async function submitRoute() {
+    const output = document.getElementById("routeResult");
+    output.value = "Routage en cours...";
+    try {
+        const json = await submitRouteRequest();
+        const destination = json.destination_local_path || json.destination_url || json.resolved_folder || "N/D";
+        const filename = json.resolved_file_name || "N/D";
+        output.value = `Mode: ${json.mode}\nCode: ${json.class_code}\nFichier: ${filename}\nDestination: ${destination}`;
+        setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+        output.value = error.message;
+    }
 }
 </script>
 </body>
