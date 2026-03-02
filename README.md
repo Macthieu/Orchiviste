@@ -2,6 +2,14 @@
 
 Monorepo Swift Package Manager + Vapor pour le MVP "Analyse -> Renommage -> Classement/Routage".
 
+## Cible d'execution
+
+Le produit est desormais pense `macOS native-first`.
+
+- `OrchivisteWorker` est un binaire macOS
+- `OrchivisteAnalyse` peut exploiter `FoundationModels` et `CoreML` sur macOS
+- Docker reste utile pour des smokes et une demo technique, mais le conteneur Linux n'active pas les frameworks Apple natifs
+
 ## Modules
 
 - `OrchivisteAPI` : API Vapor, UI SSR Leaf, preview, presets, jobs, events/webhooks, routage local et Graph.
@@ -42,6 +50,8 @@ docker compose up -d --build redis analyse api
 ./scripts/check_openapi_mvp.sh
 ./scripts/smoke_mvp.sh
 ```
+
+Pour utiliser `FoundationModels` et `CoreML`, lance `OrchivisteAnalyse` nativement sur macOS au lieu du conteneur `analyse`.
 
 UI :
 

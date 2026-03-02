@@ -2,6 +2,12 @@
 
 Ce dossier fournit un socle simple pour une démo ou un MVP hébergé sur Mac mini.
 
+Le chemin recommandé pour Orchiviste est `macOS native-first` :
+
+- lancer `OrchivisteAPI`, `OrchivisteAnalyse` et `OrchivisteWorker` sur le Mac mini
+- utiliser Docker surtout pour les validations locales, les smoke tests et certains services annexes
+- réserver les conteneurs Linux à la CI ou à une démo technique, pas comme cible fonctionnelle principale des frameworks Apple
+
 ## Fichiers
 
 - `orchiviste.macmini.env.example` : variables d'environnement à copier dans `orchiviste.macmini.env`

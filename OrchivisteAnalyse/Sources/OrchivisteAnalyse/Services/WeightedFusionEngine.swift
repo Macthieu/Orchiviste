@@ -61,15 +61,17 @@ struct WeightedFusionEngine: Sendable {
         let allNodes = candidates.flatMap(\.topNodes)
         let mergedReview = mergeReview(candidates: candidates)
         let mergedCapture = mergeCapture(selected: selected, candidates: candidates)
+        let mergedSubjects = mergeSubjects(selected: selected, candidates: candidates)
+        let mergedFields = mergeFields(selected: selected, candidates: candidates)
 
         return AnalysisResponse(
             type_doc: selected.typeDoc,
-            sujets: selected.sujets,
+            sujets: mergedSubjects,
             structure: AnalysisStructure(
                 has_signature: selected.hasSignature,
                 pages: selected.pages
             ),
-            champs: selected.champs,
+            champs: mergedFields,
             confidence: selected.confidence,
             suggested_preset: selected.suggestedPreset,
             suggested_class_code: selected.suggestedClassCode,
@@ -126,6 +128,60 @@ struct WeightedFusionEngine: Sendable {
             field_sources: fieldSources,
             warnings: warnings
         )
+    }
+
+    private func mergeSubjects(
+        selected: ProviderCandidate,
+        candidates: [ProviderCandidate]
+    ) -> [String] {
+        var result = selected.sujets
+        for candidate in candidates where candidate.provider != selected.provider {
+            for sujet in candidate.sujets where !result.contains(sujet) {
+                result.append(sujet)
+            }
+        }
+        return result
+    }
+
+    private func mergeFields(
+        selected: ProviderCandidate,
+        candidates: [ProviderCandidate]
+    ) -> [String: String] {
+        var merged = selected.champs
+        for candidate in candidates where candidate.provider != selected.provider {
+            for (key, value) in candidate.champs {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    continue
+                }
+                let current = merged[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if current.isEmpty || shouldPreferIncomingField(key: key, from: candidate.provider) {
+                    merged[key] = value
+                }
+            }
+        }
+        return merged
+    }
+
+    private func shouldPreferIncomingField(key: String, from provider: String) -> Bool {
+        switch provider {
+        case "AppleFoundationModels":
+            if key.hasPrefix("summary.") || key.hasPrefix("metadata.") {
+                return true
+            }
+            return [
+                "doc_type_hint",
+                "document_objet",
+                "organisme_emetteur",
+                "date_document",
+                "numero",
+                "comite"
+            ].contains(key)
+        case "AppleCoreML":
+            return key == "doc_type_hint" || key == "metadata.type_document"
+        default:
+            return false
+        }
     }
 
     private func orderedUnique(_ values: [String]) -> [String] {

@@ -6,6 +6,14 @@ Monorepo SwiftPM + Vapor comprenant :
 - `OrchivisteWorker` (CLI worker Redis)
 - `OrchivisteSharedKit` (DTO partages)
 
+## Cible d'execution
+
+Le produit vise d'abord une execution native sur macOS.
+
+- `OrchivisteWorker` s'appuie sur des frameworks Apple (`Vision`)
+- `OrchivisteAnalyse` peut enrichir l'analyse avec `FoundationModels` et `CoreML` sur macOS
+- Docker et les images Linux restent utiles pour la CI, les smoke tests et une demo technique, mais ils n'activent pas les frameworks Apple natifs
+
 ## Demarrage rapide
 
 Prerequis :

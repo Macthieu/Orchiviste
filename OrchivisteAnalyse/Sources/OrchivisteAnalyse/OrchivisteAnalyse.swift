@@ -54,6 +54,8 @@ extension Application {
         let engine = WeightedFusionEngine(
             providers: [
                 LocalHeuristicsProvider(),
+                AppleCoreMLProvider(),
+                AppleFoundationModelsProvider(),
                 CoreMLProvider(),
                 CoginovAPIProvider(),
                 LLMFallbackProvider()
