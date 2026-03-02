@@ -1,3 +1,4 @@
+import Foundation
 import Vapor
 
 func registerPreviewRoutes(_ app: Application) {
@@ -48,9 +49,20 @@ func registerPreviewRoutes(_ app: Application) {
             guard page > 0 else {
                 throw Abort(.badRequest, reason: "Parametre page invalide.")
             }
-            guard let text = record.textPages[page] else {
-                throw Abort(.notFound, reason: "Texte d'aperçu introuvable pour cette page.")
+            if let existing = record.textPages[page],
+               !PreviewHelper.isDefaultText(existing, page: page) {
+                return PreviewTextResponse(page: page, text: existing)
             }
+
+            if let supplemental = try await loadSupplementalPreviewText(
+                jobId: jobId,
+                page: page,
+                req: req
+            ) {
+                return PreviewTextResponse(page: page, text: supplemental)
+            }
+
+            let text = record.textPages[page] ?? PreviewHelper.defaultText(page: page)
             return PreviewTextResponse(page: page, text: text)
         }
 
@@ -71,4 +83,49 @@ func registerPreviewRoutes(_ app: Application) {
             return req.redirect(to: url)
         }
     }
+}
+
+private func loadSupplementalPreviewText(
+    jobId: UUID,
+    page: Int,
+    req: Request
+) async throws -> String? {
+    let inMemory = await req.application.appState.job(id: jobId)
+    let persisted = try await JobPersistenceRepository.fetchJob(id: jobId, on: req.db)
+    guard let job = inMemory ?? persisted else {
+        return nil
+    }
+    guard job.source.kind.lowercased() == "local",
+          let localFileURL = resolvePreviewLocalFileURL(raw: job.fileURL),
+          FileManager.default.fileExists(atPath: localFileURL.path) else {
+        return nil
+    }
+    guard let extracted = DocumentTextExtractor.extract(fileURL: localFileURL, logger: req.logger) else {
+        return nil
+    }
+    defer {
+        for artifact in extracted.temporaryArtifacts {
+            try? FileManager.default.removeItem(at: artifact)
+        }
+    }
+
+    guard extracted.pages.indices.contains(page - 1) else {
+        return nil
+    }
+    let text = extracted.pages[page - 1].trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else {
+        return nil
+    }
+    return text
+}
+
+private func resolvePreviewLocalFileURL(raw: String) -> URL? {
+    if let url = URL(string: raw), url.isFileURL {
+        return url
+    }
+    if raw.hasPrefix("/") {
+        return URL(fileURLWithPath: raw)
+    }
+    let current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    return current.appendingPathComponent(raw)
 }

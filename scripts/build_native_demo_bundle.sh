@@ -116,6 +116,14 @@ export ORCHIVISTE_DEMO_START_WORKER=0
 export ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379
 EOF
 
+write_file "$CONFIG_DIR/analysis/routing/local.settings.json" <<EOF
+{
+  "default_name_format" : "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
+  "local_route_root" : "$DATA_ROUTED_DIR",
+  "default_destination_template" : "Archives/{year}/{class_code}/{type_doc}"
+}
+EOF
+
 write_file "$BUNDLE_DIR/start-orchiviste.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail

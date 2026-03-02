@@ -390,15 +390,30 @@ function syncRouteFieldsFromReview() {
 
 async function loadText() {
     const page = document.getElementById("textPage").value || "1";
-    const res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
     const area = document.getElementById("textArea");
+    area.value = "Chargement du texte...";
+    let res;
+    try {
+        res = await fetch(`/v1/preview/${jobId}/text?page=${encodeURIComponent(page)}`);
+    } catch (error) {
+        area.value = "Erreur réseau lors du chargement du texte.";
+        return;
+    }
     if (!res.ok) {
         area.value = `Erreur de chargement du texte (${res.status})`;
         return;
     }
-    const json = await res.json();
-    area.value = json.text || "";
+    try {
+        const json = await res.json();
+        area.value = json.text || "Aucun texte d'aperçu disponible.";
+    } catch (error) {
+        area.value = "Réponse texte invalide.";
+    }
 }
+
+window.addEventListener("DOMContentLoaded", () => {
+    loadText();
+});
 
 async function submitReview(routeAfterReview = false) {
     const output = document.getElementById("routeResult");

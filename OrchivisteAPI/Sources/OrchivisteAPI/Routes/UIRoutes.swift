@@ -1872,15 +1872,23 @@ private func analysisSummaryTitle(for job: JobRecord) -> String {
 }
 
 private func analysisSummaryText(for job: JobRecord) -> String {
-    if let summary = nonEmptyString(job.analysisChamps?["summary.generated"]) {
-        return summary
-    }
     let typeDoc = nonEmptyString(job.analysisTypeDoc) ?? "Document"
     let object = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.objet", "document_objet", "resolution_titre"], fallback: typeDoc)
     let number = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.numero_document", "resolution_numero", "numero"], fallback: "")
     let date = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_document", "date_document", "date"], fallback: "")
     let issuer = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.organisme_emetteur", "organisme_emetteur", "comite"], fallback: "")
     let subjectText = nonEmptyString((job.analysisSujets ?? []).joined(separator: ", ")) ?? ""
+
+    if let summary = nonEmptyString(job.analysisChamps?["summary.generated"]),
+       generatedSummaryLooksDisplaySafe(
+            summary,
+            expectedIssuer: issuer,
+            expectedDate: date,
+            expectedNumber: number,
+            expectedObject: object
+       ) {
+        return summary
+    }
 
     var parts: [String] = []
     var intro = typeDoc
@@ -1899,6 +1907,97 @@ private func analysisSummaryText(for job: JobRecord) -> String {
         parts.append("Sujets détectés: \(subjectText).")
     }
     return parts.joined(separator: " ")
+}
+
+private func generatedSummaryLooksDisplaySafe(
+    _ summary: String,
+    expectedIssuer: String,
+    expectedDate: String,
+    expectedNumber: String,
+    expectedObject: String
+) -> Bool {
+    let normalizedSummary = normalizedDisplayText(summary)
+    let normalizedIssuer = normalizedDisplayText(expectedIssuer)
+    let normalizedDate = normalizedDisplayText(expectedDate)
+    let normalizedNumber = normalizedDisplayText(expectedNumber)
+    let normalizedObject = normalizedDisplayText(expectedObject)
+
+    if let municipalMention = firstMunicipalMention(in: normalizedSummary) {
+        guard !normalizedIssuer.isEmpty else {
+            return false
+        }
+        if !normalizedIssuer.contains(municipalMention) && !municipalMention.contains(normalizedIssuer) {
+            return false
+        }
+    }
+
+    if let summaryDate = firstDateLikeMention(in: normalizedSummary) {
+        guard !normalizedDate.isEmpty else {
+            return false
+        }
+        if !normalizedDate.contains(summaryDate) && !summaryDate.contains(normalizedDate) {
+            return false
+        }
+    }
+
+    if !normalizedNumber.isEmpty,
+       normalizedSummary.contains(normalizedNumber) == false,
+       normalizedSummary.contains("resolution") {
+        return false
+    }
+
+    if !normalizedObject.isEmpty,
+       significantTokenOverlapCount(summary: normalizedSummary, reference: normalizedObject) == 0 {
+        return false
+    }
+
+    return true
+}
+
+private func normalizedDisplayText(_ raw: String) -> String {
+    raw
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+}
+
+private func firstMunicipalMention(in normalizedText: String) -> String? {
+    let pattern = #"(?:ville|municipalite|municipalité)\s+(?:de|d['’]?)\s+[a-z][a-z'’\- ]{1,80}"#
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+        return nil
+    }
+    let range = NSRange(normalizedText.startIndex..<normalizedText.endIndex, in: normalizedText)
+    guard let match = regex.firstMatch(in: normalizedText, options: [], range: range),
+          let matchRange = Range(match.range, in: normalizedText) else {
+        return nil
+    }
+    return String(normalizedText[matchRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func firstDateLikeMention(in normalizedText: String) -> String? {
+    let pattern = #"(?:20\d{2}-\d{2}-\d{2}|[0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})"#
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+        return nil
+    }
+    let range = NSRange(normalizedText.startIndex..<normalizedText.endIndex, in: normalizedText)
+    guard let match = regex.firstMatch(in: normalizedText, options: [], range: range),
+          let matchRange = Range(match.range, in: normalizedText) else {
+        return nil
+    }
+    return String(normalizedText[matchRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func significantTokenOverlapCount(summary: String, reference: String) -> Int {
+    let stopWords: Set<String> = [
+        "avec", "cette", "contrat", "document", "objet", "pour", "resolution",
+        "résolution", "ville", "municipalite", "municipalité", "type"
+    ]
+    let summaryTokens = Set(summary.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        .map(String.init)
+        .filter { $0.count >= 4 && !stopWords.contains($0) })
+    let referenceTokens = Set(reference.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        .map(String.init)
+        .filter { $0.count >= 4 && !stopWords.contains($0) })
+    return summaryTokens.intersection(referenceTokens).count
 }
 
 private func analysisSummaryPoints(for job: JobRecord) -> [String] {

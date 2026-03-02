@@ -104,6 +104,13 @@ enum DocumentTextExtractor {
             if !pages.isEmpty {
                 return pages
             }
+
+            if ocrEnabled() {
+                let renderedOCRPages = extractOCRPagesFromPDFWithPDFKit(document: document, logger: logger)
+                if !renderedOCRPages.isEmpty {
+                    return renderedOCRPages
+                }
+            }
         }
         #endif
 
@@ -126,6 +133,82 @@ enum DocumentTextExtractor {
         }
         return directPages
     }
+
+    #if canImport(PDFKit) && canImport(AppKit)
+    private static func extractOCRPagesFromPDFWithPDFKit(document: PDFDocument, logger: Logger) -> [String] {
+        guard commandExists("tesseract") else {
+            logger.warning("OCR PDF via PDFKit ignoré: tesseract absent.")
+            return []
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-pdfkit-ocr-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            logger.warning("Impossible de créer le dossier temporaire OCR PDFKit.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return []
+        }
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        var pages: [String] = []
+        let maxPages = min(document.pageCount, ocrMaxPages())
+        for index in 0..<maxPages {
+            guard let page = document.page(at: index) else {
+                continue
+            }
+            let pageBounds = page.bounds(for: .mediaBox)
+            let safeWidth = max(1, pageBounds.width)
+            let ratio = max(0.2, pageBounds.height / safeWidth)
+            let size = NSSize(width: 1600, height: max(600, 1600 * ratio))
+            let image = page.thumbnail(of: size, for: .mediaBox)
+            let imageURL = tempDir.appendingPathComponent("page-\(index + 1).png")
+            guard writePNGImage(image, to: imageURL) else {
+                continue
+            }
+
+            let ocr = ShellCommand.run(
+                executable: "tesseract",
+                arguments: [
+                    imageURL.path,
+                    "stdout",
+                    "-l", ocrLanguage(),
+                    "--dpi", "\(ocrDPI())"
+                ]
+            )
+            guard ocr.exitCode == 0 else {
+                logger.warning("OCR PDFKit en échec pour une page.", metadata: [
+                    "page": .stringConvertible(index + 1),
+                    "stderr": .string(ocr.stderr)
+                ])
+                continue
+            }
+            let trimmed = ocr.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                pages.append(trimmed)
+            }
+        }
+        return pages
+    }
+
+    private static func writePNGImage(_ image: NSImage, to url: URL) -> Bool {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let data = bitmap.representation(using: .png, properties: [:]) else {
+            return false
+        }
+        do {
+            try data.write(to: url, options: [.atomic])
+            return true
+        } catch {
+            return false
+        }
+    }
+    #endif
 
     private static func extractDOCXPages(fileURL: URL, logger: Logger) -> [String] {
         let preferredEntries = [

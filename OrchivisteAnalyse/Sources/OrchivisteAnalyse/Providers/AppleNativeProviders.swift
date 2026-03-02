@@ -314,13 +314,25 @@ private func sanitizeFoundationModelEnrichment(
         : nil
     let keywords = enrichment.keywords.filter { keywordAppearsInSource($0, normalizedSource: normalizedSource) }
 
+    let object = generatedObjectAppearsGrounded(enrichment.object, normalizedSource: normalizedSource)
+        ? nonEmpty(enrichment.object)
+        : nil
+    let summary = generatedSummaryAppearsGrounded(
+        enrichment.summary,
+        normalizedSource: normalizedSource,
+        typeDocument: typeDocument,
+        documentNumber: documentNumber,
+        issuer: issuer,
+        object: object
+    ) ? nonEmpty(enrichment.summary) : nil
+
     return AppleFoundationModelEnrichment(
         typeDocument: typeDocument,
         documentNumber: documentNumber,
-        object: nonEmpty(enrichment.object),
+        object: object,
         documentDate: documentDate,
         issuer: issuer,
-        summary: nonEmpty(enrichment.summary),
+        summary: summary,
         keywords: keywords
     )
 }
@@ -372,6 +384,147 @@ private func issuerAppearsInSource(_ issuer: String?, normalizedSource: String) 
         return false
     }
     return tokens.allSatisfy { normalizedSource.contains($0) }
+}
+
+private func generatedObjectAppearsGrounded(_ object: String?, normalizedSource: String) -> Bool {
+    guard let object = nonEmpty(object) else {
+        return false
+    }
+    let mentions = extractMunicipalMentions(from: object)
+    if mentions.contains(where: { !looselyAppearsInSource($0, normalizedSource: normalizedSource) }) {
+        return false
+    }
+    return true
+}
+
+private func generatedSummaryAppearsGrounded(
+    _ summary: String?,
+    normalizedSource: String,
+    typeDocument: String?,
+    documentNumber: String?,
+    issuer: String?,
+    object: String?
+) -> Bool {
+    guard let summary = nonEmpty(summary) else {
+        return false
+    }
+
+    let mentions = extractMunicipalMentions(from: summary)
+    if mentions.contains(where: { !looselyAppearsInSource($0, normalizedSource: normalizedSource) }) {
+        return false
+    }
+
+    if let issuer = nonEmpty(issuer),
+       !summaryReferenceLooksCompatible(summary, candidate: issuer, normalizedSource: normalizedSource) {
+        return false
+    }
+
+    if let number = nonEmpty(documentNumber),
+       !summaryReferenceLooksCompatible(summary, candidate: number, normalizedSource: normalizedSource) {
+        return false
+    }
+
+    if let typeDocument = nonEmpty(typeDocument),
+       summaryContainsTypeMarker(summary, typeDocument: typeDocument),
+       !typeDocumentAppearsInSource(typeDocument, normalizedSource: normalizedSource) {
+        return false
+    }
+
+    if let object = nonEmpty(object),
+       !significantTokenOverlapExists(summary: summary, reference: object, minimumHits: 2) {
+        return false
+    }
+
+    return meaningfulGroundedTokenCount(summary, normalizedSource: normalizedSource) >= 4
+}
+
+private func summaryReferenceLooksCompatible(
+    _ summary: String,
+    candidate: String,
+    normalizedSource: String
+) -> Bool {
+    let normalizedSummary = normalizeGeneratedText(summary)
+    let normalizedCandidate = normalizeGeneratedText(candidate)
+    guard !normalizedCandidate.isEmpty else {
+        return true
+    }
+    if !normalizedSummary.contains(normalizedCandidate) {
+        return true
+    }
+    return looselyAppearsInSource(candidate, normalizedSource: normalizedSource)
+}
+
+private func summaryContainsTypeMarker(_ summary: String, typeDocument: String) -> Bool {
+    let normalizedSummary = normalizeGeneratedText(summary)
+    switch canonicalTypeDocument(from: typeDocument) {
+    case "Resolution":
+        return normalizedSummary.contains("resolution")
+    case "Facture":
+        return normalizedSummary.contains("facture") || normalizedSummary.contains("invoice")
+    case "ProcesVerbal":
+        return normalizedSummary.contains("proces-verbal") || normalizedSummary.contains("proces verbal")
+    case "Permis":
+        return normalizedSummary.contains("permis")
+    default:
+        return false
+    }
+}
+
+private func significantTokenOverlapExists(
+    summary: String,
+    reference: String,
+    minimumHits: Int
+) -> Bool {
+    let summaryTokens = Set(significantGeneratedTokens(from: summary))
+    let referenceTokens = Set(significantGeneratedTokens(from: reference))
+    guard !summaryTokens.isEmpty, !referenceTokens.isEmpty else {
+        return false
+    }
+    return summaryTokens.intersection(referenceTokens).count >= minimumHits
+}
+
+private func meaningfulGroundedTokenCount(_ summary: String, normalizedSource: String) -> Int {
+    significantGeneratedTokens(from: summary)
+        .filter { normalizedSource.contains($0) }
+        .count
+}
+
+private func significantGeneratedTokens(from raw: String) -> [String] {
+    let stopWords: Set<String> = [
+        "alors", "apres", "après", "ainsi", "avec", "cette", "cette", "comme", "dans",
+        "date", "document", "dont", "elle", "elles", "emis", "emise", "émis", "émise",
+        "entre", "etre", "être", "font", "pour", "plus", "sans", "sera", "sont",
+        "sur", "tout", "tous", "toute", "toutes", "ville", "municipalite", "municipalité",
+        "conseil", "resume", "résumé", "objet", "type"
+    ]
+
+    return normalizeGeneratedText(raw)
+        .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        .map(String.init)
+        .filter { token in
+            token.count >= 4 && !stopWords.contains(token) && !token.allSatisfy(\.isNumber)
+        }
+}
+
+private func extractMunicipalMentions(from raw: String) -> [String] {
+    let pattern = #"(?:ville|municipalite|municipalité)\s+(?:de|d)\s+[a-z][a-z'’\- ]{1,80}"#
+    let normalized = normalizeGeneratedText(raw)
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+        return []
+    }
+    let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+    return regex.matches(in: normalized, options: [], range: range).compactMap { match in
+        guard let matchRange = Range(match.range, in: normalized) else {
+            return nil
+        }
+        return String(normalized[matchRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private func normalizeGeneratedText(_ raw: String) -> String {
+    raw
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
 }
 
 private func keywordAppearsInSource(_ keyword: String, normalizedSource: String) -> Bool {

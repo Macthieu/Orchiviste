@@ -9,4 +9,8 @@ enum PreviewHelper {
     static func defaultText(page: Int) -> String {
         "Texte d'aperçu indisponible - page \(page)."
     }
+
+    static func isDefaultText(_ value: String, page: Int) -> Bool {
+        value.trimmingCharacters(in: .whitespacesAndNewlines) == defaultText(page: page)
+    }
 }
