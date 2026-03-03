@@ -1,0 +1,113 @@
+{
+  "conditions": {
+    "regex_any": [
+      "(?i)\\b(entente|convention|contrat|bail|protocole|avenant)\\b",
+      "(?i)ville\\s+d[' ]amos"
+    ],
+    "signals_any": [
+      "entente",
+      "convention",
+      "contrat",
+      "bail",
+      "protocole",
+      "avenant"
+    ],
+    "source_document_families": [
+      "Contrat",
+      "Autre"
+    ]
+  },
+  "document_family": "entente_uniformisee",
+  "fields": [
+    {
+      "key": "cocontractant",
+      "label": "Cocontractant",
+      "required": true,
+      "strategies": [
+        {
+          "kind": "semantic",
+          "semantic_hint": "agreement_counterparty"
+        }
+      ]
+    },
+    {
+      "key": "objet",
+      "label": "Objet",
+      "required": true,
+      "strategies": [
+        {
+          "kind": "semantic",
+          "preserve_terms": [
+            "lot",
+            "cadastre du québec",
+            "rue",
+            "avenue",
+            "programme",
+            "site",
+            "projet"
+          ],
+          "semantic_hint": "agreement_object",
+          "stopwords": [
+            "le",
+            "la",
+            "les",
+            "de",
+            "du",
+            "des",
+            "à",
+            "aux",
+            "ainsi",
+            "que"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "periode",
+      "label": "Période",
+      "required": true,
+      "strategies": [
+        {
+          "kind": "semantic",
+          "semantic_hint": "agreement_period"
+        }
+      ]
+    }
+  ],
+  "forbidden_terms": [
+    "signé",
+    "non signé",
+    "OCR",
+    "numérisé",
+    "scanné",
+    "version finale",
+    "PDF/A"
+  ],
+  "id": "rule_entente_uniformisee",
+  "label": "Entente uniformisée",
+  "metadata": {
+    "canonical_output_label": "Entente",
+    "suggested_class_code": "ADM-ENT"
+  },
+  "normalization": [
+    "trim",
+    "collapse_spaces",
+    "separator_en_dash",
+    "strip_technical_mentions",
+    "normalize_document_family",
+    "clean_object_stopwords",
+    "unicode_french"
+  ],
+  "template": "{cocontractant} – Entente pour {objet} – {periode}.pdf",
+  "validations": [
+    {
+      "kind": "max_length",
+      "parameter": "256"
+    },
+    {
+      "kind": "required_fields",
+      "parameter": "cocontractant,objet,periode"
+    }
+  ],
+  "version": "1.0.0"
+}

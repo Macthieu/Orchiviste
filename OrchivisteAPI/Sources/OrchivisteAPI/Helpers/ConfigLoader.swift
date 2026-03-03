@@ -1,5 +1,8 @@
 import Foundation
+import OrchivisteAnalyseCore
+import OrchivisteSharedKit
 import Vapor
+import Yams
 
 struct UIDashboardState: Codable {
     var recent_jobs_cleared_at: Date?
@@ -217,5 +220,132 @@ enum ConfigLoader {
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         let data = try encoder.encode(state)
         try data.write(to: dashboardStateURL(), options: [.atomic])
+    }
+
+    static func namingBaseDirectory() -> URL {
+        baseDir().appendingPathComponent("naming", isDirectory: true)
+    }
+
+    static func namingRulesDirectory() -> URL {
+        namingBaseDirectory().appendingPathComponent("rules", isDirectory: true)
+    }
+
+    static func namingThesaurusDirectory() -> URL {
+        namingBaseDirectory().appendingPathComponent("thesaurus", isDirectory: true)
+    }
+
+    static func namingRuleDraftsDirectory() -> URL {
+        namingBaseDirectory().appendingPathComponent("drafts/rules", isDirectory: true)
+    }
+
+    static func namingThesaurusDraftsDirectory() -> URL {
+        namingBaseDirectory().appendingPathComponent("drafts/thesaurus", isDirectory: true)
+    }
+
+    static func loadNamingRules() -> [NamingRuleDefinition] {
+        let loaded = loadStructuredDirectory(
+            at: namingRulesDirectory(),
+            as: NamingRuleDefinition.self
+        )
+        return loaded.isEmpty ? NamingFoundationSeeds.defaultRules() : loaded
+    }
+
+    static func loadNamingRule(id: String) -> NamingRuleDefinition? {
+        loadNamingRules().first { $0.id == id }
+    }
+
+    @discardableResult
+    static func saveNamingRule(_ rule: NamingRuleDefinition, filename: String? = nil) throws -> URL {
+        let dir = namingRulesDirectory()
+        try ensureDir(dir)
+        let safeFileName = (filename?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? filename : nil)
+            ?? "\(rule.id).json"
+        let url = dir.appendingPathComponent(safeFileName)
+        try saveJSON(rule, to: url)
+        return url
+    }
+
+    static func loadNamingThesauri() -> [NamingThesaurus] {
+        let loaded = loadStructuredDirectory(
+            at: namingThesaurusDirectory(),
+            as: NamingThesaurus.self
+        )
+        return loaded.isEmpty ? [NamingFoundationSeeds.defaultThesaurus()] : loaded
+    }
+
+    static func loadNamingThesaurus(id: String) -> NamingThesaurus? {
+        loadNamingThesauri().first { $0.thesaurus_id == id }
+    }
+
+    @discardableResult
+    static func saveNamingThesaurus(_ thesaurus: NamingThesaurus, filename: String? = nil) throws -> URL {
+        let dir = namingThesaurusDirectory()
+        try ensureDir(dir)
+        let safeFileName = (filename?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? filename : nil)
+            ?? "\(thesaurus.thesaurus_id).json"
+        let url = dir.appendingPathComponent(safeFileName)
+        try saveJSON(thesaurus, to: url)
+        return url
+    }
+
+    static func loadNamingRuleDrafts() -> [NamingRuleDraft] {
+        loadStructuredDirectory(at: namingRuleDraftsDirectory(), as: NamingRuleDraft.self)
+    }
+
+    @discardableResult
+    static func saveNamingRuleDraft(_ draft: NamingRuleDraft) throws -> URL {
+        let dir = namingRuleDraftsDirectory()
+        try ensureDir(dir)
+        let url = dir.appendingPathComponent("\(draft.draft_id).json")
+        try saveJSON(draft, to: url)
+        return url
+    }
+
+    static func loadNamingThesaurusDrafts() -> [ImportedThesaurusDraft] {
+        loadStructuredDirectory(at: namingThesaurusDraftsDirectory(), as: ImportedThesaurusDraft.self)
+    }
+
+    static func loadNamingThesaurusDraft(id: String) -> ImportedThesaurusDraft? {
+        loadNamingThesaurusDrafts().first { $0.draft_id == id }
+    }
+
+    @discardableResult
+    static func saveNamingThesaurusDraft(_ draft: ImportedThesaurusDraft) throws -> URL {
+        let dir = namingThesaurusDraftsDirectory()
+        try ensureDir(dir)
+        let url = dir.appendingPathComponent("\(draft.draft_id).json")
+        try saveJSON(draft, to: url)
+        return url
+    }
+
+    private static func loadStructuredDirectory<T: Decodable>(at directory: URL, as type: T.Type) -> [T] {
+        guard let items = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return items.compactMap { url in
+            guard ["json", "yaml", "yml"].contains(url.pathExtension.lowercased()),
+                  let data = try? Data(contentsOf: url) else {
+                return nil
+            }
+            if url.pathExtension.lowercased() == "json" {
+                return try? JSONDecoder().decode(T.self, from: data)
+            }
+            guard let text = String(data: data, encoding: .utf8) else {
+                return nil
+            }
+            return try? YAMLDecoder().decode(T.self, from: text)
+        }
+    }
+
+    private static func saveJSON<T: Encodable>(_ value: T, to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(value)
+        try data.write(to: url, options: [.atomic])
     }
 }

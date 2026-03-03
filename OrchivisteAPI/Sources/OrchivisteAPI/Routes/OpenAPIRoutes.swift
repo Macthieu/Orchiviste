@@ -204,6 +204,104 @@ func registerOpenAPIRoutes(_ app: Application) {
                         ]
                     ]
                 ],
+                "/v1/naming/rules": [
+                    "get": [
+                        "summary": "Lister les règles de nommage déclaratives",
+                        "responses": ["200": ["description": "Liste des règles de nommage"]]
+                    ],
+                    "post": [
+                        "summary": "Créer ou mettre à jour une règle de nommage",
+                        "responses": [
+                            "200": ["description": "Règle enregistrée"],
+                            "400": ["$ref": "#/components/responses/Error400"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/rules/{id}": [
+                    "parameters": [["name": "id", "in": "path", "required": true, "schema": ["type": "string"]]],
+                    "get": [
+                        "summary": "Récupérer une règle de nommage",
+                        "responses": [
+                            "200": ["description": "Règle de nommage"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/rules/validate": [
+                    "post": [
+                        "summary": "Valider une règle sur un exemple de document",
+                        "responses": [
+                            "200": ["description": "Prévisualisation validation/rendu"],
+                            "400": ["$ref": "#/components/responses/Error400"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/rules/learn": [
+                    "post": [
+                        "summary": "Apprendre une règle depuis un dossier",
+                        "responses": [
+                            "200": ["description": "Brouillon de règle appris"],
+                            "400": ["$ref": "#/components/responses/Error400"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/folder/learn": [
+                    "post": [
+                        "summary": "Alias d'analyse/apprentissage depuis dossier",
+                        "responses": [
+                            "200": ["description": "Brouillon de règle appris"],
+                            "400": ["$ref": "#/components/responses/Error400"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/drafts": [
+                    "get": [
+                        "summary": "Lister les brouillons de règles et de thésaurus",
+                        "responses": ["200": ["description": "Index des brouillons"]]
+                    ]
+                ],
+                "/v1/naming/thesaurus": [
+                    "get": [
+                        "summary": "Lister les thésaurus de nommage",
+                        "responses": ["200": ["description": "Liste des thésaurus"]]
+                    ],
+                    "post": [
+                        "summary": "Créer ou mettre à jour un thésaurus",
+                        "responses": [
+                            "200": ["description": "Thésaurus enregistré"],
+                            "400": ["$ref": "#/components/responses/Error400"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/thesaurus/{id}": [
+                    "parameters": [["name": "id", "in": "path", "required": true, "schema": ["type": "string"]]],
+                    "get": [
+                        "summary": "Récupérer un thésaurus",
+                        "responses": [
+                            "200": ["description": "Thésaurus"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/thesaurus/import/preview": [
+                    "post": [
+                        "summary": "Prévisualiser un import JSON/YAML de thésaurus",
+                        "responses": [
+                            "200": ["description": "Brouillon d'import avec conflits"],
+                            "400": ["$ref": "#/components/responses/Error400"]
+                        ]
+                    ]
+                ],
+                "/v1/naming/thesaurus/import/confirm": [
+                    "post": [
+                        "summary": "Confirmer la fusion ou le remplacement d'un thésaurus importé",
+                        "responses": [
+                            "200": ["description": "Thésaurus fusionné"],
+                            "400": ["$ref": "#/components/responses/Error400"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
                 "/v1/analyse": [
                     "post": [
                         "requestBody": ["required": true, "content": ["application/json": ["schema": ["$ref": "#/components/schemas/AnalysisRequest"]]]],

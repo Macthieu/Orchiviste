@@ -1,0 +1,104 @@
+{
+  "description": "Thésaurus initial pour l’uniformisation des noms documentaires municipaux.",
+  "entries": [
+    {
+      "aliases": [
+        "entente",
+        "contrat",
+        "convention",
+        "bail",
+        "protocole",
+        "avenant",
+        "entente d'aide financiere",
+        "entente de soutien financier",
+        "entente relative a",
+        "entente d'utilisation",
+        "entente de bon voisinage"
+      ],
+      "canonical": "Entente",
+      "kind": "document_family",
+      "normalized_output": "Entente",
+      "notes": [
+        "Uniformiser plusieurs familles documentaires vers une forme de sortie unique."
+      ],
+      "preserve_terms": [
+        "entente"
+      ]
+    },
+    {
+      "aliases": [
+        "resolution",
+        "résolution",
+        "resolution du conseil municipal"
+      ],
+      "canonical": "Résolution",
+      "kind": "document_family",
+      "normalized_output": "Résolution"
+    },
+    {
+      "aliases": [
+        "cadastre du quebec",
+        "cadastre du québec"
+      ],
+      "canonical": "Cadastre du Québec",
+      "kind": "significant_term"
+    },
+    {
+      "aliases": [
+        "ville d amos",
+        "ville d'amos",
+        "amos"
+      ],
+      "canonical": "Ville d'Amos",
+      "kind": "organization"
+    },
+    {
+      "aliases": [
+        "bell mobilite",
+        "bell mobilité",
+        "bell mobilité inc."
+      ],
+      "canonical": "Bell Mobilité",
+      "kind": "organization"
+    }
+  ],
+  "preserve_terms": [
+    "lot",
+    "cadastre du québec",
+    "rue",
+    "avenue",
+    "activité",
+    "programme",
+    "règlement",
+    "infrastructure",
+    "projet",
+    "site",
+    "construction",
+    "permis"
+  ],
+  "stopwords": [
+    "le",
+    "la",
+    "les",
+    "de",
+    "du",
+    "des",
+    "à",
+    "au",
+    "aux",
+    "d",
+    "l",
+    "ainsi",
+    "que",
+    "pour",
+    "relative",
+    "relatif",
+    "avec"
+  ],
+  "thesaurus_id": "municipal-fr",
+  "trace": {
+    "imported_version": "1.0.0",
+    "source": "Orchiviste seeds"
+  },
+  "version": "1.0.0"
+}

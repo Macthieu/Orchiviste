@@ -93,6 +93,36 @@ Preset JSON riche :
 - recuperation d'un preset : `GET /v1/presets/{id}`
 - apprentissage d'un draft depuis un dossier : `POST /v1/presets/learn`
 
+Fondation règles de nommage / thésaurus :
+- règles déclaratives : `OrchivisteAPI/configs/naming/rules/*.json`
+- thésaurus de nommage : `OrchivisteAPI/configs/naming/thesaurus/*.json`
+- brouillons de règles : `OrchivisteAPI/configs/naming/drafts/rules/*.json`
+- brouillons d'import de thésaurus : `OrchivisteAPI/configs/naming/drafts/thesaurus/*.json`
+- lister les règles : `GET /v1/naming/rules`
+- récupérer une règle : `GET /v1/naming/rules/{id}`
+- créer/modifier une règle : `POST /v1/naming/rules`
+- valider une règle sur un extrait : `POST /v1/naming/rules/validate`
+- apprendre une règle depuis un dossier : `POST /v1/naming/rules/learn`
+- alias plus explicite : `POST /v1/naming/folder/learn`
+- lister les brouillons : `GET /v1/naming/drafts`
+- lister les thésaurus : `GET /v1/naming/thesaurus`
+- récupérer un thésaurus : `GET /v1/naming/thesaurus/{id}`
+- créer/modifier un thésaurus : `POST /v1/naming/thesaurus`
+- prévisualiser un import JSON/YAML : `POST /v1/naming/thesaurus/import/preview`
+- confirmer une fusion/remplacement : `POST /v1/naming/thesaurus/import/confirm`
+
+Ajouter une 3e règle :
+- copier un JSON de `configs/naming/rules/`
+- définir `conditions`, `fields`, `template`, `normalization`, `forbidden_terms`, `validations`
+- tester avec `POST /v1/naming/rules/validate`
+- enregistrer avec `POST /v1/naming/rules`
+
+Ajouter un nouvel importeur de thésaurus :
+- implémenter `ThesaurusImporting` dans `OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/`
+- déclarer le format supporté
+- enregistrer l'importeur dans `ThesaurusImportService`
+- réutiliser le même flux `preview -> confirm`
+
 Analyse semantique / HIL :
 - `POST /v1/analyse` renvoie maintenant, en plus du contrat MVP initial, des blocs optionnels `capture` et `review`
 - `capture` expose la strategie (`native_text_semantic` / `ocr_semantic_assisted`), les unites detectees, les titres de section et la provenance des champs

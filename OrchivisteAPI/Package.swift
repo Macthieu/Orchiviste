@@ -12,6 +12,7 @@ let package = Package(
     dependencies: [
         // Local shared kit (mono-repo)
         .package(path: "../OrchivisteSharedKit"),
+        .package(path: "../OrchivisteAnalyse"),
 
         // Vapor stack
         .package(url: "https://github.com/vapor/vapor.git", from: "4.86.0"),
@@ -39,7 +40,8 @@ let package = Package(
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "RediStack", package: "RediStack"),
                 .product(name: "Yams", package: "Yams"),
-                .product(name: "OrchivisteSharedKit", package: "OrchivisteSharedKit")
+                .product(name: "OrchivisteSharedKit", package: "OrchivisteSharedKit"),
+                .product(name: "OrchivisteAnalyseCore", package: "OrchivisteAnalyse")
             ]
         ),
         .testTarget(

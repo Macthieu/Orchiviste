@@ -33,6 +33,7 @@ func configure(_ app: Application) throws {
     registerAnalyseRoutes(app)
     registerPresetRoutes(app)
     registerTaxonomyRoutes(app)
+    registerNamingRoutes(app)
     registerAgendaRoutes(app)
     registerRoutingRoutes(app)
     registerWorkerRoutes(app)

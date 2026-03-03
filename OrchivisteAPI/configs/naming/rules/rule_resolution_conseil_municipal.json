@@ -1,0 +1,104 @@
+{
+  "conditions": {
+    "regex_any": [
+      "(?i)r[ée]solution\\s*n[°o]?\\s*[0-9]{4}-[0-9]{1,4}"
+    ],
+    "signals_any": [
+      "résolution n°",
+      "résolution no",
+      "extrait du procès-verbal",
+      "conseil municipal"
+    ],
+    "source_document_families": [
+      "Resolution",
+      "ProcesVerbal"
+    ]
+  },
+  "document_family": "resolution_conseil",
+  "fields": [
+    {
+      "key": "numero",
+      "label": "Numéro",
+      "required": true,
+      "strategies": [
+        {
+          "kind": "regex",
+          "pattern": "(?i)r[ée]solution\\s*n[°o]?\\s*([0-9]{4}-[0-9]{1,4})"
+        },
+        {
+          "kind": "semantic",
+          "semantic_hint": "resolution_number"
+        }
+      ]
+    },
+    {
+      "key": "titre",
+      "label": "Titre",
+      "required": true,
+      "strategies": [
+        {
+          "kind": "semantic",
+          "semantic_hint": "resolution_title"
+        }
+      ]
+    },
+    {
+      "key": "date",
+      "label": "Date",
+      "required": true,
+      "strategies": [
+        {
+          "kind": "semantic",
+          "semantic_hint": "adoption_date"
+        },
+        {
+          "kind": "regex",
+          "pattern": "(?i)\\b(20[0-9]{2}-[01][0-9]-[0-3][0-9])\\b"
+        }
+      ]
+    }
+  ],
+  "forbidden_terms": [
+    "signé",
+    "non signé",
+    "OCR",
+    "numérisé",
+    "scanné",
+    "version finale",
+    "PDF/A"
+  ],
+  "id": "rule_resolution_conseil_municipal",
+  "label": "Résolution du conseil municipal",
+  "metadata": {
+    "canonical_output_label": "Résolution",
+    "notes": [
+      "Ne jamais inclure Ville d'Amos dans le nom final."
+    ],
+    "suggested_class_code": "ADM-RES"
+  },
+  "normalization": [
+    "trim",
+    "collapse_spaces",
+    "separator_en_dash",
+    "normalize_numero",
+    "clean_extension_spacing",
+    "unicode_french",
+    "strip_technical_mentions"
+  ],
+  "template": "Résolution NO {numero} – {titre} – {date}.pdf",
+  "validations": [
+    {
+      "kind": "required_prefix",
+      "parameter": "Résolution NO"
+    },
+    {
+      "kind": "max_length",
+      "parameter": "256"
+    },
+    {
+      "kind": "exclude_phrase",
+      "parameter": "Ville d'Amos"
+    }
+  ],
+  "version": "1.0.0"
+}
