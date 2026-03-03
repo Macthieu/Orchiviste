@@ -141,17 +141,23 @@ public struct NamingFeedbackExample: Codable, Sendable {
     public let created_at: Date
     public let source_filename: String
     public let corrected_filename: String
+    public let source_fields: [String: String]?
+    public let corrected_fields: [String: String]?
     public let notes: String?
 
     public init(
         created_at: Date,
         source_filename: String,
         corrected_filename: String,
+        source_fields: [String: String]? = nil,
+        corrected_fields: [String: String]? = nil,
         notes: String? = nil
     ) {
         self.created_at = created_at
         self.source_filename = source_filename
         self.corrected_filename = corrected_filename
+        self.source_fields = source_fields
+        self.corrected_fields = corrected_fields
         self.notes = notes
     }
 }

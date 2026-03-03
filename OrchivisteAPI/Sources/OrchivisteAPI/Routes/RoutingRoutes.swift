@@ -97,6 +97,9 @@ private func executeRouting(
             suggestedCode = job.suggestedClassCode
             resolvedJobID = jobId
             resolvedJob = job
+            if job.steps.routed != nil, routeRequest?.reroute_existing != true {
+                throw Abort(.conflict, reason: "Cette tâche est déjà routée. Utilise le mode de reroutage explicite.")
+            }
         }
     }
 
@@ -147,9 +150,12 @@ private func executeRouting(
     let selectedPreset = presets.first { $0.id == nonEmpty(routeRequest?.preset_id) }
         ?? presets.first { $0.id == nonEmpty(selectedRule?.preset_id) }
         ?? provisionalPreset
-    let selectedNamingRule = resolvedJob.flatMap {
-        selectNamingRuleForRouting(
-            job: $0,
+    let selectedNamingRule = resolvedJob.flatMap { job in
+        resolveRequestedNamingRule(
+            requestedNamingRuleID: routeRequest?.naming_rule_id,
+            rules: namingRules
+        ) ?? selectNamingRuleForRouting(
+            job: job,
             analysis: analysis,
             preset: selectedPreset,
             rules: namingRules
@@ -589,7 +595,7 @@ private func routeLocalFileIfPossible(
         return nil
     }
 
-    guard let sourceURL = resolveLocalFileURL(raw: job.fileURL) else {
+    guard let sourceURL = preferredRouteSourceURL(job: job) ?? resolveLocalFileURL(raw: job.fileURL) else {
         logger.warning("Routage local ignoré: chemin source non valide.", metadata: [
             "job_id": .string(job.id.uuidString)
         ])
@@ -642,7 +648,8 @@ private func routeLocalFileIfPossible(
     let effectiveDestinationName = shouldConvertOfficeToPDF
         ? replaceFileExtension(destinationName, with: "pdf")
         : destinationName
-    let destinationURL = uniqueDestinationURL(
+    let destinationURL = resolvedDestinationURL(
+        sourceURL: sourceURL,
         in: destinationDirectory,
         proposedFileName: effectiveDestinationName
     )
@@ -774,6 +781,9 @@ private func moveOrCopyLocalRouteFile(
     sourceURL: URL,
     destinationURL: URL
 ) throws -> Bool {
+    if sourceURL.standardizedFileURL == destinationURL.standardizedFileURL {
+        return false
+    }
     do {
         try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
         return false
@@ -791,6 +801,36 @@ private func moveOrCopyLocalRouteFile(
             )
         }
     }
+}
+
+private func preferredRouteSourceURL(job: JobRecord) -> URL? {
+    let candidates = [
+        job.analysisChamps?["route.destination_local_path"],
+        job.analysisChamps?["route.review_staging_path"],
+        job.fileURL
+    ]
+
+    for candidate in candidates {
+        guard let raw = nonEmpty(candidate),
+              let url = resolveLocalFileURL(raw: raw),
+              FileManager.default.fileExists(atPath: url.path) else {
+            continue
+        }
+        return url
+    }
+    return nil
+}
+
+private func resolvedDestinationURL(
+    sourceURL: URL,
+    in directory: URL,
+    proposedFileName: String
+) -> URL {
+    let proposed = directory.appendingPathComponent(proposedFileName)
+    if proposed.standardizedFileURL == sourceURL.standardizedFileURL {
+        return proposed
+    }
+    return uniqueDestinationURL(in: directory, proposedFileName: proposedFileName)
 }
 
 private func resolveLocalFileURL(raw: String) -> URL? {
@@ -968,6 +1008,7 @@ func buildRoutePreview(
     analysis: AnalysisResponse?,
     requestedClassCode: String? = nil,
     requestedPresetID: String? = nil,
+    requestedNamingRuleID: String? = nil,
     requestedDestinationFolder: String? = nil,
     requestedNameFormat: String? = nil,
     requestedExportType: String? = nil
@@ -1037,7 +1078,10 @@ func buildRoutePreview(
         ?? nonEmpty(selectedRule?.name_format)
         ?? nonEmpty(selectedPreset?.name_format)
         ?? nonEmpty(effectiveLocalSettings?.default_name_format)
-    let selectedNamingRule = selectNamingRuleForRouting(
+    let selectedNamingRule = resolveRequestedNamingRule(
+        requestedNamingRuleID: requestedNamingRuleID,
+        rules: namingRules
+    ) ?? selectNamingRuleForRouting(
         job: job,
         analysis: effectiveAnalysis,
         preset: selectedPreset,
@@ -1157,6 +1201,16 @@ private func preferredRouteFileName(_ raw: String?) -> String? {
     return FilenameGuardrails.truncateFileNameIfNeeded(value)
 }
 
+func resolveRequestedNamingRule(
+    requestedNamingRuleID: String?,
+    rules: [NamingRuleDefinition]
+) -> NamingRuleDefinition? {
+    guard let requestedID = nonEmpty(requestedNamingRuleID) else {
+        return nil
+    }
+    return rules.first { $0.id == requestedID }
+}
+
 func selectNamingRuleForRouting(
     job: JobRecord,
     analysis: AnalysisResponse?,
@@ -1220,7 +1274,7 @@ private func renderFileNameUsingNamingRule(
     }
 
     let engine = DeclarativeNamingRuleEngine()
-    let detectionText = [buildNamingDetectionText(job: job, analysis: analysis, preset: preset), loadSupplementalNamingText(sourceURL: sourceURL)]
+    let detectionText = [loadSupplementalNamingText(sourceURL: sourceURL), buildNamingDetectionText(job: job, analysis: analysis, preset: preset)]
         .compactMap { nonEmpty($0) }
         .joined(separator: "\n")
     let metadata = NamingSourceMetadata(
@@ -1231,6 +1285,10 @@ private func renderFileNameUsingNamingRule(
     )
     var fields = engine.extractFields(from: detectionText, rule: namingRule, metadata: metadata)
     for (key, value) in overlayNamingFields(job: job, analysis: analysis, sourceURL: sourceURL) {
+        if key == "date" {
+            fields[key] = value
+            continue
+        }
         if shouldUseOverlayField(key: key, existing: fields[key], incoming: value) {
             fields[key] = value
         }
@@ -1315,14 +1373,13 @@ func overlayNamingFields(
     sourceURL: URL
 ) -> [String: String] {
     let champs = analysis?.champs ?? job.analysisChamps ?? [:]
-    let date = nonEmpty(champs["date"])
-        ?? nonEmpty(champs["metadata.date_document"])
+    let date = preferredNamingDate(from: champs)
     let numero = nonEmpty(champs["numero"])
         ?? nonEmpty(champs["metadata.numero_document"])
-    let title = nonEmpty(champs["resolution_titre"])
-        ?? nonEmpty(champs["summary.title"])
+    let title = preferredNamingTitle(from: champs)
         ?? nonEmpty(champs["metadata.objet"])
         ?? nonEmpty(champs["document_objet"])
+        ?? nonEmpty(champs["summary.title"])
     let object = nonEmpty(champs["document_objet"])
         ?? nonEmpty(champs["metadata.objet"])
         ?? nonEmpty(champs["summary.title"])
@@ -1344,6 +1401,96 @@ func overlayNamingFields(
     if let period { values["periode"] = period }
     values["original"] = sourceURL.deletingPathExtension().lastPathComponent
     return values
+}
+
+private func preferredNamingDate(from champs: [String: String]) -> String? {
+    let candidate = nonEmpty(champs["metadata.date_document"])
+        ?? nonEmpty(champs["date_document"])
+        ?? nonEmpty(champs["adoption_date"])
+        ?? nonEmpty(champs["metadata.adoption_date"])
+        ?? nonEmpty(champs["date"])
+    guard let candidate else {
+        return nil
+    }
+    if let normalized = normalizeRoutingDate(candidate) {
+        return normalized
+    }
+    return candidate
+}
+
+private func preferredNamingTitle(from champs: [String: String]) -> String? {
+    let resolutionTitle = nonEmpty(champs["resolution_titre"])
+    let objectTitle = nonEmpty(champs["document_objet"])
+    let metadataTitle = nonEmpty(champs["metadata.objet"])
+    let summaryTitle = nonEmpty(champs["summary.title"])
+
+    if let objectTitle, !looksLikeWeakRoutingTitle(objectTitle) {
+        return objectTitle
+    }
+    if let metadataTitle, !looksLikeWeakRoutingTitle(metadataTitle) {
+        return metadataTitle
+    }
+    if let summaryTitle, !looksLikeWeakRoutingTitle(summaryTitle) {
+        return summaryTitle
+    }
+    if let resolutionTitle, !looksLikeWeakRoutingTitle(resolutionTitle) {
+        return resolutionTitle
+    }
+    return resolutionTitle ?? objectTitle ?? metadataTitle ?? summaryTitle
+}
+
+private func looksLikeWeakRoutingTitle(_ raw: String) -> Bool {
+    let normalized = normalizedRoutingComparisonToken(raw)
+    if normalized.isEmpty {
+        return true
+    }
+    let weakFragments = [
+        "resolution",
+        "resolution no",
+        "resolution n",
+        "decision",
+        "gouvernance",
+        "financement voirie decision gouvernance"
+    ]
+    if weakFragments.contains(where: { normalized == $0 || normalized.hasPrefix($0) }) {
+        return true
+    }
+    return normalized.range(of: #"^resolution\s+\d{4}\s+\d{1,4}$"#, options: .regularExpression) != nil
+}
+
+private func normalizeRoutingDate(_ raw: String) -> String? {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+        return trimmed
+    }
+
+    let normalized = normalizedRoutingComparisonToken(trimmed)
+    let tokens = normalized.split(separator: " ").map(String.init)
+    guard tokens.count >= 3,
+          let day = Int(tokens[0]),
+          let month = routingFrenchMonthNumber(tokens[1]),
+          let year = Int(tokens[2]) else {
+        return nil
+    }
+    return String(format: "%04d-%02d-%02d", year, month, day)
+}
+
+private func routingFrenchMonthNumber(_ raw: String) -> Int? {
+    switch normalizedRoutingComparisonToken(raw) {
+    case "janvier": return 1
+    case "fevrier": return 2
+    case "mars": return 3
+    case "avril": return 4
+    case "mai": return 5
+    case "juin": return 6
+    case "juillet": return 7
+    case "aout": return 8
+    case "septembre": return 9
+    case "octobre": return 10
+    case "novembre": return 11
+    case "decembre": return 12
+    default: return nil
+    }
 }
 
 func shouldUseOverlayField(key: String, existing: String?, incoming: String?) -> Bool {

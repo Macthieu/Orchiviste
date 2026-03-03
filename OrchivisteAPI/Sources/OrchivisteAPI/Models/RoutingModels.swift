@@ -14,10 +14,12 @@ struct RoutingTarget: Content, Codable {
 struct RoutingRequest: Content {
     let class_code: String?
     let preset_id: String?
+    let naming_rule_id: String?
     let destination_folder: String?
     let name_format: String?
     let preferred_file_name: String?
     let export_type: String?
+    let reroute_existing: Bool?
 }
 
 struct RoutingLocalSettings: Content, Codable {

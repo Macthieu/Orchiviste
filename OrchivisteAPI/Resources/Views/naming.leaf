@@ -170,6 +170,17 @@
     #endif
 
     <section class="card">
+        <h2>Secours de renommage hérité</h2>
+        <p class="hint">Ce format sert uniquement de repli pour les anciens chemins de routage qui n’utilisent pas encore une règle déclarative. L’édition principale des règles de nommage reste juste en dessous.</p>
+        <form action="/ui/naming/legacy-format" method="post">
+            <label>Format de nom hérité par défaut
+                <input type="text" name="default_name_format" value="#(legacy_default_name_format)" placeholder="{class_code}-{type_doc}-{sujet}-{date}-{numero}">
+            </label>
+            <button class="btn" type="submit">Enregistrer le format de secours</button>
+        </form>
+    </section>
+
+    <section class="card">
         <h2>Apprentissage depuis dossier</h2>
         <form action="/ui/naming/rules/learn" method="post">
             <div class="form-grid">

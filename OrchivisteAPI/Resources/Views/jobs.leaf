@@ -49,6 +49,24 @@
         .status-needs_review { color: var(--warning); font-weight: 700; }
         .status-completed { color: var(--accent); font-weight: 700; }
         .mono { font-family: "SF Mono", Menlo, monospace; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+        .btn {
+            border: 1px solid #9b3a16;
+            color: #fff;
+            background: #9b3a16;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .notice { margin: 0 0 12px; color: var(--accent); font-weight: 700; }
+        .error { margin: 0 0 12px; color: var(--warning); font-weight: 700; }
     </style>
 </head>
 <body>
@@ -65,6 +83,28 @@
     </nav>
 </header>
 <main class="wrap">
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h2 style="margin-top:0;">Nettoyage rapide</h2>
+        <p style="margin:0 0 10px; color: var(--muted);">
+            Cette action vide la liste des tâches et nettoie les fichiers de travail dans l'inbox et dans le dossier
+            <span class="mono">A_reviser</span>. Les archives finales déjà routées ailleurs ne sont pas supprimées.
+        </p>
+        <p style="margin:0 0 10px; color: var(--muted); font-size: 12px;">
+            Inbox : <span class="mono">#(cleanup_inbox_path)</span><br>
+            A_reviser : <span class="mono">#(cleanup_review_path)</span>
+        </p>
+        <form action="/ui/jobs/clear" method="post" onsubmit="return confirm('Effacer toutes les tâches et nettoyer inbox + A_reviser ?');">
+            <button class="btn" type="submit">Effacer les tâches et nettoyer les dossiers de travail</button>
+        </form>
+    </section>
+
     <table>
         <thead>
         <tr>

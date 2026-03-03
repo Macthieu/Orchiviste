@@ -58,6 +58,14 @@ enum JobPersistenceRepository {
         }
     }
 
+    static func deleteAllJobs(on db: Database) async throws {
+        try await JobRow.query(on: db).delete()
+    }
+
+    static func deleteAllIdempotencyKeys(on db: Database) async throws {
+        try await IdempotencyKeyRow.query(on: db).delete()
+    }
+
     static func saveIdempotency(
         key: String,
         requestHash: String,

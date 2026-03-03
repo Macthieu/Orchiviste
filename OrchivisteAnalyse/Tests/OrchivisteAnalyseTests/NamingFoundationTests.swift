@@ -68,6 +68,54 @@ final class NamingFoundationTests: XCTestCase {
             "Résolution NO 2023-436 – Financement par le fonds de roulement – finalisation de la voirie de la rue Nadon – 2023-11-20.pdf"
         )
     }
+
+    func testResolutionRuleReusesMemorizedCorrectionForSameDocumentNumber() {
+        let engine = DeclarativeNamingRuleEngine()
+        let baseRule = NamingFoundationSeeds.resolutionRule()
+        let correctedRule = NamingRuleDefinition(
+            id: baseRule.id,
+            label: baseRule.label,
+            version: baseRule.version,
+            document_family: baseRule.document_family,
+            template: baseRule.template,
+            conditions: baseRule.conditions,
+            fields: baseRule.fields,
+            normalization: baseRule.normalization,
+            forbidden_terms: baseRule.forbidden_terms,
+            validations: baseRule.validations,
+            metadata: NamingRuleMetadata(
+                suggested_class_code: baseRule.metadata?.suggested_class_code,
+                canonical_output_label: baseRule.metadata?.canonical_output_label,
+                rendering: baseRule.metadata?.rendering,
+                feedback_examples: [
+                    NamingFeedbackExample(
+                        created_at: Date(timeIntervalSince1970: 0),
+                        source_filename: "20260303-101231-31-2023_398.pdf",
+                        corrected_filename: "Résolution NO 2023-398 – Adjudication de l'entente pour l'entretien d'hiver du réseau routier rural – 2023-10-16.pdf"
+                    )
+                ],
+                notes: baseRule.metadata?.notes
+            )
+        )
+
+        let rawFields = [
+            "numero": "2023-398",
+            "titre": "Adjudication du entente pour l'entretien d'hiver du réseau routier rural",
+            "date": "2026-03-03"
+        ]
+
+        let normalized = engine.normalizeFields(
+            rawFields,
+            rule: correctedRule,
+            thesaurus: NamingFoundationSeeds.defaultThesaurus()
+        )
+        let rendered = engine.renderFilename(rule: correctedRule, fields: normalized)
+
+        XCTAssertEqual(
+            rendered,
+            "Résolution NO 2023-398 – Adjudication de l'entente pour l'entretien d'hiver du réseau routier rural – 2023-10-16.pdf"
+        )
+    }
 }
 
 #else

@@ -90,7 +90,7 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             switch key {
             case "numero":
                 value = normalizeDocumentNumber(value)
-            case "date":
+            case "date", "date_document":
                 value = normalizeDateString(value) ?? value
             case "periode":
                 value = normalizePeriod(value)
@@ -120,7 +120,7 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
            let existing = normalized["objet"] {
             normalized["objet"] = stripAgreementFamilyLeadIn(existing)
         }
-        return normalized
+        return applyFeedbackExamples(to: normalized, rule: rule)
     }
 
     public func renderFilename(
@@ -557,10 +557,73 @@ private func normalizeResolutionTitle(_ value: String, rendering: NamingRenderin
     return output
 }
 
+private func applyFeedbackExamples(
+    to fields: [String: String],
+    rule: NamingRuleDefinition
+) -> [String: String] {
+    guard let feedbackExamples = rule.metadata?.feedback_examples, !feedbackExamples.isEmpty else {
+        return fields
+    }
+
+    for feedback in feedbackExamples.reversed() {
+        let sourceFields = feedback.source_fields ?? parseTemplateFields(from: feedback.source_filename, template: rule.template)
+        let correctedFields = feedback.corrected_fields ?? parseTemplateFields(from: feedback.corrected_filename, template: rule.template)
+        guard !correctedFields.isEmpty else {
+            continue
+        }
+
+        if shouldApplyFeedbackExample(
+            currentFields: fields,
+            sourceFields: sourceFields,
+            correctedFields: correctedFields
+        ) {
+            var merged = fields
+            for key in ["numero", "date", "titre", "objet", "cocontractant", "periode"] {
+                if let corrected = correctedFields[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !corrected.isEmpty {
+                    merged[key] = corrected
+                }
+            }
+            return merged
+        }
+    }
+
+    return fields
+}
+
 private func stripAgreementFamilyLeadIn(_ value: String) -> String {
     let pattern = #"(?i)^\s*(entente|contrat|convention|bail|protocole|avenant)(?:\s+(?:pour|de|d'|relatif\s+a|relative\s+a|d'utilisation|de bon voisinage))?\s*"#
     let stripped = value.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
     return FilenameGuardrails.normalizeFrenchTypography(stripped)
+}
+
+private func shouldApplyFeedbackExample(
+    currentFields: [String: String],
+    sourceFields: [String: String],
+    correctedFields: [String: String]
+) -> Bool {
+    if let currentNumero = currentFields["numero"],
+       let exampleNumero = correctedFields["numero"] ?? sourceFields["numero"],
+       normalizedNamingFeedbackValue(currentNumero) == normalizedNamingFeedbackValue(exampleNumero) {
+        return true
+    }
+
+    let candidateKeys = ["titre", "objet", "cocontractant"]
+    for key in candidateKeys {
+        guard let current = currentFields[key], !current.isEmpty else {
+            continue
+        }
+        if let source = sourceFields[key],
+           namingSimilarityScore(current, source) >= 0.82 {
+            return true
+        }
+        if let corrected = correctedFields[key],
+           namingSimilarityScore(current, corrected) >= 0.94 {
+            return true
+        }
+    }
+
+    return false
 }
 
 private func cleanupCounterparties(_ value: String) -> String {
@@ -661,6 +724,71 @@ private func smartTrimPhrase(_ value: String, maxLength: Int) -> String {
         }
     }
     return prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func parseTemplateFields(from fileName: String, template: String) -> [String: String] {
+    guard let placeholderRegex = try? NSRegularExpression(pattern: #"\{([^}]+)\}"#) else {
+        return [:]
+    }
+    let range = NSRange(template.startIndex..<template.endIndex, in: template)
+    let matches = placeholderRegex.matches(in: template, range: range)
+    guard !matches.isEmpty else {
+        return [:]
+    }
+
+    var pattern = "^"
+    var fieldKeys: [String] = []
+    var cursor = template.startIndex
+    for match in matches {
+        guard let fullRange = Range(match.range(at: 0), in: template),
+              let keyRange = Range(match.range(at: 1), in: template) else {
+            continue
+        }
+        pattern += NSRegularExpression.escapedPattern(for: String(template[cursor..<fullRange.lowerBound]))
+        pattern += "(.+?)"
+        fieldKeys.append(String(template[keyRange]))
+        cursor = fullRange.upperBound
+    }
+    pattern += NSRegularExpression.escapedPattern(for: String(template[cursor...]))
+    pattern += "$"
+
+    guard let regex = try? NSRegularExpression(pattern: pattern),
+          let match = regex.firstMatch(in: fileName, range: NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)) else {
+        return [:]
+    }
+
+    var fields: [String: String] = [:]
+    for (index, key) in fieldKeys.enumerated() {
+        let captureIndex = index + 1
+        guard captureIndex < match.numberOfRanges,
+              let captureRange = Range(match.range(at: captureIndex), in: fileName) else {
+            continue
+        }
+        fields[key] = String(fileName[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    return fields
+}
+
+private func normalizedNamingFeedbackValue(_ raw: String) -> String {
+    FilenameGuardrails.normalizeFrenchTypography(raw)
+        .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        .lowercased()
+        .replacingOccurrences(of: #"[^a-z0-9]+"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func namingSimilarityScore(_ lhs: String, _ rhs: String) -> Double {
+    let lhsTokens = Set(normalizedNamingFeedbackValue(lhs).split(separator: " ").map(String.init))
+    let rhsTokens = Set(normalizedNamingFeedbackValue(rhs).split(separator: " ").map(String.init))
+    guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else {
+        return 0
+    }
+    let intersection = lhsTokens.intersection(rhsTokens).count
+    let union = lhsTokens.union(rhsTokens).count
+    guard union > 0 else {
+        return 0
+    }
+    return Double(intersection) / Double(union)
 }
 
 private func frenchSentenceCase(_ value: String, preservedAcronyms: Set<String>) -> String {

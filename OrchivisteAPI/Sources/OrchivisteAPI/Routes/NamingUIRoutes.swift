@@ -6,6 +6,7 @@ import Vapor
 private struct UINamingContext: Encodable {
     let notice: String?
     let error: String?
+    let legacy_default_name_format: String
     let rules: [UINamingRuleSummary]
     let thesauri: [UINamingThesaurusSummary]
     let rule_drafts: [UINamingRuleDraftSummary]
@@ -101,6 +102,10 @@ private struct UINamingThesaurusImportConfirmForm: Content {
     let strategy: String?
 }
 
+private struct UINamingLegacyFormatForm: Content {
+    let default_name_format: String?
+}
+
 func registerNamingUIRoutes(_ app: Application) {
     app.get("ui", "naming") { req async throws -> View in
         let rules = ConfigLoader.loadNamingRules()
@@ -135,6 +140,7 @@ func registerNamingUIRoutes(_ app: Application) {
         let context = UINamingContext(
             notice: req.query[String.self, at: "notice"],
             error: req.query[String.self, at: "error"],
+            legacy_default_name_format: ConfigLoader.loadRoutingLocalSettings()?.default_name_format ?? "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
             rules: rules.map {
                 UINamingRuleSummary(
                     id: $0.id,
@@ -208,6 +214,27 @@ func registerNamingUIRoutes(_ app: Application) {
         )
 
         return try await req.view.render("naming", context)
+    }
+
+    app.on(.POST, "ui", "naming", "legacy-format", body: .collect(maxSize: "512kb")) { req async throws -> Response in
+        do {
+            let form = try req.content.decode(UINamingLegacyFormatForm.self)
+            let existing = ConfigLoader.loadRoutingLocalSettings()
+            let updated = RoutingLocalSettings(
+                local_route_root: existing?.local_route_root,
+                default_destination_template: existing?.default_destination_template,
+                default_name_format: namingNonEmpty(form.default_name_format)
+            )
+            try ConfigLoader.saveRoutingLocalSettings(updated)
+            return req.redirect(to: "/ui/naming?notice=\(namingQuery("Format de secours hérité mis à jour."))")
+        } catch let abort as AbortError {
+            return req.redirect(to: "/ui/naming?error=\(namingQuery(abort.reason))")
+        } catch {
+            req.logger.error("Échec mise à jour format hérité UI.", metadata: [
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/naming?error=\(namingQuery("Erreur interne pendant l'enregistrement du format hérité."))")
+        }
     }
 
     app.on(.POST, "ui", "naming", "rules", "save", body: .collect(maxSize: "2mb")) { req async throws -> Response in

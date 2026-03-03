@@ -66,6 +66,14 @@ actor AppState {
             .map { $0 }
     }
 
+    func clearJobs() {
+        jobs.removeAll()
+        previews.removeAll()
+        analyses.removeAll()
+        idempotency.removeAll()
+        addEvent(type: "jobs.cleared", payload: [:])
+    }
+
     func cancelJob(id: UUID) -> JobRecord? {
         guard var job = jobs[id] else { return nil }
         job.status = .cancelled

@@ -51,6 +51,10 @@ private struct UIDashboardRecentJobsPayload: Content {
 
 private struct UIJobsContext: Encodable {
     let jobs: [UIJobSummary]
+    let notice: String?
+    let error: String?
+    let cleanup_inbox_path: String
+    let cleanup_review_path: String
 }
 
 private struct UISetupContext: Encodable {
@@ -82,6 +86,7 @@ private struct UIPresetsContext: Encodable {
     let taxonomy_ids: [String]
     let selected_taxonomy_id: String?
     let selected_taxonomy_json: String
+    let class_code_options: [UIClassCodeOption]
     let notice: String?
     let error: String?
 }
@@ -118,6 +123,19 @@ private struct UIKeyValueSummary: Encodable {
     let value: String
 }
 
+private struct UIClassCodeOption: Encodable {
+    let code: String
+    let label: String
+    let display: String
+    let path: String
+}
+
+private struct UINamingRuleOption: Encodable {
+    let id: String
+    let label: String
+    let display: String
+}
+
 private struct UIWorkerSummary: Encodable {
     let id: String
     let name: String
@@ -148,7 +166,9 @@ private struct UIRoutingRuleSummary: Encodable {
     let when_type_doc: String
     let when_sujet: String
     let when_class_code: String
+    let when_class_code_display: String
     let class_code: String
+    let class_code_display: String
     let preset_id: String
     let destination_template: String
     let name_format: String
@@ -165,6 +185,7 @@ private struct UIJobViewerContext: Encodable {
     let needs_review: Bool
     let can_review: Bool
     let can_route: Bool
+    let can_reroute: Bool
     let can_route_after_review: Bool
     let show_routing_form: Bool
     let route_disabled_reason: String?
@@ -185,6 +206,8 @@ private struct UIJobViewerContext: Encodable {
     let analysis_sujets: String
     let analysis_capture_strategy: String
     let analysis_review_reasons: String
+    let analysis_review_reason_items: [UIKeyValueSummary]
+    let analysis_review_reason_items_present: Bool
     let analysis_summary_title: String
     let analysis_summary_text: String
     let analysis_summary_points: [String]
@@ -194,8 +217,12 @@ private struct UIJobViewerContext: Encodable {
     let suggested_metadata_json: String
     let analysis_champs_json: String
     let analysis_validation_flags: String
-    let class_code_options: [String]
+    let analysis_validation_items: [UIKeyValueSummary]
+    let analysis_validation_items_present: Bool
+    let class_code_options: [UIClassCodeOption]
     let preset_options: [String]
+    let naming_rule_options: [UINamingRuleOption]
+    let selected_naming_rule_id: String?
     let suggested_class_code_raw: String?
     let suggested_preset_raw: String?
 }
@@ -370,6 +397,13 @@ private struct UIWorkerHeartbeatForm: Content {
 private struct UIWorkerConfigForm: Content {
     let version: String?
     let capabilities: String?
+}
+
+private struct UIRoutePreviewPayload: Content {
+    let file_name: String
+    let destination_folder: String
+    let naming_rule_id: String?
+    let naming_source: String
 }
 
 func registerUIRoutes(_ app: Application) {
@@ -1219,7 +1253,44 @@ func registerUIRoutes(_ app: Application) {
 
     app.get("ui", "jobs") { req async throws -> View in
         let jobs = try await loadJobs(req: req, limit: 300)
-        return try await req.view.render("jobs", UIJobsContext(jobs: jobs))
+        let reviewDirectory = uiLocalReviewDirectory()
+        return try await req.view.render(
+            "jobs",
+            UIJobsContext(
+                jobs: jobs,
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"],
+                cleanup_inbox_path: resolveUILocalIngestInboxDirectory().path,
+                cleanup_review_path: reviewDirectory.path
+            )
+        )
+    }
+
+    app.post("ui", "jobs", "clear") { req async throws -> Response in
+        let inboxDirectory = resolveUILocalIngestInboxDirectory()
+        let reviewDirectory = uiLocalReviewDirectory()
+
+        if (try? await JobPersistenceRepository.deleteAllJobs(on: req.db)) == nil {
+            req.logger.warning("Suppression des tâches persistées ignorée: base indisponible.")
+        }
+        if (try? await JobPersistenceRepository.deleteAllIdempotencyKeys(on: req.db)) == nil {
+            req.logger.warning("Suppression des clés d'idempotence ignorée: base indisponible.")
+        }
+        await req.application.appState.clearJobs()
+
+        do {
+            let deletedInbox = try purgeDirectoryContents(at: inboxDirectory)
+            let deletedReview = try purgeDirectoryContents(at: reviewDirectory)
+            let notice = "Tâches effacées. Inbox nettoyée (\(deletedInbox)) et A_reviser nettoyé (\(deletedReview))."
+            return req.redirect(to: "/ui/jobs?notice=\(urlQueryEncoded(notice))")
+        } catch {
+            req.logger.error("Échec du nettoyage UI des tâches.", metadata: [
+                "error": .string(error.localizedDescription),
+                "inbox": .string(inboxDirectory.path),
+                "review": .string(reviewDirectory.path)
+            ])
+            return req.redirect(to: "/ui/jobs?error=\(urlQueryEncoded("Les tâches ont été effacées, mais le nettoyage des fichiers a échoué."))")
+        }
     }
 
     app.get("ui", "setup") { req async throws -> View in
@@ -1256,13 +1327,16 @@ func registerUIRoutes(_ app: Application) {
         let taxonomyIDs = await loadTaxonomyIDs(req: req)
         let selectedTaxonomyID = req.query[String.self, at: "taxonomy_id"] ?? taxonomyIDs.first
         let selectedTaxonomyJSON = await loadTaxonomyJSONPreview(id: selectedTaxonomyID, req: req)
+        let classCodeOptions = await loadClassCodeOptions(req: req, include: nil)
         let routingRules = (ConfigLoader.loadRoutingRules()?.rules ?? []).map { rule in
             UIRoutingRuleSummary(
                 id: nonEmptyString(rule.id) ?? "(sans-id)",
                 when_type_doc: nonEmptyString(rule.when_type_doc) ?? "-",
                 when_sujet: nonEmptyString(rule.when_sujet) ?? "-",
                 when_class_code: nonEmptyString(rule.when_class_code) ?? "-",
+                when_class_code_display: displayClassCode(nonEmptyString(rule.when_class_code), options: classCodeOptions),
                 class_code: nonEmptyString(rule.class_code) ?? "-",
+                class_code_display: displayClassCode(nonEmptyString(rule.class_code), options: classCodeOptions),
                 preset_id: nonEmptyString(rule.preset_id) ?? "-",
                 destination_template: nonEmptyString(rule.destination_template) ?? "-",
                 name_format: nonEmptyString(rule.name_format) ?? "-"
@@ -1280,6 +1354,7 @@ func registerUIRoutes(_ app: Application) {
                 taxonomy_ids: taxonomyIDs,
                 selected_taxonomy_id: selectedTaxonomyID,
                 selected_taxonomy_json: selectedTaxonomyJSON,
+                class_code_options: classCodeOptions,
                 notice: req.query[String.self, at: "notice"],
                 error: req.query[String.self, at: "error"]
             )
@@ -1313,6 +1388,31 @@ func registerUIRoutes(_ app: Application) {
         return req.redirect(to: "/v1/jobs/\(jobID.uuidString)/download/searchable")
     }
 
+    app.get("ui", "jobs", ":id", "route-preview") { req async throws -> UIRoutePreviewPayload in
+        guard let id = req.parameters.get("id"),
+              let jobID = UUID(uuidString: id) else {
+            throw Abort(.badRequest, reason: "Identifiant de tâche invalide.")
+        }
+        let job = try await resolveUIJob(jobID: jobID, req: req)
+        let analysis = await req.application.appState.analysis(jobId: jobID)
+        let preview = buildRoutePreview(
+            job: job,
+            analysis: analysis,
+            requestedClassCode: req.query[String.self, at: "class_code"],
+            requestedPresetID: req.query[String.self, at: "preset_id"],
+            requestedNamingRuleID: req.query[String.self, at: "naming_rule_id"],
+            requestedDestinationFolder: req.query[String.self, at: "destination_folder"],
+            requestedNameFormat: req.query[String.self, at: "name_format"],
+            requestedExportType: req.query[String.self, at: "export_type"]
+        )
+        return UIRoutePreviewPayload(
+            file_name: preview?.fileName ?? "",
+            destination_folder: preview?.destinationFolderDisplay ?? "",
+            naming_rule_id: preview?.namingRuleID,
+            naming_source: preview?.namingSource ?? "Aucune proposition automatique"
+        )
+    }
+
     app.get("ui", "jobs", ":id") { req async throws -> View in
         guard let id = req.parameters.get("id"),
               let jobID = UUID(uuidString: id) else {
@@ -1322,6 +1422,8 @@ func registerUIRoutes(_ app: Application) {
         let preview = try await PreviewLoader.ensurePreview(jobId: jobID, req: req)
         let classCodeOptions = await loadClassCodeOptions(req: req, include: job.suggestedClassCode)
         let presetOptions = await loadPresetIDs(req: req, include: job.suggestedPreset)
+        let namingRuleOptions = loadNamingRuleOptions(include: nil)
+        let canReroute = jobCanBeRerouted(job)
         let canRoute: Bool
         let canRouteAfterReview = job.status == .needs_review
         let routeDisabledReason: String?
@@ -1334,15 +1436,17 @@ func registerUIRoutes(_ app: Application) {
         } else if job.status == .failed || job.status == .cancelled {
             canRoute = false
             routeDisabledReason = "Statut non routable."
-        } else if job.steps.routed != nil {
+        } else if job.steps.routed != nil && !canReroute {
             canRoute = false
             routeDisabledReason = "Cette tâche est déjà routée."
         } else {
-            canRoute = true
+            canRoute = job.steps.routed == nil
             routeDisabledReason = nil
         }
         let summaryPoints = analysisSummaryPoints(for: job)
         let metadataItems = suggestedMetadataItems(for: job)
+        let reviewReasonItems = explainReviewReasons(job.analysisChamps)
+        let validationItems = explainValidationFlags(job.analysisChamps)
         let routePreview = buildRoutePreview(
             job: job,
             analysis: await req.application.appState.analysis(jobId: jobID)
@@ -1353,14 +1457,15 @@ func registerUIRoutes(_ app: Application) {
             file_url: job.fileURL,
             source_kind: localizedSourceKind(job.source.kind),
             suggested_preset: job.suggestedPreset ?? "N/D",
-            suggested_class_code: job.suggestedClassCode ?? "N/D",
+            suggested_class_code: displayClassCode(job.suggestedClassCode, options: classCodeOptions),
             confidence: job.confidence.map { String(format: "%.2f", $0) } ?? "-",
             needs_review: job.needsReview,
             can_review: job.status == .needs_review,
             can_route: canRoute,
+            can_reroute: canReroute,
             can_route_after_review: canRouteAfterReview,
-            show_routing_form: canRoute || canRouteAfterReview,
-            route_disabled_reason: (canRoute || canRouteAfterReview) ? nil : routeDisabledReason,
+            show_routing_form: canRoute || canRouteAfterReview || canReroute,
+            route_disabled_reason: (canRoute || canRouteAfterReview || canReroute) ? nil : routeDisabledReason,
             routed_at: job.steps.routed.map(formatTimestamp),
             saved_folder_path: routeSavedFolderPath(job) ?? "-",
             proposed_file_name: routePreview?.fileName ?? "-",
@@ -1371,7 +1476,7 @@ func registerUIRoutes(_ app: Application) {
                 guard let folder = nonEmptyString(routePreview?.destinationFolderDisplay) else { return false }
                 return folder != "-"
             }(),
-            proposed_naming_rule_id: routePreview?.namingRuleID ?? "-",
+            proposed_naming_rule_id: routePreview?.namingRuleID ?? "",
             proposed_naming_rule_present: nonEmptyString(routePreview?.namingRuleID) != nil,
             proposed_name_source: routePreview?.namingSource ?? "Aucune proposition automatique",
             preview_pages: max(1, preview?.pages ?? 1),
@@ -1381,6 +1486,8 @@ func registerUIRoutes(_ app: Application) {
             analysis_sujets: (job.analysisSujets ?? []).isEmpty ? "N/D" : (job.analysisSujets ?? []).joined(separator: ", "),
             analysis_capture_strategy: extractAnalysisValue(job.analysisChamps, key: "capture.strategy", fallback: "idp_capture_strategy"),
             analysis_review_reasons: extractAnalysisValue(job.analysisChamps, key: "review.reasons", fallback: "idp_review_reasons"),
+            analysis_review_reason_items: reviewReasonItems,
+            analysis_review_reason_items_present: !reviewReasonItems.isEmpty,
             analysis_summary_title: analysisSummaryTitle(for: job),
             analysis_summary_text: analysisSummaryText(for: job),
             analysis_summary_points: summaryPoints,
@@ -1390,13 +1497,48 @@ func registerUIRoutes(_ app: Application) {
             suggested_metadata_json: suggestedMetadataJSON(for: job),
             analysis_champs_json: prettyPrintedJSON(job.analysisChamps),
             analysis_validation_flags: extractValidationFlags(job.analysisChamps),
+            analysis_validation_items: validationItems,
+            analysis_validation_items_present: !validationItems.isEmpty,
             class_code_options: classCodeOptions,
             preset_options: presetOptions,
+            naming_rule_options: namingRuleOptions,
+            selected_naming_rule_id: nonEmptyString(routePreview?.namingRuleID),
             suggested_class_code_raw: nonEmptyString(job.suggestedClassCode),
             suggested_preset_raw: nonEmptyString(job.suggestedPreset)
         )
         return try await req.view.render("job_viewer", context)
     }
+}
+
+private func jobCanBeRerouted(_ job: JobRecord) -> Bool {
+    guard job.status == .completed || job.steps.routed != nil else {
+        return false
+    }
+    let candidatePaths = [
+        routeValue(job, key: "route.destination_local_path"),
+        routeValue(job, key: "route.review_staging_path"),
+        nonEmptyString(job.fileURL)
+    ]
+    for rawPath in candidatePaths {
+        guard let rawPath,
+              let url = uiResolveLocalFileURL(raw: rawPath),
+              FileManager.default.fileExists(atPath: url.path) else {
+            continue
+        }
+        return true
+    }
+    return false
+}
+
+private func uiResolveLocalFileURL(raw: String) -> URL? {
+    if let parsed = URL(string: raw), parsed.isFileURL {
+        return parsed
+    }
+    if raw.hasPrefix("/") {
+        return URL(fileURLWithPath: raw)
+    }
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    return cwd.appendingPathComponent(raw)
 }
 
 private func loadWorkers(req: Request) async -> [UIWorkerSummary] {
@@ -2044,6 +2186,104 @@ private func extractValidationFlags(_ dictionary: [String: String]?) -> String {
     return trimmed.isEmpty ? "Aucun" : trimmed
 }
 
+private func explainReviewReasons(_ dictionary: [String: String]?) -> [UIKeyValueSummary] {
+    let raw = nonEmptyString(dictionary?["review.reasons"])
+        ?? nonEmptyString(dictionary?["idp_review_reasons"])
+    let codes = parseDelimitedAnalysisCodes(raw)
+    return codes.map { code in
+        switch code {
+        case "missing_required_fields":
+            return UIKeyValueSummary(
+                label: "Champs requis manquants",
+                value: "Le document n'a pas encore fourni tous les éléments obligatoires pour une décision de routage fiable."
+            )
+        case "ambiguous_fields", "ambiguous_fields_detected":
+            return UIKeyValueSummary(
+                label: "Champs ambigus",
+                value: "Plusieurs valeurs plausibles ont été détectées. Une validation humaine est préférable avant le renommage final."
+            )
+        case "multi_document_units", "multi_document_units_detected":
+            return UIKeyValueSummary(
+                label: "Plusieurs unités documentaires",
+                value: "Le fichier semble contenir plusieurs documents ou plusieurs blocs décisionnels, ce qui rend le découpage incertain."
+            )
+        case "low_confidence":
+            return UIKeyValueSummary(
+                label: "Confiance faible",
+                value: "Le score global de l'analyse est jugé trop faible pour automatiser le classement sans contrôle."
+            )
+        default:
+            return UIKeyValueSummary(
+                label: humanReadableAnalysisCode(code),
+                value: "Signal technique remonté par l'analyse documentaire."
+            )
+        }
+    }
+}
+
+private func explainValidationFlags(_ dictionary: [String: String]?) -> [UIKeyValueSummary] {
+    let codes = parseDelimitedAnalysisCodes(dictionary?["idp_validation_flags"])
+    return codes.map { code in
+        switch code {
+        case "missing_numero":
+            return UIKeyValueSummary(
+                label: "Numéro manquant",
+                value: "Le moteur n'a pas confirmé le numéro officiel du document avec assez de fiabilité."
+            )
+        case "missing_clause_resolu":
+            return UIKeyValueSummary(
+                label: "Clause résolue absente",
+                value: "La section de décision finale n'a pas été repérée clairement dans le texte analysé."
+            )
+        case "missing_date":
+            return UIKeyValueSummary(
+                label: "Date manquante",
+                value: "La date de séance ou d'adoption n'a pas été normalisée au bon format."
+            )
+        case "missing_classification":
+            return UIKeyValueSummary(
+                label: "Classement incomplet",
+                value: "Le code de classement ou la famille documentaire n'a pas été établi de manière satisfaisante."
+            )
+        case "low_completeness":
+            return UIKeyValueSummary(
+                label: "Complétude faible",
+                value: "Le document est partiellement compris, mais il manque encore des morceaux utiles au renommage final."
+            )
+        default:
+            return UIKeyValueSummary(
+                label: humanReadableAnalysisCode(code),
+                value: "Indicateur interne de validation IDP."
+            )
+        }
+    }
+}
+
+private func parseDelimitedAnalysisCodes(_ raw: String?) -> [String] {
+    guard let raw = nonEmptyString(raw) else {
+        return []
+    }
+    return raw
+        .split(whereSeparator: { $0 == ";" || $0 == "," || $0 == "|" })
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+}
+
+private func humanReadableAnalysisCode(_ raw: String) -> String {
+    raw
+        .replacingOccurrences(of: "_", with: " ")
+        .replacingOccurrences(of: "-", with: " ")
+        .split(whereSeparator: \.isWhitespace)
+        .map { token in
+            let lowercased = token.lowercased()
+            if ["idp", "ocr", "pdf", "api"].contains(lowercased) {
+                return lowercased.uppercased()
+            }
+            return lowercased.prefix(1).uppercased() + lowercased.dropFirst()
+        }
+        .joined(separator: " ")
+}
+
 private func preferredAnalysisValue(
     _ dictionary: [String: String]?,
     keys: [String],
@@ -2162,6 +2402,53 @@ private func resolveUILocalIngestInboxDirectory() -> URL {
 
     return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         .appendingPathComponent(".orchiviste-inbox", isDirectory: true)
+}
+
+private func uiLocalRouteRootDirectory() -> URL {
+    let settings = ConfigLoader.loadRoutingLocalSettings()
+    if let configured = nonEmptyString(settings?.local_route_root) {
+        if configured.hasPrefix("/") {
+            return URL(fileURLWithPath: configured, isDirectory: true)
+        }
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(configured, isDirectory: true)
+    }
+    if let configured = Environment.get("ORCHIVISTE_LOCAL_ROUTE_ROOT")?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+       !configured.isEmpty {
+        return URL(fileURLWithPath: configured, isDirectory: true)
+    }
+    if let sqlitePath = Environment.get("ORCHIVISTE_SQLITE_PATH"),
+       sqlitePath.hasPrefix("/") {
+        return URL(fileURLWithPath: sqlitePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("routed", isDirectory: true)
+    }
+    return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        .appendingPathComponent(".orchiviste-routed", isDirectory: true)
+}
+
+private func uiLocalReviewDirectory() -> URL {
+    uiLocalRouteRootDirectory().appendingPathComponent("A_reviser", isDirectory: true)
+}
+
+@discardableResult
+private func purgeDirectoryContents(at directory: URL) throws -> Int {
+    let manager = FileManager.default
+    guard manager.fileExists(atPath: directory.path) else {
+        return 0
+    }
+    let contents = try manager.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: nil,
+        options: [.skipsHiddenFiles]
+    )
+    var deletedCount = 0
+    for item in contents {
+        try manager.removeItem(at: item)
+        deletedCount += 1
+    }
+    return deletedCount
 }
 
 private func sanitizeUploadFileName(_ raw: String) -> String {
@@ -2454,36 +2741,100 @@ private func loadPresetIDs(req: Request, include value: String?) async -> [Strin
     return ids.sorted()
 }
 
-private func loadClassCodeOptions(req: Request, include value: String?) async -> [String] {
-    var codes = Set<String>()
+private func loadNamingRuleOptions(include value: String?) -> [UINamingRuleOption] {
+    var options = ConfigLoader.loadNamingRules()
+        .sorted {
+            let left = "\($0.label) \($0.id)"
+            let right = "\($1.label) \($1.id)"
+            return left.localizedCaseInsensitiveCompare(right) == .orderedAscending
+        }
+        .map { rule in
+            UINamingRuleOption(
+                id: rule.id,
+                label: rule.label,
+                display: "\(rule.label) — \(rule.id)"
+            )
+        }
+
+    if let value = nonEmptyString(value),
+       !options.contains(where: { $0.id == value }) {
+        options.insert(UINamingRuleOption(id: value, label: value, display: value), at: 0)
+    }
+    return options
+}
+
+private func loadClassCodeOptions(req: Request, include value: String?) async -> [UIClassCodeOption] {
+    var optionsByCode: [String: UIClassCodeOption] = [:]
     if let routingMap = ConfigLoader.loadRoutingMap() {
         for code in routingMap.mappings.keys where !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            codes.insert(code)
+            let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+            optionsByCode[trimmedCode] = UIClassCodeOption(
+                code: trimmedCode,
+                label: "Libellé non précisé",
+                display: trimmedCode,
+                path: ""
+            )
         }
     }
 
     let taxonomyIDs = await loadTaxonomyIDs(req: req)
     for id in taxonomyIDs {
         if let taxonomy = await req.application.appState.taxonomy(id: id) ?? ConfigLoader.loadTaxonomy(id: id) {
-            collectTaxonomyCodes(from: taxonomy.root, into: &codes)
+            collectTaxonomyCodes(from: taxonomy.root, path: [], into: &optionsByCode)
         }
     }
     if let value = nonEmptyString(value) {
-        codes.insert(value)
+        optionsByCode[value] = optionsByCode[value] ?? UIClassCodeOption(
+            code: value,
+            label: "Libellé non précisé",
+            display: value,
+            path: ""
+        )
     }
-    return codes.sorted()
+    return optionsByCode.values.sorted { left, right in
+        if left.code == right.code {
+            return left.label.localizedCaseInsensitiveCompare(right.label) == .orderedAscending
+        }
+        return left.code.localizedStandardCompare(right.code) == .orderedAscending
+    }
 }
 
-private func collectTaxonomyCodes(from nodes: [TaxonomyNode], into codes: inout Set<String>) {
+private func collectTaxonomyCodes(
+    from nodes: [TaxonomyNode],
+    path: [String],
+    into optionsByCode: inout [String: UIClassCodeOption]
+) {
     for node in nodes {
         let code = node.code.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = node.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentPath = (path + [label.isEmpty ? code : label]).filter { !$0.isEmpty }
         if !code.isEmpty {
-            codes.insert(code)
+            let display = label.isEmpty ? code : "\(code) — \(label)"
+            let option = UIClassCodeOption(
+                code: code,
+                label: label.isEmpty ? "Libellé non précisé" : label,
+                display: display,
+                path: currentPath.joined(separator: " > ")
+            )
+            if let existing = optionsByCode[code] {
+                if existing.label == "Libellé non précisé" && option.label != "Libellé non précisé" {
+                    optionsByCode[code] = option
+                }
+            } else {
+                optionsByCode[code] = option
+            }
         }
         if let children = node.children, !children.isEmpty {
-            collectTaxonomyCodes(from: children, into: &codes)
+            collectTaxonomyCodes(from: children, path: currentPath, into: &optionsByCode)
         }
     }
+}
+
+private func displayClassCode(_ code: String?, options: [UIClassCodeOption]) -> String {
+    guard let code = nonEmptyString(code) else {
+        return "-"
+    }
+    return options.first(where: { $0.code == code })?.display ?? code
 }
 
 private func loadTaxonomyJSONPreview(id: String?, req: Request) async -> String {

@@ -750,10 +750,12 @@ func registerOpenAPIRoutes(_ app: Application) {
                         "properties": [
                             "class_code": ["type": "string"],
                             "preset_id": ["type": "string"],
+                            "naming_rule_id": ["type": "string"],
                             "destination_folder": ["type": "string"],
                             "name_format": ["type": "string"],
                             "preferred_file_name": ["type": "string"],
-                            "export_type": ["type": "string", "enum": ["pdfa"]]
+                            "export_type": ["type": "string", "enum": ["pdfa"]],
+                            "reroute_existing": ["type": "boolean"]
                         ]
                     ],
                     "NamingFeedbackRequest": [

@@ -82,6 +82,8 @@ enum NamingFeedbackService {
             to: rule,
             sourceFileName: sourceURL.lastPathComponent,
             correctedFileName: correctedFileName,
+            sourceFields: normalized,
+            correctedFields: correctedFields,
             notes: request.notes,
             preservedAcronyms: preservedAcronyms
         )
@@ -213,6 +215,8 @@ private func appendFeedback(
     to rule: NamingRuleDefinition,
     sourceFileName: String,
     correctedFileName: String,
+    sourceFields: [String: String],
+    correctedFields: [String: String],
     notes: String?,
     preservedAcronyms: [String]
 ) -> NamingRuleDefinition {
@@ -225,6 +229,8 @@ private func appendFeedback(
         created_at: Date(),
         source_filename: sourceFileName,
         corrected_filename: correctedFileName,
+        source_fields: sourceFields.isEmpty ? nil : sourceFields,
+        corrected_fields: correctedFields.isEmpty ? nil : correctedFields,
         notes: notes
     )
     let feedbackExamples = Array((currentMetadata.feedback_examples ?? []) + [feedback]).suffix(25)
