@@ -71,8 +71,23 @@
   "label": "Résolution du conseil municipal",
   "metadata": {
     "canonical_output_label": "Résolution",
+    "rendering": {
+      "preserve_acronyms": [
+        "CN",
+        "MTQ",
+        "SAAQ",
+        "MRC",
+        "SQ",
+        "CNESST"
+      ],
+      "sharepoint_safe_filename_length": 140,
+      "title_case": "sentence_case",
+      "title_max_length": 120,
+      "title_source": "first_underlined_uppercase_line"
+    },
     "notes": [
-      "Ne jamais inclure Ville d'Amos dans le nom final."
+      "Ne jamais inclure Ville d'Amos dans le nom final.",
+      "Le titre doit venir du premier bloc souligné en majuscules du corps de la résolution, puis être rendu en casse phrase."
     ],
     "suggested_class_code": "ADM-RES"
   },
@@ -92,8 +107,13 @@
       "parameter": "Résolution NO"
     },
     {
+      "kind": "matches_regex",
+      "message": "Le nom final doit respecter le format Résolution NO AAAA-N – titre – AAAA-MM-JJ.pdf.",
+      "parameter": "^Résolution NO\\s20\\d{2}-\\d{1,3}\\s–\\s.+\\s–\\s20\\d{2}-\\d{2}-\\d{2}\\.pdf$"
+    },
+    {
       "kind": "max_length",
-      "parameter": "256"
+      "parameter": "255"
     },
     {
       "kind": "exclude_phrase",

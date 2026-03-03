@@ -147,6 +147,14 @@ private func executeRouting(
     let selectedPreset = presets.first { $0.id == nonEmpty(routeRequest?.preset_id) }
         ?? presets.first { $0.id == nonEmpty(selectedRule?.preset_id) }
         ?? provisionalPreset
+    let selectedNamingRule = resolvedJob.flatMap {
+        selectNamingRuleForRouting(
+            job: $0,
+            analysis: analysis,
+            preset: selectedPreset,
+            rules: namingRules
+        )
+    }
 
     let selectedRuleClassCode = nonEmpty(selectedRule?.class_code)
     let selectedRuleWhenClassCode = nonEmpty(selectedRule?.when_class_code)
@@ -182,16 +190,11 @@ private func executeRouting(
             classCode: effectiveClassCode,
             analysis: analysis,
             preset: selectedPreset,
-            explicitPreferredFileName: nil,
+            explicitPreferredFileName: preferredRouteFileName(routeRequest?.preferred_file_name),
             explicitLegacyNameFormat: routeRequest?.name_format,
             fallbackLegacyNameFormat: effectiveNameFormat,
             requestedExportType: routeRequest?.export_type,
-            namingRule: selectNamingRuleForRouting(
-                job: resolvedJob,
-                analysis: analysis,
-                preset: selectedPreset,
-                rules: namingRules
-            ),
+            namingRule: selectedNamingRule,
             namingThesaurus: namingThesaurus
         )
         resolvedFileName = resolvedNaming.fileName
@@ -278,12 +281,7 @@ private func executeRouting(
                 preset: selectedPreset,
                 requestedExportType: routeRequest?.export_type,
                 analysis: analysis,
-                namingRule: selectNamingRuleForRouting(
-                    job: resolvedJob,
-                    analysis: analysis,
-                    preset: selectedPreset,
-                    rules: namingRules
-                ),
+                namingRule: selectedNamingRule,
                 namingThesaurus: namingThesaurus,
                 logger: logger
             ) {
@@ -1116,7 +1114,7 @@ private func resolvedRoutingFileName(
     }
 
     if let explicitPreferredFileName = nonEmpty(explicitPreferredFileName) {
-        return ResolvedRoutingNaming(fileName: explicitPreferredFileName, namingRuleID: nil)
+        return ResolvedRoutingNaming(fileName: explicitPreferredFileName, namingRuleID: namingRule?.id)
     }
 
     let manualNameFormat = nonEmpty(explicitLegacyNameFormat)
@@ -1147,7 +1145,19 @@ private func resolvedRoutingFileName(
     return ResolvedRoutingNaming(fileName: legacyName, namingRuleID: nil)
 }
 
-private func selectNamingRuleForRouting(
+private func preferredRouteFileName(_ raw: String?) -> String? {
+    guard var value = nonEmpty(raw) else {
+        return nil
+    }
+    value = sanitizeFileName(FilenameGuardrails.normalizeFrenchTypography(value))
+    value = value.replacingOccurrences(of: #"\s+\.pdf$"#, with: ".pdf", options: .regularExpression)
+    if !value.lowercased().hasSuffix(".pdf") {
+        value += ".pdf"
+    }
+    return FilenameGuardrails.truncateFileNameIfNeeded(value)
+}
+
+func selectNamingRuleForRouting(
     job: JobRecord,
     analysis: AnalysisResponse?,
     preset: Preset?,
@@ -1210,7 +1220,9 @@ private func renderFileNameUsingNamingRule(
     }
 
     let engine = DeclarativeNamingRuleEngine()
-    let detectionText = buildNamingDetectionText(job: job, analysis: analysis, preset: preset)
+    let detectionText = [buildNamingDetectionText(job: job, analysis: analysis, preset: preset), loadSupplementalNamingText(sourceURL: sourceURL)]
+        .compactMap { nonEmpty($0) }
+        .joined(separator: "\n")
     let metadata = NamingSourceMetadata(
         fileName: sourceURL.lastPathComponent,
         fileExtension: sourceExtension,
@@ -1233,7 +1245,26 @@ private func renderFileNameUsingNamingRule(
     return rendered
 }
 
-private func buildNamingDetectionText(
+private func loadSupplementalNamingText(sourceURL: URL) -> String? {
+    guard FileManager.default.fileExists(atPath: sourceURL.path),
+          let extracted = DocumentTextExtractor.extract(
+            fileURL: sourceURL,
+            logger: Logger(label: "orchiviste.naming")
+          ) else {
+        return nil
+    }
+    let pages = extracted.pages
+        .prefix(2)
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    guard !pages.isEmpty else {
+        return nil
+    }
+    let merged = pages.joined(separator: "\n")
+    return String(merged.prefix(8_000))
+}
+
+func buildNamingDetectionText(
     job: JobRecord,
     analysis: AnalysisResponse?,
     preset: Preset?
@@ -1278,7 +1309,7 @@ private func buildNamingDetectionText(
     return parts.joined(separator: "\n")
 }
 
-private func overlayNamingFields(
+func overlayNamingFields(
     job: JobRecord,
     analysis: AnalysisResponse?,
     sourceURL: URL
@@ -1315,7 +1346,7 @@ private func overlayNamingFields(
     return values
 }
 
-private func shouldUseOverlayField(key: String, existing: String?, incoming: String?) -> Bool {
+func shouldUseOverlayField(key: String, existing: String?, incoming: String?) -> Bool {
     guard let incoming = incoming?.trimmingCharacters(in: .whitespacesAndNewlines),
           !incoming.isEmpty else {
         return false
@@ -1432,7 +1463,7 @@ private func formatDate(_ date: Date, pattern: String) -> String {
     return formatter.string(from: date)
 }
 
-private func makeAnalysisSnapshot(from job: JobRecord, classCodeFallback: String?) -> AnalysisResponse? {
+func makeAnalysisSnapshot(from job: JobRecord, classCodeFallback: String?) -> AnalysisResponse? {
     let hasUsefulData = job.analysisTypeDoc != nil
         || !(job.analysisSujets ?? []).isEmpty
         || !(job.analysisChamps ?? [:]).isEmpty

@@ -115,18 +115,65 @@ public struct NamingValidationRule: Codable, Sendable {
     }
 }
 
+public struct NamingRenderingOptions: Codable, Sendable {
+    public let title_source: String?
+    public let title_case: String?
+    public let preserve_acronyms: [String]?
+    public let title_max_length: Int?
+    public let sharepoint_safe_filename_length: Int?
+
+    public init(
+        title_source: String? = nil,
+        title_case: String? = nil,
+        preserve_acronyms: [String]? = nil,
+        title_max_length: Int? = nil,
+        sharepoint_safe_filename_length: Int? = nil
+    ) {
+        self.title_source = title_source
+        self.title_case = title_case
+        self.preserve_acronyms = preserve_acronyms
+        self.title_max_length = title_max_length
+        self.sharepoint_safe_filename_length = sharepoint_safe_filename_length
+    }
+}
+
+public struct NamingFeedbackExample: Codable, Sendable {
+    public let created_at: Date
+    public let source_filename: String
+    public let corrected_filename: String
+    public let notes: String?
+
+    public init(
+        created_at: Date,
+        source_filename: String,
+        corrected_filename: String,
+        notes: String? = nil
+    ) {
+        self.created_at = created_at
+        self.source_filename = source_filename
+        self.corrected_filename = corrected_filename
+        self.notes = notes
+    }
+}
+
 public struct NamingRuleMetadata: Codable, Sendable {
     public let suggested_class_code: String?
     public let canonical_output_label: String?
+    public let rendering: NamingRenderingOptions?
+    public let feedback_examples: [NamingFeedbackExample]?
     public let notes: [String]?
 
     public init(
         suggested_class_code: String? = nil,
         canonical_output_label: String? = nil,
+        rendering: NamingRenderingOptions? = nil,
+        feedback_examples: [NamingFeedbackExample]? = nil,
         notes: [String]? = nil
     ) {
         self.suggested_class_code = suggested_class_code
         self.canonical_output_label = canonical_output_label
+        self.rendering = rendering
+        self.feedback_examples = feedback_examples
         self.notes = notes
     }
 }

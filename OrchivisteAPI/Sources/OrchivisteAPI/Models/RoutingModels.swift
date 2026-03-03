@@ -16,6 +16,7 @@ struct RoutingRequest: Content {
     let preset_id: String?
     let destination_folder: String?
     let name_format: String?
+    let preferred_file_name: String?
     let export_type: String?
 }
 

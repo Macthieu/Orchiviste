@@ -260,6 +260,20 @@ func registerOpenAPIRoutes(_ app: Application) {
                         "responses": ["200": ["description": "Index des brouillons"]]
                     ]
                 ],
+                "/v1/naming/feedback": [
+                    "post": [
+                        "summary": "Mémoriser une correction manuelle de nommage pour enrichir la règle et le thésaurus",
+                        "requestBody": [
+                            "required": true,
+                            "content": ["application/json": ["schema": ["$ref": "#/components/schemas/NamingFeedbackRequest"]]]
+                        ],
+                        "responses": [
+                            "200": ["description": "Correction mémorisée", "content": ["application/json": ["schema": ["$ref": "#/components/schemas/NamingFeedbackResponse"]]]],
+                            "400": ["$ref": "#/components/responses/Error400"],
+                            "404": ["$ref": "#/components/responses/Error404"]
+                        ]
+                    ]
+                ],
                 "/v1/naming/thesaurus": [
                     "get": [
                         "summary": "Lister les thésaurus de nommage",
@@ -738,7 +752,28 @@ func registerOpenAPIRoutes(_ app: Application) {
                             "preset_id": ["type": "string"],
                             "destination_folder": ["type": "string"],
                             "name_format": ["type": "string"],
+                            "preferred_file_name": ["type": "string"],
                             "export_type": ["type": "string", "enum": ["pdfa"]]
+                        ]
+                    ],
+                    "NamingFeedbackRequest": [
+                        "type": "object",
+                        "required": ["job_id", "corrected_file_name"],
+                        "properties": [
+                            "job_id": ["type": "string", "format": "uuid"],
+                            "naming_rule_id": ["type": "string"],
+                            "corrected_file_name": ["type": "string"],
+                            "notes": ["type": "string"]
+                        ]
+                    ],
+                    "NamingFeedbackResponse": [
+                        "type": "object",
+                        "properties": [
+                            "job_id": ["type": "string", "format": "uuid"],
+                            "rule_id": ["type": "string"],
+                            "thesaurus_id": ["type": "string"],
+                            "learned_aliases": ["type": "array", "items": ["type": "string"]],
+                            "preserved_acronyms": ["type": "array", "items": ["type": "string"]]
                         ]
                     ],
                     "RoutingResponse": [

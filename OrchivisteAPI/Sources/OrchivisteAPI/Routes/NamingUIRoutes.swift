@@ -13,6 +13,8 @@ private struct UINamingContext: Encodable {
     let selected_rule_id: String?
     let selected_rule_source: String
     let selected_rule_json: String
+    let selected_rule_feedback_examples: [UINamingFeedbackExampleSummary]
+    let selected_rule_feedback_present: Bool
     let selected_thesaurus_id: String?
     let selected_thesaurus_source: String
     let selected_thesaurus_json: String
@@ -21,6 +23,13 @@ private struct UINamingContext: Encodable {
     let draft_warnings: [String]
     let draft_has_conflicts: Bool
     let draft_has_warnings: Bool
+}
+
+private struct UINamingFeedbackExampleSummary: Encodable {
+    let created_at: String
+    let source_filename: String
+    let corrected_filename: String
+    let notes: String
 }
 
 private struct UINamingRuleSummary: Encodable {
@@ -167,6 +176,19 @@ func registerNamingUIRoutes(_ app: Application) {
             selected_rule_id: selectedRuleDraft?.proposed_rule.id ?? selectedRule?.id,
             selected_rule_source: selectedRuleDraft == nil ? "Règle active" : "Brouillon",
             selected_rule_json: effectiveRuleJSON,
+            selected_rule_feedback_examples: (selectedRuleDraft?.proposed_rule.metadata?.feedback_examples
+                ?? selectedRule?.metadata?.feedback_examples
+                ?? []).suffix(10).map {
+                    UINamingFeedbackExampleSummary(
+                        created_at: namingFormatTimestamp($0.created_at),
+                        source_filename: $0.source_filename,
+                        corrected_filename: $0.corrected_filename,
+                        notes: $0.notes ?? "-"
+                    )
+                },
+            selected_rule_feedback_present: !((selectedRuleDraft?.proposed_rule.metadata?.feedback_examples
+                ?? selectedRule?.metadata?.feedback_examples
+                ?? []).isEmpty),
             selected_thesaurus_id: selectedThesaurusDraft?.preview.target_thesaurus_id ?? selectedThesaurus?.thesaurus_id,
             selected_thesaurus_source: selectedThesaurusDraft == nil ? "Thésaurus actif" : "Prévisualisation fusion",
             selected_thesaurus_json: effectiveThesaurusJSON,

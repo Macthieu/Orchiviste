@@ -27,6 +27,31 @@ func registerNamingRoutes(_ app: Application) {
             return rule
         }
 
+        naming.post("feedback") { req async throws -> NamingFeedbackResponse in
+            let feedback = try req.content.decode(NamingFeedbackRequest.self)
+            guard let jobID = UUID(uuidString: feedback.job_id) else {
+                throw Abort(.badRequest, reason: "job_id invalide.")
+            }
+            if await req.application.appState.job(id: jobID) == nil,
+               let persisted = try await JobPersistenceRepository.fetchJob(id: jobID, on: req.db) {
+                await req.application.appState.cacheJob(persisted)
+            }
+            let cachedJob = await req.application.appState.job(id: jobID)
+            let persistedJob = cachedJob == nil
+                ? try await JobPersistenceRepository.fetchJob(id: jobID, on: req.db)
+                : nil
+            guard let job = cachedJob ?? persistedJob else {
+                throw Abort(.notFound, reason: "Tâche introuvable.")
+            }
+            let analysis = await req.application.appState.analysis(jobId: jobID)
+                ?? makeAnalysisSnapshot(from: job, classCodeFallback: job.suggestedClassCode)
+            return try NamingFeedbackService.apply(
+                request: feedback,
+                job: job,
+                analysis: analysis
+            )
+        }
+
         naming.post("rules", "validate") { req async throws -> NamingRuleValidationResult in
             let request = try req.content.decode(NamingRuleValidationRequest.self)
             let engine = DeclarativeNamingRuleEngine()
@@ -125,7 +150,24 @@ func validateNamingRuleDefinition(_ rule: NamingRuleDefinition) -> [NamingRuleVa
     }
 
     let sampleFields = Dictionary(uniqueKeysWithValues: rule.fields.map { field in
-        (field.key, field.key == "date" ? "2026-03-02" : "\(field.key.capitalized)")
+        let sampleValue: String
+        switch field.key {
+        case "numero":
+            sampleValue = "2025-16"
+        case "date":
+            sampleValue = "2026-03-02"
+        case "titre":
+            sampleValue = "Exemple de résolution"
+        case "objet":
+            sampleValue = "Objet d'exemple"
+        case "cocontractant":
+            sampleValue = "Cocontractant Exemple"
+        case "periode":
+            sampleValue = "2026"
+        default:
+            sampleValue = "\(field.key.capitalized)"
+        }
+        return (field.key, sampleValue)
     })
     let filename = DeclarativeNamingRuleEngine().renderFilename(rule: rule, fields: sampleFields)
     issues.append(contentsOf: DeclarativeNamingRuleEngine().validateFilename(filename, rule: rule, fields: sampleFields))

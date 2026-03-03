@@ -171,6 +171,7 @@ private struct UIJobViewerContext: Encodable {
     let routed_at: String?
     let saved_folder_path: String
     let proposed_file_name: String
+    let proposed_file_name_input: String
     let proposed_file_name_present: Bool
     let proposed_destination_folder: String
     let proposed_destination_folder_present: Bool
@@ -1363,6 +1364,7 @@ func registerUIRoutes(_ app: Application) {
             routed_at: job.steps.routed.map(formatTimestamp),
             saved_folder_path: routeSavedFolderPath(job) ?? "-",
             proposed_file_name: routePreview?.fileName ?? "-",
+            proposed_file_name_input: routePreview?.fileName ?? "",
             proposed_file_name_present: nonEmptyString(routePreview?.fileName) != nil,
             proposed_destination_folder: routePreview?.destinationFolderDisplay ?? "-",
             proposed_destination_folder_present: {

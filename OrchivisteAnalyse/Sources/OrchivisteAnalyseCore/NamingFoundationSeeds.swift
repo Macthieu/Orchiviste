@@ -109,13 +109,28 @@ public enum NamingFoundationSeeds {
             forbidden_terms: ["signé", "non signé", "OCR", "numérisé", "scanné", "version finale", "PDF/A"],
             validations: [
                 NamingValidationRule(kind: "required_prefix", parameter: "Résolution NO"),
-                NamingValidationRule(kind: "max_length", parameter: "256"),
+                NamingValidationRule(
+                    kind: "matches_regex",
+                    parameter: #"^Résolution NO\s20\d{2}-\d{1,3}\s–\s.+\s–\s20\d{2}-\d{2}-\d{2}\.pdf$"#,
+                    message: "Le nom final doit respecter le format Résolution NO AAAA-N – titre – AAAA-MM-JJ.pdf."
+                ),
+                NamingValidationRule(kind: "max_length", parameter: "255"),
                 NamingValidationRule(kind: "exclude_phrase", parameter: "Ville d'Amos")
             ],
             metadata: NamingRuleMetadata(
                 suggested_class_code: "ADM-RES",
                 canonical_output_label: "Résolution",
-                notes: ["Ne jamais inclure la mention Ville d'Amos dans le nom final."]
+                rendering: NamingRenderingOptions(
+                    title_source: "first_underlined_uppercase_line",
+                    title_case: "sentence_case",
+                    preserve_acronyms: ["CN", "MTQ", "SAAQ", "MRC", "SQ", "CNESST"],
+                    title_max_length: 120,
+                    sharepoint_safe_filename_length: 140
+                ),
+                notes: [
+                    "Ne jamais inclure la mention Ville d'Amos dans le nom final.",
+                    "Le titre doit venir du premier bloc souligné en majuscules du corps de la résolution, puis être rendu en casse phrase."
+                ]
             )
         )
     }

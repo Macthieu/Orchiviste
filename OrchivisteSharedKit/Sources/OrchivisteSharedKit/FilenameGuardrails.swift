@@ -1,7 +1,7 @@
 import Foundation
 
 public enum FilenameGuardrails {
-    public static let maxRecommendedLength = 256
+    public static let maxRecommendedLength = 255
 
     private static let technicalMentionPatterns: [String] = [
         #"(?i)\bpdf\s*/?\s*a(?:-\d+[a-z]?)?\b"#,
@@ -82,8 +82,8 @@ public enum FilenameGuardrails {
         return nil
     }
 
-    public static func truncateFileNameIfNeeded(_ value: String) -> String {
-        guard value.count > maxRecommendedLength else {
+    public static func truncateFileNameIfNeeded(_ value: String, maxLength: Int = maxRecommendedLength) -> String {
+        guard value.count > maxLength else {
             return value
         }
 
@@ -91,7 +91,7 @@ public enum FilenameGuardrails {
         let ext = url.pathExtension
         let stem = url.deletingPathExtension().lastPathComponent
         let suffix = ext.isEmpty ? "" : ".\(ext)"
-        let maxStemLength = max(1, maxRecommendedLength - suffix.count)
+        let maxStemLength = max(1, maxLength - suffix.count)
         let truncatedStem = String(stem.prefix(maxStemLength))
             .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
         return truncatedStem + suffix

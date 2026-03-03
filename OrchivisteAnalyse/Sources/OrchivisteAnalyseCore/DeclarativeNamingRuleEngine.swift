@@ -84,7 +84,9 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         let preserve = Set((thesaurus?.preserve_terms ?? []).map(normalizedSearchText))
 
         for (key, rawValue) in fields {
-            var value = FilenameGuardrails.normalizeFrenchTypography(rawValue)
+            let rawNormalizedValue = FilenameGuardrails.normalizeFrenchTypography(rawValue)
+            let directCanonical = aliasMap[normalizedSearchText(rawNormalizedValue)]
+            var value = rawNormalizedValue
             switch key {
             case "numero":
                 value = normalizeDocumentNumber(value)
@@ -96,8 +98,14 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
                 value = canonicalizePhrase(value, aliasMap: aliasMap)
                 value = cleanupCounterparties(value)
             case "objet", "titre":
-                value = canonicalizePhrase(value, aliasMap: aliasMap)
-                value = cleanObjectPhrase(value, stopwords: stopwords, preserve: preserve)
+                value = directCanonical ?? canonicalizePhrase(value, aliasMap: aliasMap)
+                if rule.document_family == "resolution_conseil", key == "titre" {
+                    if directCanonical == nil {
+                        value = normalizeResolutionTitle(value, rendering: rule.metadata?.rendering)
+                    }
+                } else {
+                    value = cleanObjectPhrase(value, stopwords: stopwords, preserve: preserve)
+                }
             default:
                 value = canonicalizePhrase(value, aliasMap: aliasMap)
             }
@@ -119,19 +127,33 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         rule: NamingRuleDefinition,
         fields: [String: String]
     ) -> String {
+        var renderedFields = fields
+        let renderingLimit = effectiveFileNameLimit(for: rule)
+        if let titleKey = truncatedTitleFieldKey(in: renderedFields),
+           let titleValue = renderedFields[titleKey] {
+            var renderedCandidate = renderTemplate(rule.template, fields: renderedFields)
+            let explicitTitleLimit = rule.metadata?.rendering?.title_max_length
+            if renderedCandidate.count > renderingLimit || explicitTitleLimit != nil {
+                let fixedLength = renderedCandidate.count - titleValue.count
+                let safeTitleLimit = max(24, renderingLimit - fixedLength)
+                let targetTitleLength = min(explicitTitleLimit ?? safeTitleLimit, safeTitleLimit)
+                renderedFields[titleKey] = smartTrimPhrase(titleValue, maxLength: targetTitleLength)
+                renderedCandidate = renderTemplate(rule.template, fields: renderedFields)
+            }
+            renderedCandidate = renderRenderedFileName(renderedCandidate)
+            return FilenameGuardrails.truncateFileNameIfNeeded(renderedCandidate, maxLength: renderingLimit)
+        }
+
         var rendered = rule.template
-        for (key, value) in fields {
+        for (key, value) in renderedFields {
             rendered = rendered.replacingOccurrences(of: "{\(key)}", with: value)
         }
 
-        rendered = rendered.replacingOccurrences(of: #"\{[^}]+\}"#, with: "", options: .regularExpression)
-        rendered = rendered.replacingOccurrences(of: #"\s*–\s*–\s*"#, with: " – ", options: .regularExpression)
-        rendered = rendered.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
-        rendered = FilenameGuardrails.normalizeFrenchTypography(rendered)
+        rendered = renderRenderedFileName(rendered)
         if !rendered.lowercased().hasSuffix(".pdf") {
             rendered += ".pdf"
         }
-        return FilenameGuardrails.truncateFileNameIfNeeded(rendered)
+        return FilenameGuardrails.truncateFileNameIfNeeded(rendered, maxLength: renderingLimit)
     }
 
     public func validateFilename(
@@ -194,6 +216,15 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
                         message: validation.message ?? "Le nom dépasse la longueur recommandée."
                     ))
                 }
+            case "matches_regex":
+                if let pattern = validation.parameter,
+                   filename.range(of: pattern, options: .regularExpression) == nil {
+                    issues.append(.init(
+                        level: .error,
+                        code: "matches_regex",
+                        message: validation.message ?? "Le nom final ne respecte pas le format attendu."
+                    ))
+                }
             default:
                 continue
             }
@@ -249,12 +280,9 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
     private func extractResolutionTitle(from text: String) -> String? {
         let lines = significantLines(from: text)
         for (index, line) in lines.enumerated() {
-            if normalizedSearchText(line).contains("resolution") {
-                for offset in 1...3 where index + offset < lines.count {
-                    let candidate = lines[index + offset]
-                    if looksLikeResolutionTitleCandidate(candidate) {
-                        return candidate
-                    }
+            if isResolutionBoundaryLine(line) {
+                if let block = extractResolutionTitleBlock(lines: lines, startIndex: index + 1) {
+                    return block
                 }
             }
         }
@@ -367,12 +395,59 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         let uppercaseCount = letters.filter(\.isUppercase).count
         return (value.count * 2) + (uppercaseCount * 3)
     }
+
+    private func isResolutionBoundaryLine(_ value: String) -> Bool {
+        let normalized = normalizedSearchText(value)
+        if normalized.range(of: #"r[ée]solution\s*n[°o]?\s*\d{4}-\d{1,4}"#, options: .regularExpression) != nil {
+            return true
+        }
+        if normalized.range(of: #"^r[ée]solution\s*n[°o]?$"#, options: .regularExpression) != nil {
+            return true
+        }
+        return false
+    }
+
+    private func extractResolutionTitleBlock(lines: [String], startIndex: Int) -> String? {
+        guard startIndex < lines.count else { return nil }
+        var collected: [String] = []
+        var index = startIndex
+
+        while index < lines.count, collected.count < 4 {
+            let candidate = lines[index]
+            if looksLikeResolutionTitleCandidate(candidate) {
+                collected.append(candidate)
+                index += 1
+                continue
+            }
+            if !collected.isEmpty {
+                break
+            }
+            index += 1
+        }
+
+        guard !collected.isEmpty else { return nil }
+        return collected.joined(separator: " ")
+    }
 }
 
 private func normalizeDocumentNumber(_ value: String) -> String {
-    FilenameGuardrails.normalizeFrenchTypography(value)
+    let normalized = FilenameGuardrails.normalizeFrenchTypography(value)
         .replacingOccurrences(of: #"\bNO\s+"#, with: "", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let match = normalized.range(of: #"^(\d{4})-(\d{1,4})$"#, options: .regularExpression) else {
+        return normalized
+    }
+    let parts = normalized[match]
+        .split(separator: "-", maxSplits: 1)
+        .map(String.init)
+    guard parts.count == 2 else {
+        return normalized
+    }
+    let sequence = String(Int(parts[1]) ?? 0)
+    if sequence == "0", parts[1] != "0" {
+        return normalized
+    }
+    return "\(parts[0])-\(sequence)"
 }
 
 private func normalizeDateString(_ raw: String) -> String? {
@@ -453,6 +528,35 @@ private func cleanObjectPhrase(_ value: String, stopwords: Set<String>, preserve
     return FilenameGuardrails.normalizeFrenchTypography(output)
 }
 
+private func normalizeResolutionTitle(_ value: String, rendering: NamingRenderingOptions?) -> String {
+    var output = FilenameGuardrails.normalizeFrenchTypography(value)
+    output = output.replacingOccurrences(
+        of: #"(?i)\b(?:de|du|pour la|pour le)\s+ville\s+d['’ ]amos\b"#,
+        with: " ",
+        options: .regularExpression
+    )
+    output = output.replacingOccurrences(
+        of: #"(?i)\bde\s+la\s+ville\s+d['’ ]amos\b"#,
+        with: " ",
+        options: .regularExpression
+    )
+    output = output.replacingOccurrences(
+        of: #"^\d{4}-\d{1,4}\s*"#,
+        with: "",
+        options: .regularExpression
+    )
+    output = FilenameGuardrails.collapseWhitespace(output)
+
+    if rendering?.title_case?.lowercased() == "sentence_case" || rendering?.title_case == nil {
+        output = frenchSentenceCase(
+            output,
+            preservedAcronyms: Set((rendering?.preserve_acronyms ?? []).map { $0.uppercased() })
+        )
+    }
+
+    return output
+}
+
 private func stripAgreementFamilyLeadIn(_ value: String) -> String {
     let pattern = #"(?i)^\s*(entente|contrat|convention|bail|protocole|avenant)(?:\s+(?:pour|de|d'|relatif\s+a|relative\s+a|d'utilisation|de bon voisinage))?\s*"#
     let stripped = value.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
@@ -507,6 +611,87 @@ private func significantUppercaseLine(in text: String) -> String? {
         let uppercaseCount = letters.filter(\.isUppercase).count
         return uppercaseCount >= max(4, letters.count / 2)
     }
+}
+
+private func effectiveFileNameLimit(for rule: NamingRuleDefinition) -> Int {
+    let sharePointLimit = rule.metadata?.rendering?.sharepoint_safe_filename_length ?? FilenameGuardrails.maxRecommendedLength
+    return max(48, min(FilenameGuardrails.maxRecommendedLength, sharePointLimit))
+}
+
+private func truncatedTitleFieldKey(in fields: [String: String]) -> String? {
+    if let value = fields["titre"], !value.isEmpty {
+        return "titre"
+    }
+    if let value = fields["objet"], !value.isEmpty {
+        return "objet"
+    }
+    return nil
+}
+
+private func renderTemplate(_ template: String, fields: [String: String]) -> String {
+    var rendered = template
+    for (key, value) in fields {
+        rendered = rendered.replacingOccurrences(of: "{\(key)}", with: value)
+    }
+    return rendered
+}
+
+private func renderRenderedFileName(_ value: String) -> String {
+    var rendered = value
+    rendered = rendered.replacingOccurrences(of: #"\{[^}]+\}"#, with: "", options: .regularExpression)
+    rendered = rendered.replacingOccurrences(of: #"\s*–\s*–\s*"#, with: " – ", options: .regularExpression)
+    rendered = rendered.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+    return FilenameGuardrails.normalizeFrenchTypography(rendered)
+}
+
+private func smartTrimPhrase(_ value: String, maxLength: Int) -> String {
+    let normalized = FilenameGuardrails.collapseWhitespace(value)
+    guard normalized.count > maxLength else {
+        return normalized
+    }
+    guard maxLength > 16 else {
+        return String(normalized.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    let prefix = String(normalized.prefix(maxLength))
+    if let boundary = prefix.lastIndex(where: { $0 == " " || $0 == "," || $0 == ";" }) {
+        let candidate = String(prefix[..<boundary]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if candidate.count >= maxLength / 2 {
+            return candidate
+        }
+    }
+    return prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func frenchSentenceCase(_ value: String, preservedAcronyms: Set<String>) -> String {
+    let tokens = value.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+    guard !tokens.isEmpty else { return value }
+    let titleMarkers: Set<String> = ["rue", "avenue", "boulevard", "chemin", "route", "rang", "autoroute", "pont", "parc", "lot"]
+
+    let transformed = tokens.enumerated().map { index, token -> String in
+        let tokenUpper = token.uppercased()
+        if preservedAcronyms.contains(tokenUpper) {
+            return tokenUpper
+        }
+        let lowered = token.lowercased(with: Locale(identifier: "fr_CA"))
+        if index == 0 {
+            return uppercaseFirstLetter(in: lowered)
+        }
+        let previous = tokens[index - 1]
+            .trimmingCharacters(in: CharacterSet(charactersIn: "’'.,;:()[]{}"))
+            .lowercased(with: Locale(identifier: "fr_CA"))
+        if titleMarkers.contains(previous) {
+            return uppercaseFirstLetter(in: lowered)
+        }
+        return lowered
+    }
+
+    return transformed.joined(separator: " ")
+}
+
+private func uppercaseFirstLetter(in value: String) -> String {
+    guard let first = value.first else { return value }
+    return String(first).uppercased() + value.dropFirst()
 }
 
 private func firstMatch(pattern: String, in text: String) -> String? {

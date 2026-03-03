@@ -96,6 +96,11 @@
             margin-top: 4px;
             background: #fff;
         }
+        input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            padding: 0;
+        }
         label { display: block; margin-top: 10px; font-size: 13px; }
         .notice { color: var(--warning); font-weight: 700; }
         .tabs {
@@ -134,6 +139,14 @@
             color: var(--muted);
             font-size: 12px;
             line-height: 1.45;
+        }
+        .inline-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
         }
         .tab-pane { display: none; }
         .tab-pane.active { display: block; }
@@ -296,6 +309,20 @@
         #if(proposed_naming_rule_present):
         <p style="margin: 0 0 10px; color: var(--muted); font-size: 12px;">
             Règle de nommage proposée: <strong>#(proposed_naming_rule_id)</strong>. Le champ de préréglage ci-dessous reste un réglage de routage hérité.
+        </p>
+        #endif
+        <label>Nom de fichier final (modifiable)
+            <input id="routePreferredFileName" type="text" value="#(proposed_file_name_input)" data-initial="#(proposed_file_name_input)" placeholder="Résolution NO 2025-368 – Titre – 2025-09-02.pdf">
+        </label>
+        #if(proposed_naming_rule_present):
+        <label class="inline-check">
+            <input id="routeLearnCorrection" type="checkbox">
+            <span>Mémoriser cette correction pour les prochains cas similaires</span>
+        </label>
+        <input id="routeNamingRuleId" type="hidden" value="#(proposed_naming_rule_id)">
+        <button class="btn" type="button" onclick="submitNamingFeedback().catch(() => {})">Mémoriser la correction</button>
+        <p style="margin: 6px 0 10px; color: var(--muted); font-size: 12px;">
+            Cette action enrichit la règle active et le thésaurus sans attendre le routage.
         </p>
         #endif
         <label>Dossier destination (optionnel)
@@ -509,6 +536,15 @@ async function submitReview(routeAfterReview = false) {
     if (res.ok) {
         if (routeAfterReview) {
             syncRouteFieldsFromReview();
+            if (shouldLearnFilenameCorrection()) {
+                try {
+                    await submitNamingFeedback(true);
+                } catch (error) {
+                    if (output) {
+                        output.value = `${error.message}\nLe routage va tout de même utiliser le nom saisi.`;
+                    }
+                }
+            }
             try {
                 await submitRouteRequest();
                 window.location.reload();
@@ -535,6 +571,7 @@ function collectRoutePayload() {
     const presetId = document.getElementById("routePresetId")?.value || "";
     const destinationFolder = document.getElementById("routeFolder")?.value || "";
     const nameFormat = document.getElementById("routeNameFormat")?.value || "";
+    const preferredFileName = document.getElementById("routePreferredFileName")?.value || "";
     const exportType = document.getElementById("routeExportType")?.value || "";
 
     return {
@@ -542,8 +579,69 @@ function collectRoutePayload() {
         preset_id: presetId.trim() || null,
         destination_folder: destinationFolder.trim() || null,
         name_format: nameFormat.trim() || null,
+        preferred_file_name: preferredFileName.trim() || null,
         export_type: exportType.trim() || null
     };
+}
+
+function currentPreferredFileName() {
+    return (document.getElementById("routePreferredFileName")?.value || "").trim();
+}
+
+function shouldLearnFilenameCorrection() {
+    const checkbox = document.getElementById("routeLearnCorrection");
+    const ruleId = document.getElementById("routeNamingRuleId")?.value || "";
+    const current = currentPreferredFileName();
+    const initial = (document.getElementById("routePreferredFileName")?.dataset.initial || "").trim();
+    return Boolean(checkbox?.checked && ruleId.trim() && current && current !== initial);
+}
+
+async function submitNamingFeedback(silent = false) {
+    const output = document.getElementById("routeResult");
+    const correctedFileName = currentPreferredFileName();
+    const namingRuleId = document.getElementById("routeNamingRuleId")?.value || "";
+
+    if (!correctedFileName || !namingRuleId) {
+        if (!silent) {
+            alert("Aucune correction de nommage exploitable à mémoriser.");
+        }
+        return null;
+    }
+
+    if (output) {
+        output.value = "Mémorisation de la correction de nommage...";
+    }
+    const res = await fetch("/v1/naming/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            job_id: jobId,
+            naming_rule_id: namingRuleId,
+            corrected_file_name: correctedFileName,
+            notes: document.getElementById("reviewComment")?.value || null
+        })
+    });
+    if (!res.ok) {
+        const msg = await res.text();
+        if (!silent) {
+            alert(`Échec de la mémorisation (${res.status}) : ${msg}`);
+        }
+        throw new Error(`Échec de la mémorisation (${res.status}) : ${msg}`);
+    }
+
+    const json = await res.json();
+    const preferredInput = document.getElementById("routePreferredFileName");
+    if (preferredInput) {
+        preferredInput.dataset.initial = correctedFileName;
+    }
+    const checkbox = document.getElementById("routeLearnCorrection");
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    if (output && !silent) {
+        output.value = `Correction mémorisée pour ${json.rule_id}.`;
+    }
+    return json;
 }
 
 async function submitRouteRequest() {
@@ -566,6 +664,13 @@ async function submitRoute() {
     const output = document.getElementById("routeResult");
     output.value = "Routage en cours...";
     try {
+        if (shouldLearnFilenameCorrection()) {
+            try {
+                await submitNamingFeedback(true);
+            } catch (error) {
+                output.value = `${error.message}\nLe routage continue avec le nom corrigé.`;
+            }
+        }
         const json = await submitRouteRequest();
         const destination = json.destination_local_path || json.destination_url || json.resolved_folder || "N/D";
         const filename = json.resolved_file_name || "N/D";

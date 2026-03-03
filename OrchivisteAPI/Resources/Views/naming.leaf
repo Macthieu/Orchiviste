@@ -220,6 +220,39 @@
                         </label>
                     </div>
 
+                    <div class="code-box">
+                        <strong>Paramètres de rendu</strong>
+                        <p class="hint">Utilise cette section pour régler la source du titre, la casse finale, les acronymes conservés et le budget de longueur.</p>
+                        <div class="subgrid" style="margin-top: 10px;">
+                            <label>Source du titre
+                                <select id="ruleTitleSource">
+                                    <option value="">Détection standard</option>
+                                    <option value="first_underlined_uppercase_line">Premier bloc souligné en majuscules</option>
+                                    <option value="first_uppercase_line_after_resolution">Première ligne en majuscules après la résolution</option>
+                                </select>
+                            </label>
+                            <label>Casse du titre
+                                <select id="ruleTitleCase">
+                                    <option value="">Détection standard</option>
+                                    <option value="sentence_case">Casse phrase</option>
+                                    <option value="preserve">Préserver tel quel</option>
+                                </select>
+                            </label>
+                            <label>Taille max du titre
+                                <input id="ruleTitleMaxLength" type="number" min="24" max="220" placeholder="120">
+                            </label>
+                            <label>Budget nom SharePoint
+                                <input id="ruleSharePointLength" type="number" min="48" max="255" placeholder="140">
+                            </label>
+                        </div>
+                        <label style="margin-top: 10px;">Acronymes conservés (csv)
+                            <input id="rulePreserveAcronyms" type="text" placeholder="CN, MTQ, SAAQ, MRC">
+                        </label>
+                        <label style="margin-top: 10px;">Regex du nom final (optionnel)
+                            <input id="ruleFilenameRegex" type="text" placeholder="^Résolution NO\\s20\\d{2}-\\d{1,3}\\s–\\s.+\\s–\\s20\\d{2}-\\d{2}-\\d{2}\\.pdf$">
+                        </label>
+                    </div>
+
                     <div class="subgrid">
                         <label>Signaux de détection (csv)
                             <textarea id="ruleSignals" rows="4" style="min-height:96px;"></textarea>
@@ -281,6 +314,25 @@
                 #endfor
                 </tbody>
             </table>
+
+            #if(selected_rule_feedback_present):
+            <h3 style="margin-top:14px;">Corrections mémorisées</h3>
+            <table>
+                <thead>
+                <tr><th>Date</th><th>Source</th><th>Nom corrigé</th><th>Notes</th></tr>
+                </thead>
+                <tbody>
+                #for(example in selected_rule_feedback_examples):
+                <tr>
+                    <td>#(example.created_at)</td>
+                    <td class="mono">#(example.source_filename)</td>
+                    <td class="mono">#(example.corrected_filename)</td>
+                    <td>#(example.notes)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+            #endif
             <h3 style="margin-top:14px;">Brouillons de règles</h3>
             <table>
                 <thead>
@@ -446,13 +498,20 @@ function namingRuleFromJSON() {
 
 function namingPopulateGuidedEditor(rule) {
     if (!rule) return;
+    const metadata = rule.metadata || {};
+    const rendering = metadata.rendering || {};
     document.getElementById("ruleId").value = rule.id || "";
     document.getElementById("ruleLabel").value = rule.label || "";
     document.getElementById("ruleVersion").value = rule.version || "";
     document.getElementById("ruleFamily").value = rule.document_family || "";
     document.getElementById("ruleTemplate").value = rule.template || "";
-    document.getElementById("ruleClassCode").value = (rule.metadata && rule.metadata.suggested_class_code) || "";
-    document.getElementById("ruleCanonicalLabel").value = (rule.metadata && rule.metadata.canonical_output_label) || "";
+    document.getElementById("ruleClassCode").value = metadata.suggested_class_code || "";
+    document.getElementById("ruleCanonicalLabel").value = metadata.canonical_output_label || "";
+    document.getElementById("ruleTitleSource").value = rendering.title_source || "";
+    document.getElementById("ruleTitleCase").value = rendering.title_case || "";
+    document.getElementById("ruleTitleMaxLength").value = rendering.title_max_length || "";
+    document.getElementById("ruleSharePointLength").value = rendering.sharepoint_safe_filename_length || "";
+    document.getElementById("rulePreserveAcronyms").value = namingCSV(rendering.preserve_acronyms);
     document.getElementById("ruleSignals").value = namingCSV(rule.conditions && rule.conditions.signals_any);
     document.getElementById("ruleRegexes").value = namingLines(rule.conditions && rule.conditions.regex_any);
     document.getElementById("ruleSourceFamilies").value = namingCSV(rule.conditions && rule.conditions.source_document_families);
@@ -476,7 +535,9 @@ function namingPopulateGuidedEditor(rule) {
     });
     document.getElementById("ruleFields").value = fieldLines.join("\n");
 
-    const validationLines = (rule.validations || []).map((validation) => {
+    const validationLines = (rule.validations || [])
+        .filter((validation) => validation.kind !== "matches_regex")
+        .map((validation) => {
         return [
             validation.kind || "",
             validation.parameter || "",
@@ -484,6 +545,9 @@ function namingPopulateGuidedEditor(rule) {
         ].join("|");
     });
     document.getElementById("ruleValidations").value = validationLines.join("\n");
+
+    const regexValidation = (rule.validations || []).find((validation) => validation.kind === "matches_regex");
+    document.getElementById("ruleFilenameRegex").value = regexValidation?.parameter || "";
 }
 
 function namingGroupedFields() {
@@ -548,7 +612,33 @@ function namingValidations() {
 }
 
 function namingBuildRuleObject() {
+    const existing = namingRuleFromJSON() || {};
+    const metadata = Object.assign({}, existing.metadata || {});
+    const rendering = {
+        title_source: document.getElementById("ruleTitleSource").value.trim() || null,
+        title_case: document.getElementById("ruleTitleCase").value.trim() || null,
+        preserve_acronyms: namingParseCSV(document.getElementById("rulePreserveAcronyms").value),
+        title_max_length: Number(document.getElementById("ruleTitleMaxLength").value || 0) || null,
+        sharepoint_safe_filename_length: Number(document.getElementById("ruleSharePointLength").value || 0) || null
+    };
+    const validations = namingValidations().filter((validation) => validation.kind !== "matches_regex");
+    const filenameRegex = document.getElementById("ruleFilenameRegex").value.trim();
+    if (filenameRegex) {
+        validations.unshift({
+            kind: "matches_regex",
+            parameter: filenameRegex,
+            message: "Le nom final doit respecter le format attendu."
+        });
+    }
+
+    metadata.suggested_class_code = document.getElementById("ruleClassCode").value.trim() || null;
+    metadata.canonical_output_label = document.getElementById("ruleCanonicalLabel").value.trim() || null;
+    metadata.rendering = Object.values(rendering).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value))
+        ? rendering
+        : null;
+
     return {
+        ...existing,
         id: document.getElementById("ruleId").value.trim(),
         label: document.getElementById("ruleLabel").value.trim(),
         version: document.getElementById("ruleVersion").value.trim() || "1.0.0",
@@ -565,11 +655,8 @@ function namingBuildRuleObject() {
         fields: namingGroupedFields(),
         normalization: namingParseCSV(document.getElementById("ruleNormalizations").value),
         forbidden_terms: namingParseCSV(document.getElementById("ruleForbiddenTerms").value),
-        validations: namingValidations(),
-        metadata: {
-            suggested_class_code: document.getElementById("ruleClassCode").value.trim() || null,
-            canonical_output_label: document.getElementById("ruleCanonicalLabel").value.trim() || null
-        }
+        validations,
+        metadata
     };
 }
 
