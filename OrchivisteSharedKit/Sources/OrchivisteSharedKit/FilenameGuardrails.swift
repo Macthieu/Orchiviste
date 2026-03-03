@@ -52,7 +52,12 @@ public enum FilenameGuardrails {
             options: [.regularExpression, .caseInsensitive]
         )
         output = output.replacingOccurrences(
-            of: #"\s*[-–—]\s*"#,
+            of: #"[–—]+"#,
+            with: " – ",
+            options: .regularExpression
+        )
+        output = output.replacingOccurrences(
+            of: #"\s+-\s+"#,
             with: " – ",
             options: .regularExpression
         )

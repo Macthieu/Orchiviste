@@ -249,15 +249,22 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
     private func extractResolutionTitle(from text: String) -> String? {
         let lines = significantLines(from: text)
         for (index, line) in lines.enumerated() {
-            if normalizedSearchText(line).contains("resolution"),
-               index + 1 < lines.count {
-                let candidate = lines[index + 1]
-                if candidate.count >= 8 {
-                    return candidate
+            if normalizedSearchText(line).contains("resolution") {
+                for offset in 1...3 where index + offset < lines.count {
+                    let candidate = lines[index + offset]
+                    if looksLikeResolutionTitleCandidate(candidate) {
+                        return candidate
+                    }
                 }
             }
         }
-        return significantUppercaseLine(in: text)
+
+        let uppercaseCandidates = significantLines(from: text)
+            .filter(looksLikeResolutionTitleCandidate)
+            .sorted { lhs, rhs in
+                resolutionTitleScore(lhs) > resolutionTitleScore(rhs)
+            }
+        return uppercaseCandidates.first ?? significantUppercaseLine(in: text)
     }
 
     private func extractAdoptionDate(from text: String) -> String? {
@@ -328,6 +335,37 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             return minYear == maxYear ? "\(minYear)" : "\(minYear)-\(maxYear)"
         }
         return nil
+    }
+
+    private func looksLikeResolutionTitleCandidate(_ value: String) -> Bool {
+        let normalized = normalizedSearchText(value)
+        if normalized.isEmpty || normalized.count < 10 {
+            return false
+        }
+        let rejectedSignals = [
+            "resolution",
+            "extrait du proces-verbal",
+            "conseil municipal",
+            "ville d amos",
+            "presents",
+            "conseillers",
+            "adoptee a l unanimite",
+            "copie conforme"
+        ]
+        if rejectedSignals.contains(where: { normalized.contains($0) }) {
+            return false
+        }
+        if normalized.range(of: #"^\d{4}-\d{1,4}$"#, options: .regularExpression) != nil {
+            return false
+        }
+        let words = value.split(whereSeparator: \.isWhitespace)
+        return words.count >= 3 || value.count >= 20
+    }
+
+    private func resolutionTitleScore(_ value: String) -> Int {
+        let letters = value.filter(\.isLetter)
+        let uppercaseCount = letters.filter(\.isUppercase).count
+        return (value.count * 2) + (uppercaseCount * 3)
     }
 }
 

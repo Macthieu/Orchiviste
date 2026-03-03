@@ -1219,7 +1219,7 @@ private func renderFileNameUsingNamingRule(
     )
     var fields = engine.extractFields(from: detectionText, rule: namingRule, metadata: metadata)
     for (key, value) in overlayNamingFields(job: job, analysis: analysis, sourceURL: sourceURL) {
-        if nonEmpty(fields[key]) == nil {
+        if shouldUseOverlayField(key: key, existing: fields[key], incoming: value) {
             fields[key] = value
         }
     }
@@ -1313,6 +1313,58 @@ private func overlayNamingFields(
     if let period { values["periode"] = period }
     values["original"] = sourceURL.deletingPathExtension().lastPathComponent
     return values
+}
+
+private func shouldUseOverlayField(key: String, existing: String?, incoming: String?) -> Bool {
+    guard let incoming = incoming?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !incoming.isEmpty else {
+        return false
+    }
+    guard let existing = existing?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !existing.isEmpty else {
+        return true
+    }
+
+    switch key {
+    case "titre", "objet":
+        let weakValues = [
+            "resolution",
+            "entente",
+            "contrat",
+            "convention",
+            "bail",
+            "document",
+            "autre"
+        ]
+        let normalizedExisting = normalizedRoutingComparisonToken(existing)
+        if weakValues.contains(normalizedExisting) {
+            return true
+        }
+        if existing.split(whereSeparator: \.isWhitespace).count < 3 && incoming.count > existing.count {
+            return true
+        }
+        return false
+    case "numero":
+        let existingLooksValid = existing.range(of: #"^\d{4}-\d{1,4}$"#, options: .regularExpression) != nil
+        let incomingLooksValid = incoming.range(of: #"^\d{4}-\d{1,4}$"#, options: .regularExpression) != nil
+        return !existingLooksValid && incomingLooksValid
+    case "date":
+        return incoming.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+            && existing.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) == nil
+    case "cocontractant":
+        let normalizedExisting = normalizedRoutingComparisonToken(existing)
+        return normalizedExisting == "ville d amos" || normalizedExisting == "amos"
+    default:
+        return false
+    }
+}
+
+private func normalizedRoutingComparisonToken(_ raw: String) -> String {
+    raw
+        .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        .lowercased()
+        .replacingOccurrences(of: #"[^a-z0-9]+"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 private func substituteTokens(in raw: String, values: [String: String]) -> String {

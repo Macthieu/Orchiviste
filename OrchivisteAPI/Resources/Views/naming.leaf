@@ -103,6 +103,44 @@
             font-weight: 700;
             font-size: 12px;
         }
+        .subgrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        .stack {
+            display: grid;
+            gap: 10px;
+        }
+        .editor-toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0 4px;
+        }
+        .hint {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .code-box {
+            background: #f7f3ec;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        details.advanced {
+            margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fbf8f2;
+        }
+        details.advanced summary {
+            cursor: pointer;
+            font-weight: 700;
+        }
         ul.compact { margin: 8px 0 0; padding-left: 18px; }
         .mono { font-family: "SF Mono", Menlo, monospace; }
         @media (max-width: 980px) {
@@ -154,10 +192,79 @@
             <h2>Règles déclaratives</h2>
             <p style="margin:0 0 10px; color: var(--muted);">Source active : <span class="pill">#(selected_rule_source)</span></p>
             <form action="/ui/naming/rules/save" method="post">
-                <label>JSON de la règle
-                    <textarea name="rule_json" spellcheck="false">#(selected_rule_json)</textarea>
-                </label>
-                <button class="btn" type="submit">Enregistrer la règle</button>
+                <div class="stack">
+                    <div class="subgrid">
+                        <label>ID règle
+                            <input id="ruleId" type="text" placeholder="rule_resolution_conseil_municipal">
+                        </label>
+                        <label>Libellé
+                            <input id="ruleLabel" type="text" placeholder="Résolution du conseil municipal">
+                        </label>
+                        <label>Version
+                            <input id="ruleVersion" type="text" placeholder="1.0.0">
+                        </label>
+                        <label>Famille documentaire
+                            <input id="ruleFamily" type="text" placeholder="resolution_conseil">
+                        </label>
+                    </div>
+
+                    <div class="subgrid">
+                        <label>Template final
+                            <input id="ruleTemplate" type="text" placeholder="Résolution NO {numero} – {titre} – {date}.pdf">
+                        </label>
+                        <label>Code de classement suggéré
+                            <input id="ruleClassCode" type="text" placeholder="ADM-RES">
+                        </label>
+                        <label>Libellé de sortie canonique
+                            <input id="ruleCanonicalLabel" type="text" placeholder="Résolution">
+                        </label>
+                    </div>
+
+                    <div class="subgrid">
+                        <label>Signaux de détection (csv)
+                            <textarea id="ruleSignals" rows="4" style="min-height:96px;"></textarea>
+                        </label>
+                        <label>Regex de détection (1 par ligne)
+                            <textarea id="ruleRegexes" rows="4" style="min-height:96px;"></textarea>
+                        </label>
+                        <label>Familles source (csv)
+                            <textarea id="ruleSourceFamilies" rows="4" style="min-height:96px;"></textarea>
+                        </label>
+                    </div>
+
+                    <div class="subgrid">
+                        <label>Normalisations (csv)
+                            <textarea id="ruleNormalizations" rows="4" style="min-height:96px;"></textarea>
+                        </label>
+                        <label>Termes interdits (csv)
+                            <textarea id="ruleForbiddenTerms" rows="4" style="min-height:96px;"></textarea>
+                        </label>
+                    </div>
+
+                    <label>Champs de la règle
+                        <textarea id="ruleFields" rows="10" style="min-height:180px;" spellcheck="false"></textarea>
+                    </label>
+                    <p class="hint">Format : <span class="mono">key|label|required|kind|pattern|semantic_hint|stopwords csv|preserve_terms csv</span>. Une ligne par stratégie.</p>
+
+                    <label>Validations
+                        <textarea id="ruleValidations" rows="6" style="min-height:120px;" spellcheck="false"></textarea>
+                    </label>
+                    <p class="hint">Format : <span class="mono">kind|parameter|message</span>. Une ligne par validation.</p>
+                </div>
+
+                <div class="editor-toolbar">
+                    <button class="btn-secondary" type="button" onclick="namingResetGuidedEditor()">Recharger la règle sélectionnée</button>
+                    <button class="btn-secondary" type="button" onclick="namingBuildRuleJSON()">Mettre à jour le JSON</button>
+                    <button class="btn" type="submit" onclick="return namingPrepareRuleSubmit()">Enregistrer la règle</button>
+                </div>
+
+                <details class="advanced">
+                    <summary>JSON avancé</summary>
+                    <p class="hint">Le JSON reste disponible pour les cas avancés. L'éditeur guidé ci-dessus remplit automatiquement ce bloc.</p>
+                    <label>JSON de la règle
+                        <textarea id="ruleJson" name="rule_json" spellcheck="false">#(selected_rule_json)</textarea>
+                    </label>
+                </details>
             </form>
             <table style="margin-top: 14px;">
                 <thead>
@@ -311,5 +418,183 @@
         #endif
     </section>
 </main>
+<script>
+function namingCSV(values) {
+    return (values || []).join(", ");
+}
+
+function namingLines(values) {
+    return (values || []).join("\n");
+}
+
+function namingParseCSV(value) {
+    return (value || "")
+        .split(/[,;\n]/)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+}
+
+function namingRuleFromJSON() {
+    const textarea = document.getElementById("ruleJson");
+    if (!textarea) return null;
+    try {
+        return JSON.parse(textarea.value);
+    } catch (error) {
+        return null;
+    }
+}
+
+function namingPopulateGuidedEditor(rule) {
+    if (!rule) return;
+    document.getElementById("ruleId").value = rule.id || "";
+    document.getElementById("ruleLabel").value = rule.label || "";
+    document.getElementById("ruleVersion").value = rule.version || "";
+    document.getElementById("ruleFamily").value = rule.document_family || "";
+    document.getElementById("ruleTemplate").value = rule.template || "";
+    document.getElementById("ruleClassCode").value = (rule.metadata && rule.metadata.suggested_class_code) || "";
+    document.getElementById("ruleCanonicalLabel").value = (rule.metadata && rule.metadata.canonical_output_label) || "";
+    document.getElementById("ruleSignals").value = namingCSV(rule.conditions && rule.conditions.signals_any);
+    document.getElementById("ruleRegexes").value = namingLines(rule.conditions && rule.conditions.regex_any);
+    document.getElementById("ruleSourceFamilies").value = namingCSV(rule.conditions && rule.conditions.source_document_families);
+    document.getElementById("ruleNormalizations").value = namingCSV(rule.normalization);
+    document.getElementById("ruleForbiddenTerms").value = namingCSV(rule.forbidden_terms);
+
+    const fieldLines = [];
+    (rule.fields || []).forEach((field) => {
+        (field.strategies || []).forEach((strategy) => {
+            fieldLines.push([
+                field.key || "",
+                field.label || "",
+                field.required ? "true" : "false",
+                strategy.kind || "",
+                strategy.pattern || "",
+                strategy.semantic_hint || "",
+                namingCSV(strategy.stopwords),
+                namingCSV(strategy.preserve_terms)
+            ].join("|"));
+        });
+    });
+    document.getElementById("ruleFields").value = fieldLines.join("\n");
+
+    const validationLines = (rule.validations || []).map((validation) => {
+        return [
+            validation.kind || "",
+            validation.parameter || "",
+            validation.message || ""
+        ].join("|");
+    });
+    document.getElementById("ruleValidations").value = validationLines.join("\n");
+}
+
+function namingGroupedFields() {
+    const lines = (document.getElementById("ruleFields").value || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+    const fields = [];
+    const indexByKey = new Map();
+
+    for (const line of lines) {
+        const parts = line.split("|");
+        const key = (parts[0] || "").trim();
+        if (!key) continue;
+        const label = (parts[1] || key).trim();
+        const required = ((parts[2] || "").trim().toLowerCase() === "true");
+        const strategy = {
+            kind: (parts[3] || "semantic").trim() || "semantic"
+        };
+        const pattern = (parts[4] || "").trim();
+        const semanticHint = (parts[5] || "").trim();
+        const stopwords = namingParseCSV(parts[6] || "");
+        const preserveTerms = namingParseCSV(parts[7] || "");
+        if (pattern) strategy.pattern = pattern;
+        if (semanticHint) strategy.semantic_hint = semanticHint;
+        if (stopwords.length > 0) strategy.stopwords = stopwords;
+        if (preserveTerms.length > 0) strategy.preserve_terms = preserveTerms;
+
+        if (!indexByKey.has(key)) {
+            indexByKey.set(key, fields.length);
+            fields.push({
+                key,
+                label,
+                required,
+                strategies: [strategy]
+            });
+        } else {
+            fields[indexByKey.get(key)].strategies.push(strategy);
+        }
+    }
+    return fields;
+}
+
+function namingValidations() {
+    return (document.getElementById("ruleValidations").value || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => {
+            const parts = line.split("|");
+            const validation = {
+                kind: (parts[0] || "").trim()
+            };
+            const parameter = (parts[1] || "").trim();
+            const message = (parts[2] || "").trim();
+            if (parameter) validation.parameter = parameter;
+            if (message) validation.message = message;
+            return validation;
+        })
+        .filter((validation) => validation.kind);
+}
+
+function namingBuildRuleObject() {
+    return {
+        id: document.getElementById("ruleId").value.trim(),
+        label: document.getElementById("ruleLabel").value.trim(),
+        version: document.getElementById("ruleVersion").value.trim() || "1.0.0",
+        document_family: document.getElementById("ruleFamily").value.trim(),
+        template: document.getElementById("ruleTemplate").value.trim(),
+        conditions: {
+            signals_any: namingParseCSV(document.getElementById("ruleSignals").value),
+            regex_any: (document.getElementById("ruleRegexes").value || "")
+                .split("\n")
+                .map((line) => line.trim())
+                .filter((line) => line.length > 0),
+            source_document_families: namingParseCSV(document.getElementById("ruleSourceFamilies").value)
+        },
+        fields: namingGroupedFields(),
+        normalization: namingParseCSV(document.getElementById("ruleNormalizations").value),
+        forbidden_terms: namingParseCSV(document.getElementById("ruleForbiddenTerms").value),
+        validations: namingValidations(),
+        metadata: {
+            suggested_class_code: document.getElementById("ruleClassCode").value.trim() || null,
+            canonical_output_label: document.getElementById("ruleCanonicalLabel").value.trim() || null
+        }
+    };
+}
+
+function namingBuildRuleJSON() {
+    const rule = namingBuildRuleObject();
+    document.getElementById("ruleJson").value = JSON.stringify(rule, null, 2);
+}
+
+function namingPrepareRuleSubmit() {
+    namingBuildRuleJSON();
+    return true;
+}
+
+function namingResetGuidedEditor() {
+    const rule = namingRuleFromJSON();
+    if (!rule) {
+        alert("Le JSON actuel n'est pas valide.");
+        return;
+    }
+    namingPopulateGuidedEditor(rule);
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+    namingResetGuidedEditor();
+});
+</script>
 </body>
 </html>
