@@ -23641,6 +23641,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingArtifactLoaders.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationProtocols.swift"
         },
         {
@@ -23650,6 +23654,14 @@
         {
           "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationUtils.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuleRanking.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuntimeCatalog.swift"
         },
         {
           "kind" : "file",
@@ -23681,9 +23693,12 @@
       "moduleOutputPath" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/Modules/OrchivisteAnalyseCore.swiftmodule",
       "objects" : [
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/DeclarativeNamingRuleEngine.swift.o",
+        "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.swift.o",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationProtocols.swift.o",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationSeeds.swift.o",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils.swift.o",
+        "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.swift.o",
+        "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.swift.o",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/RuleLearner.swift.o",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/ThesaurusImportService.swift.o"
       ],
@@ -23741,6 +23756,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationProtocols.swift.o"
         },
         {
@@ -23750,6 +23769,14 @@
         {
           "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.swift.o"
         },
         {
           "kind" : "file",
@@ -23767,9 +23794,12 @@
       "prepareForIndexing" : false,
       "sources" : [
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/DeclarativeNamingRuleEngine.swift",
+        "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingArtifactLoaders.swift",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationProtocols.swift",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationSeeds.swift",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationUtils.swift",
+        "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuleRanking.swift",
+        "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuntimeCatalog.swift",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/RuleLearner.swift",
         "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/ThesaurusImportService.swift"
       ],
@@ -41020,9 +41050,12 @@
       "orchivisteanalyse",
       "-c",
       "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/DeclarativeNamingRuleEngine.swift",
+      "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingArtifactLoaders.swift",
       "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationProtocols.swift",
       "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationSeeds.swift",
       "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationUtils.swift",
+      "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuleRanking.swift",
+      "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuntimeCatalog.swift",
       "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/RuleLearner.swift",
       "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/ThesaurusImportService.swift",
       "-I",
@@ -63620,6 +63653,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationProtocols.swift.o"
         },
         {
@@ -63629,6 +63666,14 @@
         {
           "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.swift.o"
         },
         {
           "kind" : "file",
@@ -66122,6 +66167,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingArtifactLoaders.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationProtocols.swift"
         },
         {
@@ -66131,6 +66180,14 @@
         {
           "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationUtils.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuleRanking.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuntimeCatalog.swift"
         },
         {
           "kind" : "file",
@@ -73218,6 +73275,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationProtocols.swift.o"
         },
         {
@@ -73227,6 +73288,14 @@
         {
           "kind" : "file",
           "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.swift.o"
         },
         {
           "kind" : "file",

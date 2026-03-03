@@ -10,6 +10,12 @@
     "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/DeclarativeNamingRuleEngine.swiftdeps",
     "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/DeclarativeNamingRuleEngine.dia"
   },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingArtifactLoaders.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingArtifactLoaders.dia"
+  },
   "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingFoundationProtocols.swift": {
     "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationProtocols.swift.o",
     "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationProtocols~partial.swiftmodule",
@@ -27,6 +33,18 @@
     "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils~partial.swiftmodule",
     "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils.swiftdeps",
     "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingFoundationUtils.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuleRanking.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuleRanking.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/NamingRuntimeCatalog.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/NamingRuntimeCatalog.dia"
   },
   "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/Sources/OrchivisteAnalyseCore/RuleLearner.swift": {
     "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/OrchivisteAnalyseCore.build/RuleLearner.swift.o",
