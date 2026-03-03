@@ -170,6 +170,13 @@ private struct UIJobViewerContext: Encodable {
     let route_disabled_reason: String?
     let routed_at: String?
     let saved_folder_path: String
+    let proposed_file_name: String
+    let proposed_file_name_present: Bool
+    let proposed_destination_folder: String
+    let proposed_destination_folder_present: Bool
+    let proposed_naming_rule_id: String
+    let proposed_naming_rule_present: Bool
+    let proposed_name_source: String
     let preview_pages: Int
     let download_url: String
     let download_searchable_url: String
@@ -1335,6 +1342,10 @@ func registerUIRoutes(_ app: Application) {
         }
         let summaryPoints = analysisSummaryPoints(for: job)
         let metadataItems = suggestedMetadataItems(for: job)
+        let routePreview = buildRoutePreview(
+            job: job,
+            analysis: await req.application.appState.analysis(jobId: jobID)
+        )
         let context = UIJobViewerContext(
             id: job.id.uuidString,
             status: localizedJobStatus(job.status.rawValue),
@@ -1351,6 +1362,16 @@ func registerUIRoutes(_ app: Application) {
             route_disabled_reason: (canRoute || canRouteAfterReview) ? nil : routeDisabledReason,
             routed_at: job.steps.routed.map(formatTimestamp),
             saved_folder_path: routeSavedFolderPath(job) ?? "-",
+            proposed_file_name: routePreview?.fileName ?? "-",
+            proposed_file_name_present: nonEmptyString(routePreview?.fileName) != nil,
+            proposed_destination_folder: routePreview?.destinationFolderDisplay ?? "-",
+            proposed_destination_folder_present: {
+                guard let folder = nonEmptyString(routePreview?.destinationFolderDisplay) else { return false }
+                return folder != "-"
+            }(),
+            proposed_naming_rule_id: routePreview?.namingRuleID ?? "-",
+            proposed_naming_rule_present: nonEmptyString(routePreview?.namingRuleID) != nil,
+            proposed_name_source: routePreview?.namingSource ?? "Aucune proposition automatique",
             preview_pages: max(1, preview?.pages ?? 1),
             download_url: "/v1/jobs/\(job.id.uuidString)/download",
             download_searchable_url: "/ui/jobs/\(job.id.uuidString)/download-searchable",

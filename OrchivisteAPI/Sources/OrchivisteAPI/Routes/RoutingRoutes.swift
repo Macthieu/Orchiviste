@@ -956,6 +956,144 @@ private struct ResolvedRoutingNaming {
     let namingRuleID: String?
 }
 
+struct RoutePreview {
+    let fileName: String?
+    let destinationFolderDisplay: String?
+    let namingRuleID: String?
+    let namingSource: String
+}
+
+func buildRoutePreview(
+    job: JobRecord,
+    analysis: AnalysisResponse?,
+    requestedClassCode: String? = nil,
+    requestedPresetID: String? = nil,
+    requestedDestinationFolder: String? = nil,
+    requestedNameFormat: String? = nil,
+    requestedExportType: String? = nil
+) -> RoutePreview? {
+    guard let routing = ConfigLoader.loadRoutingMap() else {
+        return nil
+    }
+
+    let localSettings = ConfigLoader.loadRoutingLocalSettings()
+    let routingRules = ConfigLoader.loadRoutingRules()
+    let presets = ConfigLoader.loadPresets()
+    let namingRules = ConfigLoader.loadNamingRules()
+    let namingThesaurus = ConfigLoader.loadNamingThesauri().first
+    let effectiveAnalysis = analysis ?? makeAnalysisSnapshot(from: job, classCodeFallback: job.suggestedClassCode)
+    let effectiveLocalSettings = mergedLocalRoutingSettings(
+        base: localSettings,
+        requestedRoot: nonEmpty(job.analysisChamps?["route.requested_output_root"])
+    )
+
+    let provisionalRule = selectRoutingRule(
+        rules: routingRules?.rules ?? [],
+        classCode: nonEmpty(requestedClassCode) ?? nonEmpty(job.suggestedClassCode),
+        analysis: effectiveAnalysis
+    )
+    let provisionalPreset = presets.first { $0.id == nonEmpty(requestedPresetID) }
+        ?? presets.first { $0.id == nonEmpty(provisionalRule?.preset_id) }
+        ?? presets.first { $0.id == job.suggestedPreset }
+        ?? presets.first
+
+    let classCode = nonEmpty(requestedClassCode)
+        ?? nonEmpty(provisionalRule?.class_code)
+        ?? nonEmpty(provisionalRule?.when_class_code)
+        ?? nonEmpty(job.suggestedClassCode)
+        ?? nonEmpty(provisionalPreset?.class_code)
+        ?? routing.mappings.keys.first
+        ?? "UNCLASSIFIED"
+
+    let selectedRule = selectRoutingRule(
+        rules: routingRules?.rules ?? [],
+        classCode: classCode,
+        analysis: effectiveAnalysis
+    ) ?? provisionalRule
+    let selectedPreset = presets.first { $0.id == nonEmpty(requestedPresetID) }
+        ?? presets.first { $0.id == nonEmpty(selectedRule?.preset_id) }
+        ?? provisionalPreset
+
+    let effectiveClassCode = nonEmpty(requestedClassCode)
+        ?? nonEmpty(selectedRule?.class_code)
+        ?? nonEmpty(selectedRule?.when_class_code)
+        ?? classCode
+
+    guard let target = routing.mappings[effectiveClassCode] ?? routing.mappings.values.first else {
+        return nil
+    }
+
+    let folderTemplate = nonEmpty(requestedDestinationFolder)
+        ?? nonEmpty(selectedRule?.destination_template)
+        ?? nonEmpty(effectiveLocalSettings?.default_destination_template)
+        ?? target.folder_expr
+    let resolvedFolder = resolveFolderTemplate(
+        template: folderTemplate,
+        classCode: effectiveClassCode,
+        analysis: effectiveAnalysis,
+        presetID: selectedPreset?.id
+    )
+    let effectiveNameFormat = nonEmpty(requestedNameFormat)
+        ?? nonEmpty(selectedRule?.name_format)
+        ?? nonEmpty(selectedPreset?.name_format)
+        ?? nonEmpty(effectiveLocalSettings?.default_name_format)
+    let selectedNamingRule = selectNamingRuleForRouting(
+        job: job,
+        analysis: effectiveAnalysis,
+        preset: selectedPreset,
+        rules: namingRules
+    )
+    let resolvedNaming = resolvedRoutingFileName(
+        job: job,
+        classCode: effectiveClassCode,
+        analysis: effectiveAnalysis,
+        preset: selectedPreset,
+        explicitPreferredFileName: nil,
+        legacyNameFormat: effectiveNameFormat,
+        requestedExportType: requestedExportType,
+        namingRule: selectedNamingRule,
+        namingThesaurus: namingThesaurus
+    )
+
+    let destinationFolderDisplay: String?
+    if job.source.kind.lowercased() == "local" {
+        let localRoot = localRoutingRootDirectory(settings: effectiveLocalSettings)
+        let safeResolvedFolder = sanitizeRelativeFolder(resolvedFolder)
+        let destinationLocalPath = safeResolvedFolder.isEmpty
+            ? localRoot.path
+            : localRoot.appendingPathComponent(safeResolvedFolder, isDirectory: true).path
+        destinationFolderDisplay = routeDestinationFolderDisplay(
+            mode: "local",
+            target: target,
+            resolvedFolder: resolvedFolder,
+            destinationLocalPath: destinationLocalPath
+        )
+    } else {
+        destinationFolderDisplay = routeDestinationFolderDisplay(
+            mode: "graph",
+            target: target,
+            resolvedFolder: resolvedFolder,
+            destinationLocalPath: nil
+        )
+    }
+
+    let namingSource: String
+    if let namingRuleID = resolvedNaming.namingRuleID, !namingRuleID.isEmpty {
+        namingSource = "Règle déclarative"
+    } else if effectiveNameFormat != nil {
+        namingSource = "Format de nom actuel"
+    } else {
+        namingSource = "Format standard"
+    }
+
+    return RoutePreview(
+        fileName: resolvedNaming.fileName,
+        destinationFolderDisplay: destinationFolderDisplay,
+        namingRuleID: resolvedNaming.namingRuleID,
+        namingSource: namingSource
+    )
+}
+
 private func resolvedRoutingFileName(
     job: JobRecord,
     classCode: String,

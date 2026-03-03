@@ -117,6 +117,24 @@
             background: #ebf8f4;
             color: var(--accent);
         }
+        .preview-box {
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #faf7f1;
+            margin-bottom: 12px;
+        }
+        .preview-name {
+            font-family: "SF Mono", Menlo, monospace;
+            font-weight: 700;
+            word-break: break-word;
+        }
+        .preview-meta {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
         .tab-pane { display: none; }
         .tab-pane.active { display: block; }
         @media (max-width: 960px) {
@@ -133,6 +151,7 @@
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/naming">Nommage</a>
         <a href="/ui/events">Événements</a>
         <a class="btn" href="#(download_url)">Télécharger (action explicite)</a>
         <a class="btn" href="#(download_searchable_url)">Télécharger PDF OCR (explicite)</a>
@@ -245,6 +264,27 @@
         #else:
         <p style="margin: 6px 0; color: var(--muted); font-size: 12px;">
             Aucune correction requise pour cette tâche (statut différent de "Revue requise").
+        </p>
+        #endif
+
+        <h4>Nom final proposé</h4>
+        #if(proposed_file_name_present):
+        <div class="preview-box">
+            <div class="preview-name">#(proposed_file_name)</div>
+            <div class="preview-meta">Source: #(proposed_name_source)</div>
+            #if(proposed_naming_rule_present):
+            <div class="preview-meta">Règle utilisée: #(proposed_naming_rule_id)</div>
+            #endif
+            #if(proposed_destination_folder_present):
+            <div class="preview-meta">Dossier cible: #(proposed_destination_folder)</div>
+            #endif
+            <div class="preview-meta">
+                Cette proposition reprend la logique actuelle de routage. Un dossier ou un format saisi ci-dessous la remplacera au moment du routage.
+            </div>
+        </div>
+        #else:
+        <p style="margin: 0 0 12px; color: var(--muted); font-size: 12px;">
+            Aucune proposition automatique disponible pour cette tâche.
         </p>
         #endif
 
