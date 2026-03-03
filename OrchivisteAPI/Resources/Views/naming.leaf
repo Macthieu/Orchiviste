@@ -103,6 +103,10 @@
             font-weight: 700;
             font-size: 12px;
         }
+        .pill-warn {
+            background: #fff3e6;
+            color: var(--warn);
+        }
         .subgrid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -168,6 +172,9 @@
     #if(error):
     <p class="error">#(error)</p>
     #endif
+    #if(runtime_fallback_active):
+    <p class="error">Aucun artefact de nommage valide n’a été chargé depuis les configs. Le runtime utilise actuellement le fallback minimal compilé.</p>
+    #endif
 
     <section class="card">
         <h2>Secours de renommage hérité</h2>
@@ -201,7 +208,16 @@
     <div class="grid">
         <section class="card">
             <h2>Règles déclaratives</h2>
-            <p style="margin:0 0 10px; color: var(--muted);">Source active : <span class="pill">#(selected_rule_source)</span></p>
+            <p style="margin:0 0 10px; color: var(--muted);">
+                Runtime sélectionné :
+                <span class="pill">#(selected_rule_status)</span>
+                <span class="pill">#(selected_rule_source)</span>
+                #if(selected_rule_is_fallback):
+                <span class="pill pill-warn">fallback</span>
+                #endif
+                <br>
+                Chargé depuis : <span class="mono">#(selected_rule_loaded_from)</span>
+            </p>
             <form action="/ui/naming/rules/save" method="post">
                 <div class="stack">
                     <div class="subgrid">
@@ -312,15 +328,24 @@
             </form>
             <table style="margin-top: 14px;">
                 <thead>
-                <tr><th>ID</th><th>Famille</th><th>Template</th><th>Code</th></tr>
+                <tr><th>ID</th><th>Famille</th><th>Version / statut</th><th>Template</th><th>Code</th><th>Chargement</th></tr>
                 </thead>
                 <tbody>
                 #for(rule in rules):
                 <tr>
                     <td><a class="mono" href="/ui/naming?rule_id=#(rule.id)">#(rule.id)</a></td>
                     <td>#(rule.document_family)<br><strong>#(rule.label)</strong></td>
+                    <td>
+                        <span class="mono">#(rule.version)</span><br>
+                        <span class="pill">#(rule.status)</span>
+                        <span class="pill">#(rule.source)</span>
+                        #if(rule.is_fallback):
+                        <br><span class="pill pill-warn">fallback</span>
+                        #endif
+                    </td>
                     <td class="mono">#(rule.template)</td>
                     <td>#(rule.class_code)</td>
+                    <td class="mono">#(rule.loaded_from)</td>
                 </tr>
                 #endfor
                 </tbody>
@@ -368,7 +393,16 @@
 
         <section class="card">
             <h2>Thésaurus</h2>
-            <p style="margin:0 0 10px; color: var(--muted);">Source active : <span class="pill">#(selected_thesaurus_source)</span></p>
+            <p style="margin:0 0 10px; color: var(--muted);">
+                Runtime sélectionné :
+                <span class="pill">#(selected_thesaurus_status)</span>
+                <span class="pill">#(selected_thesaurus_source)</span>
+                #if(selected_thesaurus_is_fallback):
+                <span class="pill pill-warn">fallback</span>
+                #endif
+                <br>
+                Chargé depuis : <span class="mono">#(selected_thesaurus_loaded_from)</span>
+            </p>
             <form action="/ui/naming/thesaurus/save" method="post">
                 <label>JSON du thésaurus
                     <textarea name="thesaurus_json" spellcheck="false">#(selected_thesaurus_json)</textarea>
@@ -377,15 +411,23 @@
             </form>
             <table style="margin-top: 14px;">
                 <thead>
-                <tr><th>ID</th><th>Version</th><th>Description</th><th>Entrées</th></tr>
+                <tr><th>ID</th><th>Version / statut</th><th>Description</th><th>Entrées</th><th>Chargement</th></tr>
                 </thead>
                 <tbody>
                 #for(thesaurus in thesauri):
                 <tr>
                     <td><a class="mono" href="/ui/naming?thesaurus_id=#(thesaurus.id)">#(thesaurus.id)</a></td>
-                    <td>#(thesaurus.version)</td>
+                    <td>
+                        <span class="mono">#(thesaurus.version)</span><br>
+                        <span class="pill">#(thesaurus.status)</span>
+                        <span class="pill">#(thesaurus.source)</span>
+                        #if(thesaurus.is_fallback):
+                        <br><span class="pill pill-warn">fallback</span>
+                        #endif
+                    </td>
                     <td>#(thesaurus.description)</td>
                     <td>#(thesaurus.entries)</td>
+                    <td class="mono">#(thesaurus.loaded_from)</td>
                 </tr>
                 #endfor
                 </tbody>

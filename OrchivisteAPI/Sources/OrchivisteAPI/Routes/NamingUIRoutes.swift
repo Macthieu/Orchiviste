@@ -7,17 +7,24 @@ private struct UINamingContext: Encodable {
     let notice: String?
     let error: String?
     let legacy_default_name_format: String
+    let runtime_fallback_active: Bool
     let rules: [UINamingRuleSummary]
     let thesauri: [UINamingThesaurusSummary]
     let rule_drafts: [UINamingRuleDraftSummary]
     let thesaurus_drafts: [UINamingThesaurusDraftSummary]
     let selected_rule_id: String?
     let selected_rule_source: String
+    let selected_rule_status: String
+    let selected_rule_loaded_from: String
+    let selected_rule_is_fallback: Bool
     let selected_rule_json: String
     let selected_rule_feedback_examples: [UINamingFeedbackExampleSummary]
     let selected_rule_feedback_present: Bool
     let selected_thesaurus_id: String?
     let selected_thesaurus_source: String
+    let selected_thesaurus_status: String
+    let selected_thesaurus_loaded_from: String
+    let selected_thesaurus_is_fallback: Bool
     let selected_thesaurus_json: String
     let selected_thesaurus_draft_id: String?
     let draft_conflicts: [UIThesaurusConflictSummary]
@@ -36,9 +43,14 @@ private struct UINamingFeedbackExampleSummary: Encodable {
 private struct UINamingRuleSummary: Encodable {
     let id: String
     let label: String
+    let version: String
     let document_family: String
     let template: String
     let class_code: String
+    let status: String
+    let source: String
+    let loaded_from: String
+    let is_fallback: Bool
 }
 
 private struct UINamingThesaurusSummary: Encodable {
@@ -46,6 +58,10 @@ private struct UINamingThesaurusSummary: Encodable {
     let version: String
     let description: String
     let entries: Int
+    let status: String
+    let source: String
+    let loaded_from: String
+    let is_fallback: Bool
 }
 
 private struct UINamingRuleDraftSummary: Encodable {
@@ -108,8 +124,11 @@ private struct UINamingLegacyFormatForm: Content {
 
 func registerNamingUIRoutes(_ app: Application) {
     app.get("ui", "naming") { req async throws -> View in
-        let rules = ConfigLoader.loadNamingRules()
-        let thesauri = ConfigLoader.loadNamingThesauri()
+        let runtimeCatalog = ConfigLoader.loadNamingRuntimeCatalog()
+        let ruleRecords = runtimeCatalog.active_rules
+        let rules = ruleRecords.map(\.definition)
+        let thesaurusRecords = runtimeCatalog.active_thesauri
+        let thesauri = thesaurusRecords.map(\.definition)
         let ruleDrafts = ConfigLoader.loadNamingRuleDrafts()
         let thesaurusDrafts = ConfigLoader.loadNamingThesaurusDrafts()
 
@@ -124,6 +143,9 @@ func registerNamingUIRoutes(_ app: Application) {
         let selectedRule = selectedRuleID.flatMap { id in
             rules.first(where: { $0.id == id })
         } ?? rules.first
+        let selectedRuleRecord = selectedRule.flatMap { rule in
+            runtimeCatalog.ruleRecord(id: rule.id, includeDrafts: false)
+        }
 
         let selectedThesaurusDraft = selectedThesaurusDraftID.flatMap { id in
             thesaurusDrafts.first(where: { $0.draft_id == id })
@@ -131,6 +153,9 @@ func registerNamingUIRoutes(_ app: Application) {
         let selectedThesaurus = selectedThesaurusID.flatMap { id in
             thesauri.first(where: { $0.thesaurus_id == id })
         } ?? thesauri.first
+        let selectedThesaurusRecord = selectedThesaurus.flatMap { thesaurus in
+            thesaurusRecords.first(where: { $0.thesaurus_id == thesaurus.thesaurus_id })
+        }
 
         let effectiveRuleJSON = prettyJSONString(selectedRuleDraft?.proposed_rule ?? selectedRule)
         let effectiveThesaurusJSON = prettyJSONString(
@@ -141,21 +166,31 @@ func registerNamingUIRoutes(_ app: Application) {
             notice: req.query[String.self, at: "notice"],
             error: req.query[String.self, at: "error"],
             legacy_default_name_format: ConfigLoader.loadRoutingLocalSettings()?.default_name_format ?? "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
-            rules: rules.map {
+            runtime_fallback_active: runtimeCatalog.fallback_active,
+            rules: ruleRecords.map {
                 UINamingRuleSummary(
-                    id: $0.id,
-                    label: $0.label,
-                    document_family: $0.document_family,
-                    template: $0.template,
-                    class_code: $0.metadata?.suggested_class_code ?? "-"
+                    id: $0.definition.id,
+                    label: $0.definition.label,
+                    version: $0.version,
+                    document_family: $0.definition.document_family,
+                    template: $0.definition.template,
+                    class_code: $0.definition.metadata?.suggested_class_code ?? "-",
+                    status: $0.status.rawValue,
+                    source: $0.source.rawValue,
+                    loaded_from: $0.loaded_from ?? "-",
+                    is_fallback: $0.is_fallback
                 )
             },
-            thesauri: thesauri.map {
+            thesauri: thesaurusRecords.map {
                 UINamingThesaurusSummary(
-                    id: $0.thesaurus_id,
+                    id: $0.definition.thesaurus_id,
                     version: $0.version,
-                    description: $0.description ?? "-",
-                    entries: $0.entries.count
+                    description: $0.definition.description ?? "-",
+                    entries: $0.definition.entries.count,
+                    status: $0.status.rawValue,
+                    source: $0.source.rawValue,
+                    loaded_from: $0.loaded_from ?? "-",
+                    is_fallback: $0.is_fallback
                 )
             },
             rule_drafts: ruleDrafts.map {
@@ -180,7 +215,10 @@ func registerNamingUIRoutes(_ app: Application) {
                 )
             },
             selected_rule_id: selectedRuleDraft?.proposed_rule.id ?? selectedRule?.id,
-            selected_rule_source: selectedRuleDraft == nil ? "Règle active" : "Brouillon",
+            selected_rule_source: selectedRuleDraft == nil ? (selectedRuleRecord?.source.rawValue ?? "configFile") : "draftFile",
+            selected_rule_status: selectedRuleDraft == nil ? (selectedRuleRecord?.status.rawValue ?? "active") : NamingArtifactStatus.draft.rawValue,
+            selected_rule_loaded_from: selectedRuleDraft == nil ? (selectedRuleRecord?.loaded_from ?? "-") : "configs/naming/drafts/rules",
+            selected_rule_is_fallback: selectedRuleDraft == nil ? (selectedRuleRecord?.is_fallback ?? false) : false,
             selected_rule_json: effectiveRuleJSON,
             selected_rule_feedback_examples: (selectedRuleDraft?.proposed_rule.metadata?.feedback_examples
                 ?? selectedRule?.metadata?.feedback_examples
@@ -196,7 +234,10 @@ func registerNamingUIRoutes(_ app: Application) {
                 ?? selectedRule?.metadata?.feedback_examples
                 ?? []).isEmpty),
             selected_thesaurus_id: selectedThesaurusDraft?.preview.target_thesaurus_id ?? selectedThesaurus?.thesaurus_id,
-            selected_thesaurus_source: selectedThesaurusDraft == nil ? "Thésaurus actif" : "Prévisualisation fusion",
+            selected_thesaurus_source: selectedThesaurusDraft == nil ? (selectedThesaurusRecord?.source.rawValue ?? "configFile") : "draftFile",
+            selected_thesaurus_status: selectedThesaurusDraft == nil ? (selectedThesaurusRecord?.status.rawValue ?? "active") : NamingArtifactStatus.draft.rawValue,
+            selected_thesaurus_loaded_from: selectedThesaurusDraft == nil ? (selectedThesaurusRecord?.loaded_from ?? "-") : "configs/naming/drafts/thesaurus",
+            selected_thesaurus_is_fallback: selectedThesaurusDraft == nil ? (selectedThesaurusRecord?.is_fallback ?? false) : false,
             selected_thesaurus_json: effectiveThesaurusJSON,
             selected_thesaurus_draft_id: selectedThesaurusDraft?.draft_id,
             draft_conflicts: (selectedThesaurusDraft?.preview.conflicts ?? []).map {

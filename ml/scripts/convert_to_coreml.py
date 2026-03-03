@@ -13,19 +13,11 @@ def convert_torchscript_to_coreml(
     input_name: str = "input",
     input_shape: tuple[int, ...] = (1, 16),
 ) -> None:
-    """
-    Convert a TorchScript model (.pt / .torchscript.pt) to Core ML (.mlpackage).
-
-    This script expects a TorchScript model already saved on disk.
-    Example input shape is intentionally simple and should be adapted later
-    to the real Orchiviste model.
-    """
     try:
         import torch
     except ImportError as exc:
         raise RuntimeError(
-            "PyTorch is not installed in the active environment. "
-            "Install it before converting a TorchScript model."
+            "PyTorch is not installed in the active environment."
         ) from exc
 
     if not source_path.exists():
@@ -50,14 +42,11 @@ def convert_torchscript_to_coreml(
 
 
 def parse_shape(shape_text: str) -> tuple[int, ...]:
-    """
-    Parse a shape string like '1,16' or '1,3,224,224' into a tuple of ints.
-    """
     try:
         parts = [int(x.strip()) for x in shape_text.split(",") if x.strip()]
     except ValueError as exc:
         raise argparse.ArgumentTypeError(
-            "Shape must be a comma-separated list of integers, e.g. 1,16 or 1,3,224,224"
+            "Shape must be a comma-separated list of integers."
         ) from exc
 
     if not parts:
@@ -70,27 +59,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Convert a TorchScript model to Core ML (.mlpackage)."
     )
-    parser.add_argument(
-        "--source",
-        required=True,
-        help="Path to the source TorchScript model (.pt).",
-    )
-    parser.add_argument(
-        "--output",
-        required=True,
-        help="Path to the output Core ML model (.mlpackage).",
-    )
-    parser.add_argument(
-        "--input-name",
-        default="input",
-        help="Input tensor name for the Core ML model.",
-    )
-    parser.add_argument(
-        "--input-shape",
-        type=parse_shape,
-        default=(1, 16),
-        help="Input tensor shape, e.g. 1,16 or 1,3,224,224",
-    )
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--input-name", default="input")
+    parser.add_argument("--input-shape", type=parse_shape, default=(1, 16))
 
     args = parser.parse_args()
 
