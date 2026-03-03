@@ -183,7 +183,8 @@ private func executeRouting(
             analysis: analysis,
             preset: selectedPreset,
             explicitPreferredFileName: nil,
-            legacyNameFormat: effectiveNameFormat,
+            explicitLegacyNameFormat: routeRequest?.name_format,
+            fallbackLegacyNameFormat: effectiveNameFormat,
             requestedExportType: routeRequest?.export_type,
             namingRule: selectNamingRuleForRouting(
                 job: resolvedJob,
@@ -625,7 +626,8 @@ private func routeLocalFileIfPossible(
         analysis: analysis,
         preset: preset,
         explicitPreferredFileName: preferredFileName,
-        legacyNameFormat: nil,
+        explicitLegacyNameFormat: nil,
+        fallbackLegacyNameFormat: nil,
         requestedExportType: requestedExportType,
         namingRule: namingRule,
         namingThesaurus: namingThesaurus
@@ -1049,7 +1051,8 @@ func buildRoutePreview(
         analysis: effectiveAnalysis,
         preset: selectedPreset,
         explicitPreferredFileName: nil,
-        legacyNameFormat: effectiveNameFormat,
+        explicitLegacyNameFormat: requestedNameFormat,
+        fallbackLegacyNameFormat: effectiveNameFormat,
         requestedExportType: requestedExportType,
         namingRule: selectedNamingRule,
         namingThesaurus: namingThesaurus
@@ -1080,6 +1083,8 @@ func buildRoutePreview(
     let namingSource: String
     if let namingRuleID = resolvedNaming.namingRuleID, !namingRuleID.isEmpty {
         namingSource = "Règle déclarative"
+    } else if nonEmpty(requestedNameFormat) != nil {
+        namingSource = "Format manuel"
     } else if effectiveNameFormat != nil {
         namingSource = "Format de nom actuel"
     } else {
@@ -1100,7 +1105,8 @@ private func resolvedRoutingFileName(
     analysis: AnalysisResponse?,
     preset: Preset?,
     explicitPreferredFileName: String?,
-    legacyNameFormat: String?,
+    explicitLegacyNameFormat: String?,
+    fallbackLegacyNameFormat: String?,
     requestedExportType: String?,
     namingRule: NamingRuleDefinition?,
     namingThesaurus: NamingThesaurus?
@@ -1113,8 +1119,9 @@ private func resolvedRoutingFileName(
         return ResolvedRoutingNaming(fileName: explicitPreferredFileName, namingRuleID: nil)
     }
 
-    let effectiveNameFormat = nonEmpty(legacyNameFormat)
-    if effectiveNameFormat == nil,
+    let manualNameFormat = nonEmpty(explicitLegacyNameFormat)
+    let inheritedNameFormat = nonEmpty(fallbackLegacyNameFormat)
+    if manualNameFormat == nil,
        let namingRule,
        let rendered = renderFileNameUsingNamingRule(
             job: job,
@@ -1134,7 +1141,7 @@ private func resolvedRoutingFileName(
         analysis: analysis,
         presetID: preset?.id,
         jobID: job.id.uuidString,
-        nameFormat: effectiveNameFormat,
+        nameFormat: manualNameFormat ?? inheritedNameFormat,
         postprocess: preset?.postprocess ?? []
     )
     return ResolvedRoutingNaming(fileName: legacyName, namingRuleID: nil)

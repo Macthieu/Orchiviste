@@ -240,7 +240,7 @@
                     #endfor
                 </select>
             </label>
-            <label>Préréglage (proposé / sélection)
+            <label>Préréglage de routage hérité (proposé / sélection)
                 <select id="reviewPresetSelect">
                     <option value="">-- Aucun --</option>
                     #for(option in preset_options):
@@ -251,7 +251,7 @@
         </div>
         <div id="tabManual" class="tab-pane">
             <label>Code de classement corrigé <input id="reviewClass" type="text" placeholder="ADM-PV"></label>
-            <label>Préréglage corrigé <input id="reviewPreset" type="text" placeholder="preset_pv"></label>
+            <label>Préréglage de routage hérité corrigé <input id="reviewPreset" type="text" placeholder="preset_pv"></label>
             <label>Type document corrigé <input id="reviewTypeDoc" type="text" placeholder="ProcesVerbal"></label>
             <label>Sujets corrigés (csv) <input id="reviewSujets" type="text" placeholder="Comite, Session"></label>
             <label>Numéro document corrigé <input id="reviewDocumentNumber" type="text" placeholder="2026-28"></label>
@@ -293,6 +293,11 @@
         <p>Déjà routée le <strong>#(routed_at)</strong>.</p>
         #endif
         #if(show_routing_form):
+        #if(proposed_naming_rule_present):
+        <p style="margin: 0 0 10px; color: var(--muted); font-size: 12px;">
+            Règle de nommage proposée: <strong>#(proposed_naming_rule_id)</strong>. Le champ de préréglage ci-dessous reste un réglage de routage hérité.
+        </p>
+        #endif
         <label>Dossier destination (optionnel)
             <input id="routeFolder" type="text" placeholder="Archives/{year}/{class_code}/{type_doc}/{sujet}">
         </label>
@@ -302,7 +307,7 @@
         <label>Code de classement (optionnel)
             <input id="routeClassCode" type="text" value="#(suggested_class_code)">
         </label>
-        <label>ID préréglage (optionnel)
+        <label>ID préréglage de routage (optionnel)
             <input id="routePresetId" type="text" value="#(suggested_preset)">
         </label>
         <label>Export archivage (optionnel)
