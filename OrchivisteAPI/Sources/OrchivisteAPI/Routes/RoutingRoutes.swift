@@ -1,5 +1,7 @@
 import Foundation
 import Fluent
+import OrchivisteAnalyseCore
+import OrchivisteSharedKit
 import Vapor
 
 private struct LocalRouteResult {
@@ -8,6 +10,7 @@ private struct LocalRouteResult {
     let warnings: [String]
     let pdfStrategy: String?
     let requiresReview: Bool
+    let namingRuleID: String?
 }
 
 struct ReviewStagingResult {
@@ -74,6 +77,8 @@ private func executeRouting(
     let localSettings = ConfigLoader.loadRoutingLocalSettings()
     let routingRules = ConfigLoader.loadRoutingRules()
     let presets = ConfigLoader.loadPresets()
+    let namingRules = ConfigLoader.loadNamingRules()
+    let namingThesaurus = ConfigLoader.loadNamingThesauri().first
 
     var suggestedCode: String?
     var resolvedJobID: UUID?
@@ -166,21 +171,30 @@ private func executeRouting(
     )
 
     var resolvedFileName: String?
+    var routeNamingRuleID: String?
     if let resolvedJob {
-        let originalName = URL(fileURLWithPath: resolvedJob.fileURL).lastPathComponent
         let effectiveNameFormat = nonEmpty(routeRequest?.name_format)
             ?? nonEmpty(selectedRule?.name_format)
             ?? nonEmpty(selectedPreset?.name_format)
             ?? nonEmpty(effectiveLocalSettings?.default_name_format)
-        resolvedFileName = buildRoutedFileName(
+        let resolvedNaming = resolvedRoutingFileName(
+            job: resolvedJob,
             classCode: effectiveClassCode,
-            originalName: originalName,
             analysis: analysis,
-            presetID: selectedPreset?.id,
-            jobID: resolvedJob.id.uuidString,
-            nameFormat: effectiveNameFormat,
-            postprocess: selectedPreset?.postprocess ?? []
+            preset: selectedPreset,
+            explicitPreferredFileName: nil,
+            legacyNameFormat: effectiveNameFormat,
+            requestedExportType: routeRequest?.export_type,
+            namingRule: selectNamingRuleForRouting(
+                job: resolvedJob,
+                analysis: analysis,
+                preset: selectedPreset,
+                rules: namingRules
+            ),
+            namingThesaurus: namingThesaurus
         )
+        resolvedFileName = resolvedNaming.fileName
+        routeNamingRuleID = resolvedNaming.namingRuleID
     }
 
     var routeMode = "stub"
@@ -262,11 +276,20 @@ private func executeRouting(
                 preferredFileName: resolvedFileName,
                 preset: selectedPreset,
                 requestedExportType: routeRequest?.export_type,
+                analysis: analysis,
+                namingRule: selectNamingRuleForRouting(
+                    job: resolvedJob,
+                    analysis: analysis,
+                    preset: selectedPreset,
+                    rules: namingRules
+                ),
+                namingThesaurus: namingThesaurus,
                 logger: logger
             ) {
                 routeMode = "local"
                 destinationLocalPath = localRoute.destinationPath
                 resolvedFileName = localRoute.fileName
+                routeNamingRuleID = localRoute.namingRuleID
                 destinationFolderDisplay = routeDestinationFolderDisplay(
                     mode: routeMode,
                     target: target,
@@ -360,7 +383,8 @@ private func executeRouting(
             destinationLocalPath: destinationLocalPath,
             destinationFolderDisplay: destinationFolderDisplay,
             pdfStrategy: routePDFStrategy,
-            ocrStatus: routeOCRState
+            ocrStatus: routeOCRState,
+            namingRuleID: routeNamingRuleID
         )
        ) {
         try await JobPersistenceRepository.upsert(job: updatedJob, on: database)
@@ -411,7 +435,8 @@ private func buildRouteJobDetails(
     destinationLocalPath: String?,
     destinationFolderDisplay: String?,
     pdfStrategy: String?,
-    ocrStatus: String
+    ocrStatus: String,
+    namingRuleID: String?
 ) -> [String: String] {
     var details: [String: String] = [:]
     details["route.mode"] = mode
@@ -432,6 +457,9 @@ private func buildRouteJobDetails(
     }
     if let pdfStrategy, !pdfStrategy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         details["route.pdf_strategy"] = pdfStrategy
+    }
+    if let namingRuleID, !namingRuleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        details["route.naming_rule_id"] = namingRuleID
     }
     details["route.ocr_status"] = ocrStatus
     details["route.metadata_status"] = routeMetadataStatus(for: target)
@@ -553,6 +581,9 @@ private func routeLocalFileIfPossible(
     preferredFileName: String?,
     preset: Preset?,
     requestedExportType: String?,
+    analysis: AnalysisResponse?,
+    namingRule: NamingRuleDefinition?,
+    namingThesaurus: NamingThesaurus?,
     logger: Logger
 ) throws -> LocalRouteResult? {
     guard job.source.kind.lowercased() == "local" else {
@@ -588,7 +619,18 @@ private func routeLocalFileIfPossible(
         attributes: nil
     )
 
-    let destinationName = nonEmpty(preferredFileName) ?? routedLocalFileName(
+    let routedNaming = resolvedRoutingFileName(
+        job: job,
+        classCode: classCode,
+        analysis: analysis,
+        preset: preset,
+        explicitPreferredFileName: preferredFileName,
+        legacyNameFormat: nil,
+        requestedExportType: requestedExportType,
+        namingRule: namingRule,
+        namingThesaurus: namingThesaurus
+    )
+    let destinationName = routedNaming.fileName ?? routedLocalFileName(
         classCode: classCode,
         originalName: sourceURL.lastPathComponent
     )
@@ -661,7 +703,8 @@ private func routeLocalFileIfPossible(
             fileName: destinationURL.lastPathComponent,
             warnings: pdfaResult.warnings,
             pdfStrategy: strategy,
-            requiresReview: pdfaWarningsRequireReview(pdfaResult.warnings)
+            requiresReview: pdfaWarningsRequireReview(pdfaResult.warnings),
+            namingRuleID: routedNaming.namingRuleID
         )
     }
 
@@ -711,7 +754,8 @@ private func routeLocalFileIfPossible(
             fileName: destinationURL.lastPathComponent,
             warnings: extracted.warnings + pdfaResult.warnings,
             pdfStrategy: strategy,
-            requiresReview: pdfaWarningsRequireReview(pdfaResult.warnings)
+            requiresReview: pdfaWarningsRequireReview(pdfaResult.warnings),
+            namingRuleID: routedNaming.namingRuleID
         )
     }
 
@@ -721,7 +765,8 @@ private func routeLocalFileIfPossible(
         fileName: destinationURL.lastPathComponent,
         warnings: [],
         pdfStrategy: nil,
-        requiresReview: false
+        requiresReview: false,
+        namingRuleID: routedNaming.namingRuleID
     )
 }
 
@@ -904,6 +949,225 @@ private func buildRoutedFileName(
         ? rawName
         : "\(rawName).\(ext)"
     return NamingPolicy.truncateFileNameIfNeeded(baseName)
+}
+
+private struct ResolvedRoutingNaming {
+    let fileName: String?
+    let namingRuleID: String?
+}
+
+private func resolvedRoutingFileName(
+    job: JobRecord,
+    classCode: String,
+    analysis: AnalysisResponse?,
+    preset: Preset?,
+    explicitPreferredFileName: String?,
+    legacyNameFormat: String?,
+    requestedExportType: String?,
+    namingRule: NamingRuleDefinition?,
+    namingThesaurus: NamingThesaurus?
+) -> ResolvedRoutingNaming {
+    guard let sourceURL = resolveLocalFileURL(raw: job.fileURL) else {
+        return ResolvedRoutingNaming(fileName: explicitPreferredFileName, namingRuleID: nil)
+    }
+
+    if let explicitPreferredFileName = nonEmpty(explicitPreferredFileName) {
+        return ResolvedRoutingNaming(fileName: explicitPreferredFileName, namingRuleID: nil)
+    }
+
+    let effectiveNameFormat = nonEmpty(legacyNameFormat)
+    if effectiveNameFormat == nil,
+       let namingRule,
+       let rendered = renderFileNameUsingNamingRule(
+            job: job,
+            sourceURL: sourceURL,
+            analysis: analysis,
+            preset: preset,
+            requestedExportType: requestedExportType,
+            namingRule: namingRule,
+            namingThesaurus: namingThesaurus
+       ) {
+        return ResolvedRoutingNaming(fileName: rendered, namingRuleID: namingRule.id)
+    }
+
+    let legacyName = buildRoutedFileName(
+        classCode: classCode,
+        originalName: sourceURL.lastPathComponent,
+        analysis: analysis,
+        presetID: preset?.id,
+        jobID: job.id.uuidString,
+        nameFormat: effectiveNameFormat,
+        postprocess: preset?.postprocess ?? []
+    )
+    return ResolvedRoutingNaming(fileName: legacyName, namingRuleID: nil)
+}
+
+private func selectNamingRuleForRouting(
+    job: JobRecord,
+    analysis: AnalysisResponse?,
+    preset: Preset?,
+    rules: [NamingRuleDefinition]
+) -> NamingRuleDefinition? {
+    guard !rules.isEmpty else {
+        return nil
+    }
+
+    let haystack = buildNamingDetectionText(job: job, analysis: analysis, preset: preset)
+    let engine = DeclarativeNamingRuleEngine()
+
+    let prioritizedIDs = [
+        preset?.id,
+        analysis?.suggested_preset,
+        analysis?.type_doc,
+        job.analysisTypeDoc,
+        job.analysisChamps?["metadata.type_document"]
+    ]
+        .compactMap { nonEmpty($0) }
+        .map { normalizeRoutingToken($0) }
+
+    for token in prioritizedIDs {
+        if token?.contains("resolution") == true,
+           let rule = rules.first(where: { $0.id == "rule_resolution_conseil_municipal" }) {
+            return rule
+        }
+        if token?.contains("contrat") == true || token?.contains("entente") == true || token?.contains("bail") == true,
+           let rule = rules.first(where: { $0.id == "rule_entente_uniformisee" }) {
+            return rule
+        }
+    }
+
+    return engine.detectRule(
+        in: haystack,
+        metadata: NamingSourceMetadata(
+            fileName: URL(fileURLWithPath: job.fileURL).lastPathComponent,
+            fileExtension: URL(fileURLWithPath: job.fileURL).pathExtension,
+            originalName: URL(fileURLWithPath: job.fileURL).lastPathComponent,
+            hints: job.analysisChamps
+        ),
+        rules: rules
+    )
+}
+
+private func renderFileNameUsingNamingRule(
+    job: JobRecord,
+    sourceURL: URL,
+    analysis: AnalysisResponse?,
+    preset: Preset?,
+    requestedExportType: String?,
+    namingRule: NamingRuleDefinition,
+    namingThesaurus: NamingThesaurus?
+) -> String? {
+    let sourceExtension = sourceURL.pathExtension.lowercased()
+    let willProducePDF = sourceExtension == "pdf"
+        || ArchivalPDFExporter.shouldAttemptPDFA(preset: preset, requestedExportType: requestedExportType)
+    guard willProducePDF else {
+        return nil
+    }
+
+    let engine = DeclarativeNamingRuleEngine()
+    let detectionText = buildNamingDetectionText(job: job, analysis: analysis, preset: preset)
+    let metadata = NamingSourceMetadata(
+        fileName: sourceURL.lastPathComponent,
+        fileExtension: sourceExtension,
+        originalName: sourceURL.lastPathComponent,
+        hints: job.analysisChamps
+    )
+    var fields = engine.extractFields(from: detectionText, rule: namingRule, metadata: metadata)
+    for (key, value) in overlayNamingFields(job: job, analysis: analysis, sourceURL: sourceURL) {
+        if nonEmpty(fields[key]) == nil {
+            fields[key] = value
+        }
+    }
+
+    let normalized = engine.normalizeFields(fields, rule: namingRule, thesaurus: namingThesaurus)
+    let rendered = engine.renderFilename(rule: namingRule, fields: normalized)
+    let issues = engine.validateFilename(rendered, rule: namingRule, fields: normalized)
+    if issues.contains(where: { $0.level == .error }) {
+        return nil
+    }
+    return rendered
+}
+
+private func buildNamingDetectionText(
+    job: JobRecord,
+    analysis: AnalysisResponse?,
+    preset: Preset?
+) -> String {
+    var parts: [String] = [URL(fileURLWithPath: job.fileURL).lastPathComponent]
+    if let typeDoc = nonEmpty(analysis?.type_doc) ?? nonEmpty(job.analysisTypeDoc) {
+        parts.append(typeDoc)
+    }
+    if let sujets = analysis?.sujets, !sujets.isEmpty {
+        parts.append(sujets.joined(separator: " "))
+    } else if let sujets = job.analysisSujets, !sujets.isEmpty {
+        parts.append(sujets.joined(separator: " "))
+    }
+    if let presetName = nonEmpty(preset?.name) {
+        parts.append(presetName)
+    }
+    if let presetDescription = nonEmpty(preset?.description) {
+        parts.append(presetDescription)
+    }
+    if let champs = analysis?.champs ?? job.analysisChamps {
+        let usefulKeys = [
+            "summary.title",
+            "summary.generated",
+            "resolution_titre",
+            "document_objet",
+            "metadata.objet",
+            "metadata.type_document",
+            "metadata.numero_document",
+            "metadata.date_document",
+            "cocontractant",
+            "periode"
+        ]
+        for key in usefulKeys {
+            if let value = nonEmpty(champs[key]) {
+                parts.append(value)
+            }
+        }
+        for value in champs.values where !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(value)
+        }
+    }
+    return parts.joined(separator: "\n")
+}
+
+private func overlayNamingFields(
+    job: JobRecord,
+    analysis: AnalysisResponse?,
+    sourceURL: URL
+) -> [String: String] {
+    let champs = analysis?.champs ?? job.analysisChamps ?? [:]
+    let date = nonEmpty(champs["date"])
+        ?? nonEmpty(champs["metadata.date_document"])
+    let numero = nonEmpty(champs["numero"])
+        ?? nonEmpty(champs["metadata.numero_document"])
+    let title = nonEmpty(champs["resolution_titre"])
+        ?? nonEmpty(champs["summary.title"])
+        ?? nonEmpty(champs["metadata.objet"])
+        ?? nonEmpty(champs["document_objet"])
+    let object = nonEmpty(champs["document_objet"])
+        ?? nonEmpty(champs["metadata.objet"])
+        ?? nonEmpty(champs["summary.title"])
+        ?? title
+    let counterparty = nonEmpty(champs["cocontractant"])
+        ?? nonEmpty(champs["metadata.cocontractant"])
+        ?? nonEmpty(champs["organisme_tiers"])
+        ?? nonEmpty(champs["metadata.organisme_tiers"])
+    let period = nonEmpty(champs["periode"])
+        ?? nonEmpty(champs["metadata.periode"])
+        ?? date.flatMap { String($0.prefix(4)) }
+
+    var values: [String: String] = [:]
+    if let numero { values["numero"] = numero }
+    if let date { values["date"] = date }
+    if let title { values["titre"] = title }
+    if let object { values["objet"] = object }
+    if let counterparty { values["cocontractant"] = counterparty }
+    if let period { values["periode"] = period }
+    values["original"] = sourceURL.deletingPathExtension().lastPathComponent
+    return values
 }
 
 private func substituteTokens(in raw: String, values: [String: String]) -> String {

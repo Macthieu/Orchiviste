@@ -120,6 +120,7 @@
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
         <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/naming">Nommage</a>
         <a href="/ui/events">Événements</a>
     </nav>
 </header>
@@ -130,6 +131,14 @@
     #if(error):
     <p class="error">#(error)</p>
     #endif
+
+    <section class="card">
+        <h2>Nommage déclaratif & thésaurus</h2>
+        <p style="margin: 0; color: var(--muted);">
+            La fondation règles de nommage / thésaurus / brouillons est disponible sur
+            <a href="/ui/naming">/ui/naming</a>.
+        </p>
+    </section>
 
     <section class="card">
         <h2>Paramètres de routage local</h2>

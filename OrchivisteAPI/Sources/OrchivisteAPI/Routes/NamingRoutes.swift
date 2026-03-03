@@ -35,7 +35,7 @@ func registerNamingRoutes(_ app: Application) {
 
         naming.post("rules", "learn") { req async throws -> NamingRuleDraft in
             let request = try req.content.decode(RuleLearningRequest.self)
-            let samples = try collectLearningSamples(request: request, logger: req.logger)
+            let samples = try collectNamingLearningSamples(request: request, logger: req.logger)
             let learner = RuleLearner()
             let draft = learner.learn(
                 request: request,
@@ -48,7 +48,7 @@ func registerNamingRoutes(_ app: Application) {
 
         naming.post("folder", "learn") { req async throws -> NamingRuleDraft in
             let request = try req.content.decode(RuleLearningRequest.self)
-            let samples = try collectLearningSamples(request: request, logger: req.logger)
+            let samples = try collectNamingLearningSamples(request: request, logger: req.logger)
             let learner = RuleLearner()
             let draft = learner.learn(
                 request: request,
@@ -111,7 +111,7 @@ func registerNamingRoutes(_ app: Application) {
     }
 }
 
-private func validateNamingRuleDefinition(_ rule: NamingRuleDefinition) -> [NamingRuleValidationIssue] {
+func validateNamingRuleDefinition(_ rule: NamingRuleDefinition) -> [NamingRuleValidationIssue] {
     var issues: [NamingRuleValidationIssue] = []
 
     if rule.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -130,64 +130,4 @@ private func validateNamingRuleDefinition(_ rule: NamingRuleDefinition) -> [Nami
     let filename = DeclarativeNamingRuleEngine().renderFilename(rule: rule, fields: sampleFields)
     issues.append(contentsOf: DeclarativeNamingRuleEngine().validateFilename(filename, rule: rule, fields: sampleFields))
     return issues
-}
-
-private func collectLearningSamples(
-    request: RuleLearningRequest,
-    logger: Logger
-) throws -> [LearningDocumentSample] {
-    let folderURL = URL(fileURLWithPath: request.folder_path, isDirectory: true).standardizedFileURL
-    var isDirectory: ObjCBool = false
-    guard FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory),
-          isDirectory.boolValue else {
-        throw Abort(.badRequest, reason: "Le dossier source est introuvable.")
-    }
-
-    let allowedExtensions = normalizeLearningExtensions(request.extensions)
-    let sampleSize = max(1, min(request.sample_size ?? 50, 200))
-    guard let enumerator = FileManager.default.enumerator(
-        at: folderURL,
-        includingPropertiesForKeys: [.isRegularFileKey],
-        options: [.skipsHiddenFiles]
-    ) else {
-        return []
-    }
-
-    var samples: [LearningDocumentSample] = []
-    for case let fileURL as URL in enumerator {
-        let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-        guard values.isRegularFile == true else { continue }
-        let fileExtension = fileURL.pathExtension.lowercased()
-        guard allowedExtensions.contains(fileExtension) else { continue }
-        guard let extracted = DocumentTextExtractor.extract(fileURL: fileURL, logger: logger) else { continue }
-        let mergedText = extracted.pages.joined(separator: "\n\u{000C}\n")
-        samples.append(
-            LearningDocumentSample(
-                file_name: fileURL.lastPathComponent,
-                file_path: fileURL.path,
-                file_extension: fileExtension,
-                text: mergedText,
-                metadata: [
-                    "page_count": "\(extracted.pages.count)",
-                    "kind": extracted.kind
-                ]
-            )
-        )
-        if samples.count >= sampleSize {
-            break
-        }
-    }
-
-    if samples.isEmpty {
-        throw Abort(.badRequest, reason: "Aucun document exploitable trouvé dans ce dossier.")
-    }
-    return samples
-}
-
-private func normalizeLearningExtensions(_ raw: [String]?) -> Set<String> {
-    let normalized = (raw ?? DocumentTextExtractor.supportedExtensions()).map {
-        $0.trimmingCharacters(in: CharacterSet(charactersIn: ". ").union(.whitespacesAndNewlines))
-            .lowercased()
-    }.filter { DocumentTextExtractor.supportedExtensions().contains($0) }
-    return Set(normalized.isEmpty ? DocumentTextExtractor.supportedExtensions() : normalized)
 }

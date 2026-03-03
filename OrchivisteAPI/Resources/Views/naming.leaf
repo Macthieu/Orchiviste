@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Nommage</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --border: #d9d2c4;
+            --warn: #ac5d0c;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Avenir Next", "Helvetica Neue", sans-serif; color: var(--ink); background: var(--bg); }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap { max-width: 1300px; margin: 20px auto 40px; padding: 0 16px; }
+        .grid { display: grid; grid-template-columns: 1.1fr 1.1fr; gap: 14px; align-items: start; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 10px;
+        }
+        label { display: block; font-size: 13px; color: var(--muted); }
+        input, textarea, select {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            background: #fff;
+        }
+        textarea { min-height: 220px; font-family: "SF Mono", Menlo, monospace; }
+        .btn {
+            margin-top: 10px;
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            border: 1px solid var(--border);
+            background: #f6f1e9;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .notice { margin: 0 0 10px; font-weight: 700; color: var(--accent); }
+        .error { margin: 0 0 10px; font-weight: 700; color: var(--warn); }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 13px;
+            vertical-align: top;
+        }
+        th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #edf4f1;
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 12px;
+        }
+        ul.compact { margin: 8px 0 0; padding-left: 18px; }
+        .mono { font-family: "SF Mono", Menlo, monospace; }
+        @media (max-width: 980px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Nommage & Thésaurus</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/naming">Nommage</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+<main class="wrap">
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h2>Apprentissage depuis dossier</h2>
+        <form action="/ui/naming/rules/learn" method="post">
+            <div class="form-grid">
+                <label>Dossier source
+                    <input type="text" name="folder_path" placeholder="/data/routed/resolutions" required>
+                </label>
+                <label>Taille échantillon
+                    <input type="number" name="sample_size" min="1" max="200" value="30">
+                </label>
+                <label>Extensions (csv)
+                    <input type="text" name="extensions" placeholder="pdf,docx,xlsx,pptx,png,jpg,tiff">
+                </label>
+            </div>
+            <button class="btn" type="submit">Apprendre un brouillon de règle</button>
+        </form>
+    </section>
+
+    <div class="grid">
+        <section class="card">
+            <h2>Règles déclaratives</h2>
+            <p style="margin:0 0 10px; color: var(--muted);">Source active : <span class="pill">#(selected_rule_source)</span></p>
+            <form action="/ui/naming/rules/save" method="post">
+                <label>JSON de la règle
+                    <textarea name="rule_json" spellcheck="false">#(selected_rule_json)</textarea>
+                </label>
+                <button class="btn" type="submit">Enregistrer la règle</button>
+            </form>
+            <table style="margin-top: 14px;">
+                <thead>
+                <tr><th>ID</th><th>Famille</th><th>Template</th><th>Code</th></tr>
+                </thead>
+                <tbody>
+                #for(rule in rules):
+                <tr>
+                    <td><a class="mono" href="/ui/naming?rule_id=#(rule.id)">#(rule.id)</a></td>
+                    <td>#(rule.document_family)<br><strong>#(rule.label)</strong></td>
+                    <td class="mono">#(rule.template)</td>
+                    <td>#(rule.class_code)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+            <h3 style="margin-top:14px;">Brouillons de règles</h3>
+            <table>
+                <thead>
+                <tr><th>Draft</th><th>Source</th><th>Confiance</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                #for(draft in rule_drafts):
+                <tr>
+                    <td><a class="mono" href="/ui/naming?rule_draft_id=#(draft.draft_id)">#(draft.draft_id)</a><br>#(draft.created_at)</td>
+                    <td class="mono">#(draft.source_folder)<br>Règle : #(draft.proposed_rule_id)</td>
+                    <td>#(draft.confidence) #if(draft.needs_review):<br><span class="pill">needs_review</span>#endif</td>
+                    <td>
+                        <form action="/ui/naming/rule-drafts/#(draft.draft_id)/apply" method="post">
+                            <button class="btn-secondary" type="submit">Appliquer</button>
+                        </form>
+                    </td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card">
+            <h2>Thésaurus</h2>
+            <p style="margin:0 0 10px; color: var(--muted);">Source active : <span class="pill">#(selected_thesaurus_source)</span></p>
+            <form action="/ui/naming/thesaurus/save" method="post">
+                <label>JSON du thésaurus
+                    <textarea name="thesaurus_json" spellcheck="false">#(selected_thesaurus_json)</textarea>
+                </label>
+                <button class="btn" type="submit">Enregistrer le thésaurus</button>
+            </form>
+            <table style="margin-top: 14px;">
+                <thead>
+                <tr><th>ID</th><th>Version</th><th>Description</th><th>Entrées</th></tr>
+                </thead>
+                <tbody>
+                #for(thesaurus in thesauri):
+                <tr>
+                    <td><a class="mono" href="/ui/naming?thesaurus_id=#(thesaurus.id)">#(thesaurus.id)</a></td>
+                    <td>#(thesaurus.version)</td>
+                    <td>#(thesaurus.description)</td>
+                    <td>#(thesaurus.entries)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <section class="card">
+        <h2>Importer un thésaurus externe</h2>
+        <form action="/ui/naming/thesaurus/import-preview" method="post">
+            <div class="form-grid">
+                <label>Nom source
+                    <input type="text" name="source_name" placeholder="thesaurus-gouvernemental.yaml">
+                </label>
+                <label>Format
+                    <select name="format">
+                        <option value="json">JSON</option>
+                        <option value="yaml">YAML</option>
+                    </select>
+                </label>
+                <label>Stratégie
+                    <select name="strategy">
+                        <option value="draft">draft</option>
+                        <option value="merge">merge</option>
+                        <option value="replace">replace</option>
+                    </select>
+                </label>
+                <label>Thésaurus cible
+                    <input type="text" name="target_thesaurus_id" value="#(selected_thesaurus_id)" placeholder="municipal-fr">
+                </label>
+            </div>
+            <label>Contenu à importer
+                <textarea name="raw_text" spellcheck="false"></textarea>
+            </label>
+            <button class="btn" type="submit">Prévisualiser l'import</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Brouillons d'import de thésaurus</h2>
+        <table>
+            <thead>
+            <tr><th>Draft</th><th>Source</th><th>Fusion</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+            #for(draft in thesaurus_drafts):
+            <tr>
+                <td><a class="mono" href="/ui/naming?thesaurus_draft_id=#(draft.draft_id)">#(draft.draft_id)</a><br>#(draft.created_at)</td>
+                <td>#(draft.source_name)<br>Format: #(draft.format)</td>
+                <td>Stratégie: #(draft.strategy)<br>Cible: <span class="mono">#(draft.target_thesaurus_id)</span><br>Conflits: #(draft.conflicts)</td>
+                <td>
+                    <form action="/ui/naming/thesaurus-drafts/#(draft.draft_id)/confirm" method="post">
+                        <input type="hidden" name="strategy" value="#(draft.strategy)">
+                        <input type="hidden" name="target_thesaurus_id" value="#(draft.target_thesaurus_id)">
+                        <button class="btn-secondary" type="submit">Confirmer</button>
+                    </form>
+                </td>
+            </tr>
+            #endfor
+            </tbody>
+        </table>
+
+        #if(selected_thesaurus_draft_id):
+        <div style="margin-top: 14px;">
+            <h3>Prévisualisation brouillon #(selected_thesaurus_draft_id)</h3>
+            #if(draft_has_conflicts):
+            <p class="error">Des conflits ont été détectés.</p>
+            <table>
+                <thead>
+                <tr><th>Type</th><th>Alias</th><th>Existant</th><th>Entrant</th><th>Détail</th></tr>
+                </thead>
+                <tbody>
+                #for(conflict in draft_conflicts):
+                <tr>
+                    <td>#(conflict.kind)</td>
+                    <td>#(conflict.alias)</td>
+                    <td>#(conflict.existing_canonical)</td>
+                    <td>#(conflict.incoming_canonical)</td>
+                    <td>#(conflict.message)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+            #endif
+            #if(draft_has_warnings):
+            <ul class="compact">
+                #for(warning in draft_warnings):
+                <li>#(warning)</li>
+                #endfor
+            </ul>
+            #endif
+        </div>
+        #endif
+    </section>
+</main>
+</body>
+</html>
