@@ -1,0 +1,3 @@
+module X509 {
+    header "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/X509.build/include/X509-Swift.h"
+}

@@ -1,0 +1,43 @@
+{
+  "": {
+    "dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/VaporTesting.d",
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/VaporTesting.o",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/master.swiftdeps"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/vapor/Sources/VaporTesting/+TestingHTTPResponse.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/+TestingHTTPResponse.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/+TestingHTTPResponse~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/+TestingHTTPResponse.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/+TestingHTTPResponse.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/vapor/Sources/VaporTesting/Exports.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/Exports.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/Exports~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/Exports.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/Exports.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/vapor/Sources/VaporTesting/TestingApplicationTester.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/TestingApplicationTester.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/TestingApplicationTester~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/TestingApplicationTester.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/TestingApplicationTester.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/vapor/Sources/VaporTesting/VaporTestingContext.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/VaporTestingContext.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/VaporTestingContext~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/VaporTestingContext.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/VaporTestingContext.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/vapor/Sources/VaporTesting/XCTest+Migration.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/XCTest+Migration.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/XCTest+Migration~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/XCTest+Migration.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/XCTest+Migration.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/vapor/Sources/VaporTesting/withApp.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/withApp.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/withApp~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/withApp.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/VaporTesting.build/withApp.dia"
+  }
+}

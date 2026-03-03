@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/ConsoleKit.build/master.swiftdeps"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/console-kit/Sources/ConsoleKit/Exports.swift": {
+    "dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/ConsoleKit.build/Exports.d",
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/ConsoleKit.build/Exports.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/ConsoleKit.build/Exports~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/ConsoleKit.build/Exports.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/debug/ConsoleKit.build/Exports.dia"
+  }
+}

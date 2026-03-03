@@ -1,0 +1,67 @@
+{
+  "": {
+    "dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocket.d",
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocket.o",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/master.swiftdeps"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/NIOWebSocketClientUpgrader.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketClientUpgrader.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketClientUpgrader~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketClientUpgrader.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketClientUpgrader.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/NIOWebSocketFrameAggregator.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketFrameAggregator.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketFrameAggregator~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketFrameAggregator.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketFrameAggregator.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/NIOWebSocketServerUpgrader.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketServerUpgrader.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketServerUpgrader~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketServerUpgrader.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/NIOWebSocketServerUpgrader.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/SHA1.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/SHA1.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/SHA1~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/SHA1.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/SHA1.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/WebSocketErrorCodes.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketErrorCodes.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketErrorCodes~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketErrorCodes.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketErrorCodes.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/WebSocketFrame.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrame.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrame~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrame.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrame.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/WebSocketFrameDecoder.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameDecoder.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameDecoder~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameDecoder.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameDecoder.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/WebSocketFrameEncoder.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameEncoder.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameEncoder~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameEncoder.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketFrameEncoder.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/WebSocketOpcode.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketOpcode.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketOpcode~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketOpcode.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketOpcode.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/NIOWebSocket/WebSocketProtocolErrorHandler.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketProtocolErrorHandler.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketProtocolErrorHandler~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketProtocolErrorHandler.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOWebSocket.build/WebSocketProtocolErrorHandler.dia"
+  }
+}

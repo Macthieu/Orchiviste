@@ -1,0 +1,67 @@
+{
+  "": {
+    "dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/ConfigurationTestingInternal.d",
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/ConfigurationTestingInternal.o",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/master.swiftdeps"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/AccessReporterTestUtils.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AccessReporterTestUtils.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AccessReporterTestUtils~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AccessReporterTestUtils.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AccessReporterTestUtils.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/AsyncSequence+first.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AsyncSequence+first.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AsyncSequence+first~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AsyncSequence+first.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/AsyncSequence+first.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/CannedValues.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CannedValues.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CannedValues~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CannedValues.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CannedValues.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/CollectingLogHandler.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CollectingLogHandler.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CollectingLogHandler~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CollectingLogHandler.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/CollectingLogHandler.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/ConfigValueExtensions.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/ConfigValueExtensions.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/ConfigValueExtensions~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/ConfigValueExtensions.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/ConfigValueExtensions.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/InMemoryFileSystem.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/InMemoryFileSystem.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/InMemoryFileSystem~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/InMemoryFileSystem.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/InMemoryFileSystem.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/Logging.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/Logging.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/Logging~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/Logging.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/Logging.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/TestFuture.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestFuture.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestFuture~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestFuture.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestFuture.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/TestProvider.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestProvider.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestProvider~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestProvider.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/TestProvider.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-configuration/Sources/ConfigurationTestingInternal/withService.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/withService.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/withService~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/withService.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ConfigurationTestingInternal.build/withService.dia"
+  }
+}

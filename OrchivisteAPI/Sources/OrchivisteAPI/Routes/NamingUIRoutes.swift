@@ -271,10 +271,12 @@ func registerNamingUIRoutes(_ app: Application) {
             )
             let samples = try collectNamingLearningSamples(request: request, logger: req.logger)
             let learner = RuleLearner()
+            let catalog = ConfigLoader.loadNamingRuntimeCatalog()
             let draft = learner.learn(
                 request: request,
                 samples: samples,
-                baseThesaurus: ConfigLoader.loadNamingThesauri().first ?? NamingFoundationSeeds.defaultThesaurus()
+                catalog: catalog,
+                baseThesaurus: catalog.primaryThesaurus()
             )
             try ConfigLoader.saveNamingRuleDraft(draft)
             return req.redirect(

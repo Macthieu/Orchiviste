@@ -1,0 +1,73 @@
+{
+  "": {
+    "dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/ComplexModule.d",
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/ComplexModule.o",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/master.swiftdeps"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+AdditiveArithmetic.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AdditiveArithmetic.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AdditiveArithmetic~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AdditiveArithmetic.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AdditiveArithmetic.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+AlgebraicField.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AlgebraicField.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AlgebraicField~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AlgebraicField.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+AlgebraicField.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+Codable.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Codable.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Codable~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Codable.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Codable.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+ElementaryFunctions.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+ElementaryFunctions.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+ElementaryFunctions~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+ElementaryFunctions.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+ElementaryFunctions.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+Hashable.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Hashable.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Hashable~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Hashable.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Hashable.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+IntegerLiteral.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+IntegerLiteral.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+IntegerLiteral~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+IntegerLiteral.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+IntegerLiteral.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+Numeric.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Numeric.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Numeric~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Numeric.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+Numeric.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex+StringConvertible.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+StringConvertible.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+StringConvertible~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+StringConvertible.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex+StringConvertible.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Complex.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Complex.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Polar.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Polar.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Polar~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Polar.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Polar.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-numerics/Sources/ComplexModule/Scale.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Scale.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Scale~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Scale.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/ComplexModule.build/Scale.dia"
+  }
+}

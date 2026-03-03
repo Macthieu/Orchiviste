@@ -1,0 +1,3 @@
+module InMemoryLogging {
+    header "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/InMemoryLogging.build/include/InMemoryLogging-Swift.h"
+}

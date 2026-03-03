@@ -2,17 +2,19 @@ import Foundation
 import OrchivisteSharedKit
 
 public enum NamingFoundationSeeds {
-    public static func defaultRules() -> [NamingRuleDefinition] {
-        [resolutionRule(), ententeRule()]
+    /// Fallback de secours uniquement. Le runtime normal charge désormais les règles depuis `configs/naming/rules`.
+    public static func bootstrapFallbackRules() -> [NamingRuleDefinition] {
+        [bootstrapResolutionRule(), bootstrapEntenteRule()]
     }
 
-    public static func defaultThesaurus() -> NamingThesaurus {
+    /// Fallback de secours uniquement. Le runtime normal charge désormais les thésaurus depuis `configs/naming/thesaurus`.
+    public static func bootstrapFallbackThesaurus() -> NamingThesaurus {
         NamingThesaurus(
             thesaurus_id: "municipal-fr",
             version: "1.0.0",
-            description: "Thésaurus initial pour l’uniformisation des noms documentaires municipaux.",
+            description: "Thésaurus bootstrap de secours pour l’uniformisation des noms documentaires municipaux.",
             trace: NamingThesaurusTrace(
-                source: "Orchiviste seeds",
+                source: "bootstrap_fallback",
                 imported_at: nil,
                 imported_version: "1.0.0"
             ),
@@ -62,7 +64,27 @@ public enum NamingFoundationSeeds {
         )
     }
 
+    @available(*, deprecated, message: "Utiliser le catalogue runtime chargé depuis les fichiers de config.")
+    public static func defaultRules() -> [NamingRuleDefinition] {
+        bootstrapFallbackRules()
+    }
+
+    @available(*, deprecated, message: "Utiliser le catalogue runtime chargé depuis les fichiers de config.")
+    public static func defaultThesaurus() -> NamingThesaurus {
+        bootstrapFallbackThesaurus()
+    }
+
+    @available(*, deprecated, message: "Utiliser le catalogue runtime chargé depuis les fichiers de config.")
     public static func resolutionRule() -> NamingRuleDefinition {
+        bootstrapResolutionRule()
+    }
+
+    @available(*, deprecated, message: "Utiliser le catalogue runtime chargé depuis les fichiers de config.")
+    public static func ententeRule() -> NamingRuleDefinition {
+        bootstrapEntenteRule()
+    }
+
+    private static func bootstrapResolutionRule() -> NamingRuleDefinition {
         NamingRuleDefinition(
             id: "rule_resolution_conseil_municipal",
             label: "Résolution du conseil municipal",
@@ -135,7 +157,7 @@ public enum NamingFoundationSeeds {
         )
     }
 
-    public static func ententeRule() -> NamingRuleDefinition {
+    private static func bootstrapEntenteRule() -> NamingRuleDefinition {
         NamingRuleDefinition(
             id: "rule_entente_uniformisee",
             label: "Entente uniformisée",

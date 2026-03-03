@@ -1,0 +1,9 @@
+localhost {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:28780
+
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "same-origin"
+    }
+}

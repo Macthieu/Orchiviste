@@ -31,14 +31,15 @@ enum NamingFeedbackService {
 
         let presets = ConfigLoader.loadPresets()
         let preset = presets.first { $0.id == job.suggestedPreset }
-        let rules = ConfigLoader.loadNamingRules()
-        let rule = request.naming_rule_id.flatMap { ConfigLoader.loadNamingRule(id: $0) }
+        let catalog = ConfigLoader.loadNamingRuntimeCatalog()
+        let rules = catalog.activeRuleDefinitions()
+        let rule = request.naming_rule_id.flatMap { catalog.ruleRecord(id: $0, includeDrafts: true)?.definition }
             ?? selectNamingRuleForRouting(job: job, analysis: analysis, preset: preset, rules: rules)
         guard let rule else {
             throw Abort(.notFound, reason: "Aucune règle de nommage exploitable pour cette tâche.")
         }
 
-        var thesaurus = ConfigLoader.loadNamingThesauri().first ?? NamingFoundationSeeds.defaultThesaurus()
+        var thesaurus = catalog.primaryThesaurus() ?? NamingFoundationSeeds.bootstrapFallbackThesaurus()
         let engine = DeclarativeNamingRuleEngine()
         let sourceURL = URL(fileURLWithPath: job.fileURL)
         let detectionText = buildNamingDetectionText(job: job, analysis: analysis, preset: preset)
@@ -90,6 +91,22 @@ enum NamingFeedbackService {
 
         try ConfigLoader.saveNamingRule(updatedRule)
         try ConfigLoader.saveNamingThesaurus(thesaurus)
+        try ConfigLoader.namingStore().recordFeedback(
+            PersistedNamingFeedback(
+                feedback_id: "feedback-\(request.job_id)-\(UUID().uuidString)",
+                rule_id: updatedRule.id,
+                created_at: Date(),
+                source: .feedback,
+                feedback: NamingFeedbackExample(
+                    created_at: Date(),
+                    source_filename: sourceURL.lastPathComponent,
+                    corrected_filename: correctedFileName,
+                    source_fields: normalized,
+                    corrected_fields: correctedFields.isEmpty ? nil : correctedFields,
+                    notes: request.notes
+                )
+            )
+        )
 
         return NamingFeedbackResponse(
             job_id: request.job_id,

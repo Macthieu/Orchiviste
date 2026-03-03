@@ -1,0 +1,42 @@
+{
+  "rules" : [
+    {
+      "preset_id" : "preset_facture",
+      "name_format" : "{class_code}-FACT-{sujet}-{date}-{numero}",
+      "id" : "facture-finance",
+      "when_type_doc" : "Facture",
+      "class_code" : "FIN-001",
+      "destination_template" : "Archives/{year}/{class_code}/Factures/{sujet}"
+    },
+    {
+      "preset_id" : "preset_pv",
+      "name_format" : "{class_code}-PV-{sujet}-{date}-{numero}",
+      "id" : "proces-verbal-comite",
+      "when_type_doc" : "ProcesVerbal",
+      "class_code" : "ADM-PV",
+      "destination_template" : "Archives/{year}/{class_code}/Proces-Verbaux/{sujet}"
+    },
+    {
+      "preset_id" : "preset_resolution",
+      "name_format" : "{class_code}-RES-{sujet}-{date}-{numero}",
+      "id" : "resolution-gouvernance",
+      "when_type_doc" : "Resolution",
+      "class_code" : "ADM-RES",
+      "destination_template" : "Archives/{year}/{class_code}/Resolutions/{sujet}"
+    },
+    {
+      "preset_id" : "preset_default",
+      "name_format" : "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
+      "id" : "fallback-autre",
+      "when_type_doc" : "Autre",
+      "class_code" : "GEN-000",
+      "destination_template" : "Archives/{year}/{class_code}/Autres/{sujet}"
+    },
+    {
+      "name_format" : "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
+      "id" : "auto-1552---biens-et-services",
+      "class_code" : "CLUB",
+      "destination_template" : "Archives/{year}/{class_code}/1552---biens-et-services"
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import OrchivisteSharedKit
 final class NamingFoundationTests: XCTestCase {
     func testResolutionRuleNormalizesSentenceCaseTitleAndStructuredNumber() {
         let engine = DeclarativeNamingRuleEngine()
-        let rule = NamingFoundationSeeds.resolutionRule()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
         let text = """
         EXTRAIT DU PROCÈS-VERBAL D'UNE SÉANCE ORDINAIRE DU CONSEIL MUNICIPAL
         Résolution n° 2025-016
@@ -19,7 +19,7 @@ final class NamingFoundationTests: XCTestCase {
                 rule: rule,
                 text: text,
                 metadata: NamingSourceMetadata(fileName: "resolution.pdf"),
-                thesaurus: NamingFoundationSeeds.defaultThesaurus()
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
             )
         )
 
@@ -39,7 +39,7 @@ final class NamingFoundationTests: XCTestCase {
 
     func testResolutionRuleDoesNotTreatSubjectsAsTitle() {
         let engine = DeclarativeNamingRuleEngine()
-        let rule = NamingFoundationSeeds.resolutionRule()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
         let text = """
         resolution.pdf
         Resolution
@@ -55,7 +55,7 @@ final class NamingFoundationTests: XCTestCase {
                 rule: rule,
                 text: text,
                 metadata: NamingSourceMetadata(fileName: "resolution.pdf"),
-                thesaurus: NamingFoundationSeeds.defaultThesaurus()
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
             )
         )
 
@@ -71,7 +71,7 @@ final class NamingFoundationTests: XCTestCase {
 
     func testResolutionRuleReusesMemorizedCorrectionForSameDocumentNumber() {
         let engine = DeclarativeNamingRuleEngine()
-        let baseRule = NamingFoundationSeeds.resolutionRule()
+        let baseRule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
         let correctedRule = NamingRuleDefinition(
             id: baseRule.id,
             label: baseRule.label,
@@ -107,7 +107,7 @@ final class NamingFoundationTests: XCTestCase {
         let normalized = engine.normalizeFields(
             rawFields,
             rule: correctedRule,
-            thesaurus: NamingFoundationSeeds.defaultThesaurus()
+            thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
         )
         let rendered = engine.renderFilename(rule: correctedRule, fields: normalized)
 
@@ -115,6 +115,55 @@ final class NamingFoundationTests: XCTestCase {
             rendered,
             "Résolution NO 2023-398 – Adjudication de l'entente pour l'entretien d'hiver du réseau routier rural – 2023-10-16.pdf"
         )
+    }
+
+    func testNamingRuleRankerScoresResolutionRuleFromLoadedCatalog() {
+        let ranker = NamingRuleRanker()
+        let resolution = LoadedNamingRule(
+            rule_id: NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!.id,
+            version: "1.0.0",
+            status: .active,
+            source: .configFile,
+            definition: NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
+        )
+        let entente = LoadedNamingRule(
+            rule_id: NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!.id,
+            version: "1.0.0",
+            status: .active,
+            source: .configFile,
+            definition: NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!
+        )
+        let request = NamingPredictionRequest(
+            text: """
+            EXTRAIT DU PROCÈS-VERBAL D'UNE SÉANCE ORDINAIRE DU CONSEIL MUNICIPAL
+            Résolution n° 2025-016
+            ADJUDICATION DU CONTRAT
+            """,
+            metadata: NamingSourceMetadata(fileName: "resolution.pdf"),
+            sample_count: 1,
+            sample_file_names: ["resolution.pdf"]
+        )
+
+        let ranked = ranker.rank(request: request, candidates: [resolution, entente])
+
+        XCTAssertEqual(ranked.first?.rule.rule_id, "rule_resolution_conseil_municipal")
+        XCTAssertGreaterThan(ranked.first?.score ?? 0, 0.1)
+    }
+
+    func testRuntimeCatalogFallsBackWhenNothingIsLoaded() {
+        let catalog = NamingRuntimeCatalogBuilder().build(
+            activeRules: [],
+            archivedRules: [],
+            activeThesauri: [],
+            archivedThesauri: [],
+            ruleDrafts: [],
+            thesaurusDrafts: [],
+            feedbackRecords: []
+        )
+
+        XCTAssertTrue(catalog.fallback_active)
+        XCTAssertFalse(catalog.active_rules.isEmpty)
+        XCTAssertFalse(catalog.active_thesauri.isEmpty)
     }
 }
 
@@ -125,7 +174,7 @@ import OrchivisteSharedKit
 enum NamingFoundationTestsPlaceholder {
     static let resolutionRenderedFilename: String = {
         let engine = DeclarativeNamingRuleEngine()
-        let rule = NamingFoundationSeeds.resolutionRule()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
         let text = """
         EXTRAIT DU PROCÈS-VERBAL D'UNE SÉANCE ORDINAIRE DU CONSEIL MUNICIPAL
         Résolution n° 2023-394
@@ -138,7 +187,7 @@ enum NamingFoundationTestsPlaceholder {
                 rule: rule,
                 text: text,
                 metadata: NamingSourceMetadata(fileName: "resolution.pdf"),
-                thesaurus: NamingFoundationSeeds.defaultThesaurus()
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
             )
         )
         return result.rendered_filename ?? ""

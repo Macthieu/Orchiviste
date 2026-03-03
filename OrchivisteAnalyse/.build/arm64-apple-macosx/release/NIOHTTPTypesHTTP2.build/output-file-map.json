@@ -1,0 +1,25 @@
+{
+  "": {
+    "dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/NIOHTTPTypesHTTP2.d",
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/NIOHTTPTypesHTTP2.o",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/master.swiftdeps"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-extras/Sources/NIOHTTPTypesHTTP2/HTTP2HeadersStateMachine.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2HeadersStateMachine.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2HeadersStateMachine~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2HeadersStateMachine.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2HeadersStateMachine.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-extras/Sources/NIOHTTPTypesHTTP2/HTTP2ToHTTPCodec.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2ToHTTPCodec.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2ToHTTPCodec~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2ToHTTPCodec.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTP2ToHTTPCodec.dia"
+  },
+  "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-extras/Sources/NIOHTTPTypesHTTP2/HTTPTypeConversion.swift": {
+    "object": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTPTypeConversion.swift.o",
+    "swiftmodule": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTPTypeConversion~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTPTypeConversion.swiftdeps",
+    "diagnostics": "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/NIOHTTPTypesHTTP2.build/HTTPTypeConversion.dia"
+  }
+}

@@ -242,80 +242,72 @@ enum ConfigLoader {
         namingBaseDirectory().appendingPathComponent("drafts/thesaurus", isDirectory: true)
     }
 
+    static func namingStore() -> FileBackedNamingStore {
+        FileBackedNamingStore()
+    }
+
+    static func loadNamingRuntimeCatalog() -> NamingRuntimeCatalog {
+        (try? namingStore().loadRuntimeCatalog()) ?? NamingRuntimeCatalog.fallback()
+    }
+
     static func loadNamingRules() -> [NamingRuleDefinition] {
-        let loaded = loadStructuredDirectory(
-            at: namingRulesDirectory(),
-            as: NamingRuleDefinition.self
-        )
-        return loaded.isEmpty ? NamingFoundationSeeds.defaultRules() : loaded
+        loadNamingRuntimeCatalog().activeRuleDefinitions()
     }
 
     static func loadNamingRule(id: String) -> NamingRuleDefinition? {
-        loadNamingRules().first { $0.id == id }
+        loadNamingRuntimeCatalog().ruleRecord(id: id, includeDrafts: false)?.definition
     }
 
     @discardableResult
     static func saveNamingRule(_ rule: NamingRuleDefinition, filename: String? = nil) throws -> URL {
-        let dir = namingRulesDirectory()
-        try ensureDir(dir)
-        let safeFileName = (filename?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? filename : nil)
-            ?? "\(rule.id).json"
-        let url = dir.appendingPathComponent(safeFileName)
-        try saveJSON(rule, to: url)
-        return url
+        let saved = try namingStore().saveRule(rule, filename: filename)
+        guard let path = saved.loaded_from else {
+            throw Abort(.internalServerError, reason: "Impossible de déterminer le chemin d'enregistrement de la règle.")
+        }
+        return URL(fileURLWithPath: path)
     }
 
     static func loadNamingThesauri() -> [NamingThesaurus] {
-        let loaded = loadStructuredDirectory(
-            at: namingThesaurusDirectory(),
-            as: NamingThesaurus.self
-        )
-        return loaded.isEmpty ? [NamingFoundationSeeds.defaultThesaurus()] : loaded
+        loadNamingRuntimeCatalog().active_thesauri.map(\.definition)
     }
 
     static func loadNamingThesaurus(id: String) -> NamingThesaurus? {
-        loadNamingThesauri().first { $0.thesaurus_id == id }
+        do {
+            return try namingStore().loadThesaurus(id: id)?.definition
+        } catch {
+            return nil
+        }
     }
 
     @discardableResult
     static func saveNamingThesaurus(_ thesaurus: NamingThesaurus, filename: String? = nil) throws -> URL {
-        let dir = namingThesaurusDirectory()
-        try ensureDir(dir)
-        let safeFileName = (filename?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? filename : nil)
-            ?? "\(thesaurus.thesaurus_id).json"
-        let url = dir.appendingPathComponent(safeFileName)
-        try saveJSON(thesaurus, to: url)
-        return url
+        let saved = try namingStore().saveThesaurus(thesaurus, filename: filename)
+        guard let path = saved.loaded_from else {
+            throw Abort(.internalServerError, reason: "Impossible de déterminer le chemin d'enregistrement du thésaurus.")
+        }
+        return URL(fileURLWithPath: path)
     }
 
     static func loadNamingRuleDrafts() -> [NamingRuleDraft] {
-        loadStructuredDirectory(at: namingRuleDraftsDirectory(), as: NamingRuleDraft.self)
+        (try? namingStore().listRuleDrafts()) ?? []
     }
 
     @discardableResult
     static func saveNamingRuleDraft(_ draft: NamingRuleDraft) throws -> URL {
-        let dir = namingRuleDraftsDirectory()
-        try ensureDir(dir)
-        let url = dir.appendingPathComponent("\(draft.draft_id).json")
-        try saveJSON(draft, to: url)
-        return url
+        try namingStore().saveRuleDraft(draft)
     }
 
     static func loadNamingThesaurusDrafts() -> [ImportedThesaurusDraft] {
-        loadStructuredDirectory(at: namingThesaurusDraftsDirectory(), as: ImportedThesaurusDraft.self)
+        (try? namingStore().listThesaurusDrafts()) ?? []
     }
 
     static func loadNamingThesaurusDraft(id: String) -> ImportedThesaurusDraft? {
-        loadNamingThesaurusDrafts().first { $0.draft_id == id }
+        try? namingStore().loadThesaurusDraft(id: id)
     }
 
     @discardableResult
     static func saveNamingThesaurusDraft(_ draft: ImportedThesaurusDraft) throws -> URL {
-        let dir = namingThesaurusDraftsDirectory()
-        try ensureDir(dir)
-        let url = dir.appendingPathComponent("\(draft.draft_id).json")
-        try saveJSON(draft, to: url)
-        return url
+        try namingStore().saveThesaurusDraft(draft)
     }
 
     private static func loadStructuredDirectory<T: Decodable>(at directory: URL, as type: T.Type) -> [T] {

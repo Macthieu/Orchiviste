@@ -98,7 +98,7 @@
   "thesaurus_id": "municipal-fr",
   "trace": {
     "imported_version": "1.0.0",
-    "source": "Orchiviste seeds"
+    "source": "configs/naming/thesaurus/municipal-fr.json"
   },
   "version": "1.0.0"
 }

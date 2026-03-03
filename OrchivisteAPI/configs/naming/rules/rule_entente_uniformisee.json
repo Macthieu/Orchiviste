@@ -87,6 +87,10 @@
   "label": "Entente uniformisée",
   "metadata": {
     "canonical_output_label": "Entente",
+    "notes": [
+      "Fichier de configuration actif chargé à chaud par le runtime de nommage.",
+      "La règle produit toujours la forme normalisée « Entente pour {objet} »."
+    ],
     "suggested_class_code": "ADM-ENT"
   },
   "normalization": [

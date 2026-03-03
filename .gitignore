@@ -1,31 +1,30 @@
+# Python virtual environments
+.venv/
+.venv-coreml/
+.venv-coreml311/
+venv/
+env/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python packaging / build artifacts
+build/
+dist/
+*.egg-info/
+
 # macOS
 .DS_Store
 
-# SwiftPM builds (dans chaque sous-package)
-.build/
-.swiftpm/
+# ML artifacts (generated)
+ml/models-coreml/*.mlmodel
+ml/models-coreml/*.mlpackage
 
-# Xcode
-DerivedData/
-*.xcodeproj
-*.xcworkspace
-xcuserdata/
-
-# VS Code
-.vscode/
-
-# Logs / runtime
-*.log
-runtime/
-rename-batch-report-*.csv
-
-# DB locale
-db.sqlite
-*.sqlite
-*.sqlite3
-
-# Env / secrets
-.env
-.env.*
-deploy/mac-mini/orchiviste.macmini.env
-deploy/mac-mini/Caddyfile
+# Optional local experiment outputs
+ml/tmp/
+ml/runs/
