@@ -31,6 +31,7 @@ dist/
 .DS_Store
 
 # ML artifacts (generated)
+ml/models-src/*.pt
 ml/models-coreml/*.mlmodel
 ml/models-coreml/*.mlpackage
 ml/models-coreml/*.mlmodelc
@@ -41,3 +42,6 @@ orchiviste_discussion_resume_coreml.pdf
 # Optional local experiment outputs
 ml/tmp/
 ml/runs/
+ml/datasets/labeled/*.jsonl
+ml/models-src/*.labels.json
+ml/models-src/*.metrics.json

@@ -47,9 +47,76 @@ ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_MODEL_PATH=/chemin/vers/DocumentClassif
 ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_INPUT_TEXT=text
 ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_LABEL=label
 ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_PROBABILITIES=labelProbability
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_INPUT_VECTOR=input
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_SCORES=var_123
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_LABELS_PATH=/chemin/vers/document_classifier.labels.json
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_LABELS=Resolution,ProcesVerbal,Facture,Permis,Entente,Depot,AvisMotion,Autre
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_VECTOR_SIZE=256
 ```
 
-Le modele attendu est un classifieur texte Core ML deja compile, charge localement sur macOS.
+Le modele attendu peut etre :
+
+- soit un classifieur texte Core ML deja compile, charge localement sur macOS
+- soit un classifieur vectoriel Core ML recevant un `MLMultiArray`, avec une liste de labels externe
+
+Exemple local avec le modele bootstrap genere dans le repo :
+
+```bash
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_ENABLED=1
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_MODEL_PATH=ml/models-coreml/document_classifier_bootstrap.mlpackage
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_INPUT_VECTOR=input
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_SCORES=var_14
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_LABELS_PATH=ml/models-src/document_classifier_bootstrap.labels.json
+ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_VECTOR_SIZE=256
+```
+
+## Similarite semantique / embeddings
+
+Une couche complementaire de similarite semantique peut maintenant etre activee pour comparer un document a :
+
+- des classes du plan de classification
+- des regles de nommage
+- des exemples valides
+
+Variables utiles:
+
+```bash
+ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_ENABLED=1
+ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_INDEX_PATH=/chemin/vers/embedding_reference.jsonl
+ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_TOP_K=5
+ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_MIN_SCORE=0.18
+```
+
+Cette couche reste une aide a la decision. Le rendu final du nom et le routage restent gouvernes par les regles et validations deterministes.
+
+## Outillage ML
+
+Scripts ajoutes dans `ml/scripts/` :
+
+- `export_training_dataset.py` : exporte un corpus JSONL a partir des feedbacks de nommage et des artefacts OCR
+- `train_document_classifier.py` : entraine un premier classifieur PyTorch a vecteurs hashes, compatible conversion `Core ML`
+- `build_embedding_reference.py` : construit un index JSONL de references semantiques a partir des regles et du plan de classification
+
+Flux minimal recommande :
+
+```bash
+python ml/scripts/export_training_dataset.py \
+  --ocr-artifact-dir /chemin/vers/ocr-artifacts
+
+python ml/scripts/train_document_classifier.py \
+  --train ml/datasets/labeled/classification_train.jsonl \
+  --eval ml/datasets/labeled/classification_eval.jsonl
+
+python ml/scripts/convert_to_coreml.py \
+  --source ml/models-src/document_classifier.pt \
+  --output ml/models-coreml/document_classifier.mlpackage \
+  --input-name input \
+  --input-shape 1,256
+
+python ml/scripts/build_embedding_reference.py \
+  --taxonomy OrchivisteAPI/configs/analysis/taxonomy/syged_2026.json \
+  --output ml/datasets/labeled/embedding_reference.jsonl
+```
 
 ## Capture intelligente
 

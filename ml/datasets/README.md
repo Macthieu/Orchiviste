@@ -30,3 +30,48 @@
 - l'index de similarite consomme `embedding_reference.jsonl`
 - les corrections de nommage validees servent a enrichir ces corpus
 
+## Bootstrap local rapide
+
+Quand les feedbacks humains sont encore peu nombreux, Orchiviste peut demarrer avec
+un corpus faiblement supervise derive des fichiers deja routes :
+
+```bash
+python3 ml/scripts/bootstrap_training_dataset.py \
+  --routed-dir runtime/routed \
+  --output-train ml/datasets/labeled/classification_bootstrap_train.jsonl \
+  --output-eval ml/datasets/labeled/classification_bootstrap_eval.jsonl
+```
+
+Puis construire l'index de references semantiques :
+
+```bash
+python3 ml/scripts/build_embedding_reference.py \
+  --rules-dir OrchivisteAPI/configs/naming/rules \
+  --taxonomy OrchivisteAPI/configs/analysis/taxonomy/syged_2026.json \
+  --output ml/datasets/labeled/embedding_reference.jsonl
+```
+
+Et, dans un environnement Python 3.11 local avec `torch` et `coremltools` :
+
+```bash
+.venv-coreml311/bin/python ml/scripts/train_document_classifier.py \
+  --train ml/datasets/labeled/classification_bootstrap_train.jsonl \
+  --eval ml/datasets/labeled/classification_bootstrap_eval.jsonl \
+  --label-field type_document \
+  --vector-size 256 \
+  --hidden-size 128 \
+  --epochs 25 \
+  --device cpu \
+  --output-model ml/models-src/document_classifier_bootstrap.pt \
+  --output-labels ml/models-src/document_classifier_bootstrap.labels.json \
+  --output-metrics ml/models-src/document_classifier_bootstrap.metrics.json
+
+.venv-coreml311/bin/python ml/scripts/convert_to_coreml.py \
+  --source ml/models-src/document_classifier_bootstrap.pt \
+  --output ml/models-coreml/document_classifier_bootstrap.mlpackage \
+  --input-name input \
+  --input-shape 1,256
+```
+
+Ce bootstrap reste un point de depart. Le corpus de production doit ensuite etre enrichi
+avec des feedbacks humains valides et, idealement, du texte OCR ou natif reel.

@@ -55,6 +55,7 @@ extension Application {
             providers: [
                 LocalHeuristicsProvider(),
                 AppleCoreMLProvider(),
+                EmbeddingSimilarityProvider(),
                 AppleFoundationModelsProvider(),
                 CoreMLProvider(),
                 CoginovAPIProvider(),

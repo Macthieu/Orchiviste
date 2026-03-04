@@ -29,6 +29,11 @@ struct AppleCoreMLProvider: AnalysisProvider {
             textFeatureName: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_INPUT_TEXT") ?? "text",
             labelFeatureName: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_LABEL") ?? "label",
             probabilityFeatureName: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_PROBABILITIES") ?? "labelProbability",
+            vectorFeatureName: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_INPUT_VECTOR"),
+            scoreFeatureName: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_SCORES"),
+            labelMapPath: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_LABELS_PATH"),
+            labelCSV: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_LABELS"),
+            vectorSize: Environment.get("ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_VECTOR_SIZE").flatMap(Int.init),
             text: sourceText
         )
         guard let prediction else {
@@ -43,7 +48,8 @@ struct AppleCoreMLProvider: AnalysisProvider {
         var champs: [String: String] = [
             "doc_type_hint": typeDoc,
             "metadata.type_document": typeDoc,
-            "apple_coreml.label": prediction.label
+            "apple_coreml.label": prediction.label,
+            "apple_coreml.mode": prediction.mode
         ]
         if let probability = prediction.probabilities[prediction.label] {
             champs["apple_coreml.label_confidence"] = String(format: "%.4f", probability)
@@ -561,25 +567,33 @@ private actor AppleCoreMLRuntime {
         textFeatureName: String,
         labelFeatureName: String,
         probabilityFeatureName: String,
+        vectorFeatureName: String?,
+        scoreFeatureName: String?,
+        labelMapPath: String?,
+        labelCSV: String?,
+        vectorSize: Int?,
         text: String
-    ) throws -> (label: String, confidence: Double, probabilities: [String: Double])? {
+    ) throws -> (label: String, confidence: Double, probabilities: [String: Double], mode: String)? {
         let model = try loadModel(at: modelPath)
-        let input = try MLDictionaryFeatureProvider(dictionary: [
-            textFeatureName: MLFeatureValue(string: text)
-        ])
-        let output = try model.prediction(from: input)
-
-        let rawLabel = output.featureValue(for: labelFeatureName)?.stringValue
-        let probabilities = normalizedProbabilityDictionary(
-            output.featureValue(for: probabilityFeatureName)?.dictionaryValue
-        )
-
-        let resolvedLabel = nonEmpty(rawLabel) ?? probabilities.max(by: { $0.value < $1.value })?.key
-        guard let resolvedLabel else {
-            return nil
+        if let textPrediction = try predictWithTextInput(
+            model: model,
+            textFeatureName: textFeatureName,
+            labelFeatureName: labelFeatureName,
+            probabilityFeatureName: probabilityFeatureName,
+            text: text
+        ) {
+            return textPrediction
         }
-        let confidence = probabilities[resolvedLabel] ?? 0.6
-        return (resolvedLabel, confidence, probabilities)
+
+        return try predictWithVectorInput(
+            model: model,
+            vectorFeatureName: vectorFeatureName,
+            scoreFeatureName: scoreFeatureName,
+            labelMapPath: labelMapPath,
+            labelCSV: labelCSV,
+            vectorSize: vectorSize,
+            text: text
+        )
     }
 
     private func loadModel(at rawPath: String) throws -> MLModel {
@@ -615,6 +629,127 @@ private actor AppleCoreMLRuntime {
             } else if let float = value as? Float {
                 result[label] = Double(float)
             }
+        }
+        return result
+    }
+
+    private func predictWithTextInput(
+        model: MLModel,
+        textFeatureName: String,
+        labelFeatureName: String,
+        probabilityFeatureName: String,
+        text: String
+    ) throws -> (label: String, confidence: Double, probabilities: [String: Double], mode: String)? {
+        let input = try MLDictionaryFeatureProvider(dictionary: [
+            textFeatureName: MLFeatureValue(string: text)
+        ])
+        guard let output = try? model.prediction(from: input) else {
+            return nil
+        }
+
+        let rawLabel = output.featureValue(for: labelFeatureName)?.stringValue
+        let probabilities = normalizedProbabilityDictionary(
+            output.featureValue(for: probabilityFeatureName)?.dictionaryValue
+        )
+
+        let resolvedLabel = nonEmpty(rawLabel) ?? probabilities.max(by: { $0.value < $1.value })?.key
+        guard let resolvedLabel else {
+            return nil
+        }
+        let confidence = probabilities[resolvedLabel] ?? 0.6
+        return (resolvedLabel, confidence, probabilities, "text")
+    }
+
+    private func predictWithVectorInput(
+        model: MLModel,
+        vectorFeatureName: String?,
+        scoreFeatureName: String?,
+        labelMapPath: String?,
+        labelCSV: String?,
+        vectorSize: Int?,
+        text: String
+    ) throws -> (label: String, confidence: Double, probabilities: [String: Double], mode: String)? {
+        let inputName = vectorFeatureName
+            ?? model.modelDescription.inputDescriptionsByName.first(where: { $0.value.type == .multiArray })?.key
+        guard let inputName else {
+            return nil
+        }
+
+        let labels = analysisLoadCoreMLLabelList(labelMapPath: labelMapPath, labelsCSV: labelCSV)
+        guard let labels, !labels.isEmpty else {
+            return nil
+        }
+
+        let inferredSize = model.modelDescription.inputDescriptionsByName[inputName]?.multiArrayConstraint?.shape.last?.intValue
+        let featureVector = analysisHashedTextFeatureVector(
+            text: text,
+            dimension: max(8, vectorSize ?? inferredSize ?? labels.count)
+        )
+
+        let inputArray = try MLMultiArray(
+            shape: [NSNumber(value: 1), NSNumber(value: featureVector.count)],
+            dataType: .double
+        )
+        for (index, value) in featureVector.enumerated() {
+            inputArray[index] = NSNumber(value: value)
+        }
+
+        let provider = try MLDictionaryFeatureProvider(dictionary: [
+            inputName: MLFeatureValue(multiArray: inputArray)
+        ])
+        let output = try model.prediction(from: provider)
+
+        let scores = scoreArray(from: output, preferredName: scoreFeatureName)
+        guard !scores.isEmpty else {
+            return nil
+        }
+
+        let probabilities = normalizedProbabilityScores(scores, labels: labels)
+        guard let best = probabilities.max(by: { $0.value < $1.value }) else {
+            return nil
+        }
+        return (best.key, best.value, probabilities, "vector")
+    }
+
+    private func scoreArray(from output: MLFeatureProvider, preferredName: String?) -> [Double] {
+        if let preferredName,
+           let feature = output.featureValue(for: preferredName)?.multiArrayValue {
+            return (0..<feature.count).map { feature[$0].doubleValue }
+        }
+        for name in output.featureNames {
+            if let feature = output.featureValue(for: name)?.multiArrayValue {
+                return (0..<feature.count).map { feature[$0].doubleValue }
+            }
+        }
+        return []
+    }
+
+    private func normalizedProbabilityScores(_ scores: [Double], labels: [String]) -> [String: Double] {
+        let resolvedLabels = Array(labels.prefix(scores.count))
+        guard !resolvedLabels.isEmpty else {
+            return [:]
+        }
+
+        let minScore = scores.min() ?? 0
+        let maxScore = scores.max() ?? 0
+        let looksLikeProbabilities =
+            minScore >= 0 &&
+            maxScore <= 1.0 &&
+            abs(scores.reduce(0, +) - 1.0) < 0.05
+
+        let normalized: [Double]
+        if looksLikeProbabilities {
+            normalized = scores
+        } else {
+            let maxLogit = maxScore
+            let expScores = scores.map { Foundation.exp($0 - maxLogit) }
+            let sum = expScores.reduce(0, +)
+            normalized = sum > 0 ? expScores.map { $0 / sum } : Array(repeating: 0, count: scores.count)
+        }
+
+        var result: [String: Double] = [:]
+        for (index, label) in resolvedLabels.enumerated() {
+            result[label] = normalized[index]
         }
         return result
     }
