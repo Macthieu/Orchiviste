@@ -145,6 +145,29 @@
             padding-top: 10px;
             border-top: 1px solid var(--border);
         }
+        .preview-ranking-best {
+            margin: 10px 0 12px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #f2fbf7;
+            border: 1px solid #cfe7db;
+        }
+        .preview-ranking-best strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        .preview-score-chip {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #dff3ea;
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
         .preview-ranking table {
             width: 100%;
             border-collapse: collapse;
@@ -349,10 +372,27 @@
             #endif
             <div id="routePreviewRanking" class="preview-ranking" #if(proposed_ranking_present):style="display:block;"#else:style="display:none;"#endif>
                 <div id="routePreviewRankingStatus" class="preview-meta">Ranking: #(proposed_ranking_provider_status)</div>
+                #if(proposed_ranking_present):
+                #for(row in proposed_ranking_rows):
+                #if(forloop.first):
+                <div id="routePreviewRankingBest" class="preview-ranking-best">
+                    <strong>Suggestion la plus probable : #(row.label)</strong>
+                    <div class="preview-meta">
+                        Règle <span class="mono">#(row.rule_id)</span><br>
+                        #(row.reasons)
+                    </div>
+                    <div id="routePreviewRankingBestChip" class="preview-score-chip">Confiance élevée</div>
+                </div>
+                #endif
+                #endfor
+                #else:
+                <div id="routePreviewRankingBest" class="preview-ranking-best" style="display:none;"></div>
+                #endif
                 <table>
                     <thead>
                     <tr>
                         <th>Règle</th>
+                        <th>Pourquoi</th>
                         <th>Final</th>
                         <th>Déterministe</th>
                         <th>Core ML</th>
@@ -366,6 +406,7 @@
                             <strong>#(row.label)</strong><br>
                             <span class="preview-meta">#(row.sources)</span>
                         </td>
+                        <td>#(row.reasons)</td>
                         <td>#(row.final_score)</td>
                         <td>#(row.deterministic_score)</td>
                         <td>#(row.ml_score)</td>
@@ -581,6 +622,7 @@ function setPreviewBoxState(payload) {
     const previewFolder = document.getElementById("routePreviewFolder");
     const previewRanking = document.getElementById("routePreviewRanking");
     const previewRankingStatus = document.getElementById("routePreviewRankingStatus");
+    const previewRankingBest = document.getElementById("routePreviewRankingBest");
     const previewRankingBody = document.getElementById("routePreviewRankingBody");
     if (!previewBox || !previewName || !previewSource) return;
 
@@ -616,10 +658,30 @@ function setPreviewBoxState(payload) {
         previewRankingBody.innerHTML = "";
         if (rows.length > 0) {
             previewRanking.style.display = "block";
+            if (previewRankingBest) {
+                const best = rows[0];
+                const finalScore = Number(best.final_score || 0);
+                let confidenceLabel = "Confiance faible";
+                if (finalScore >= 0.8) {
+                    confidenceLabel = "Confiance élevée";
+                } else if (finalScore >= 0.55) {
+                    confidenceLabel = "Confiance moyenne";
+                }
+                previewRankingBest.style.display = "block";
+                previewRankingBest.innerHTML = `
+                    <strong>Suggestion la plus probable : ${best.label}</strong>
+                    <div class="preview-meta">
+                        Règle <span class="mono">${best.rule_id}</span><br>
+                        ${best.reasons || "Aucune explication disponible"}
+                    </div>
+                    <div class="preview-score-chip">${confidenceLabel}</div>
+                `;
+            }
             for (const row of rows) {
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
                     <td><span class="mono">${row.rule_id}</span><br><strong>${row.label}</strong><br><span class="preview-meta">${row.sources}</span></td>
+                    <td>${row.reasons || "-"}</td>
                     <td>${row.final_score}</td>
                     <td>${row.deterministic_score}</td>
                     <td>${row.ml_score}</td>
@@ -628,6 +690,9 @@ function setPreviewBoxState(payload) {
             }
         } else {
             previewRanking.style.display = "none";
+            if (previewRankingBest) {
+                previewRankingBest.style.display = "none";
+            }
         }
     }
 }
