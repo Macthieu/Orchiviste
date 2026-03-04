@@ -202,6 +202,62 @@
             font-size: 12px;
             line-height: 1.45;
         }
+        .route-file-name-field {
+            min-height: 78px;
+            resize: vertical;
+            line-height: 1.45;
+            font-family: "SF Mono", Menlo, monospace;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        .class-picker {
+            position: relative;
+        }
+        .class-picker-panel {
+            position: absolute;
+            z-index: 20;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            max-height: 260px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface);
+            box-shadow: 0 12px 24px rgba(31, 37, 42, 0.12);
+        }
+        .class-picker-panel[hidden] {
+            display: none;
+        }
+        .class-picker-option {
+            width: 100%;
+            border: 0;
+            border-bottom: 1px solid #efe7da;
+            background: transparent;
+            text-align: left;
+            padding: 10px;
+            cursor: pointer;
+            color: var(--ink);
+        }
+        .class-picker-option:hover,
+        .class-picker-option:focus {
+            background: #f5f0e6;
+            outline: none;
+        }
+        .class-picker-option strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+        .class-picker-option small {
+            display: block;
+            color: var(--muted);
+            line-height: 1.35;
+        }
+        .class-picker-empty {
+            padding: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
         .inline-check {
             display: flex;
             align-items: center;
@@ -326,7 +382,10 @@
         </div>
         <div id="tabSuggestion" class="tab-pane active">
             <label>Code de classement (proposé / sélection)
-                <input id="reviewClassSelect" type="text" list="classCodeOptionsList" placeholder="ADM-RES">
+                <div class="class-picker">
+                    <input id="reviewClassSelect" type="text" placeholder="Tape un code, un titre ou un chemin" autocomplete="off" spellcheck="false">
+                    <div id="reviewClassPicker" class="class-picker-panel" hidden></div>
+                </div>
             </label>
             <p id="reviewClassHint" class="soft-note"></p>
             <label>Préréglage de routage hérité (proposé / sélection)
@@ -443,7 +502,7 @@
         </label>
         <button class="btn btn-secondary" type="button" onclick="refreshRoutePreview(true)">Recalculer le nom</button>
         <label>Nom de fichier final (modifiable)
-            <input id="routePreferredFileName" type="text" value="#(proposed_file_name_input)" data-initial="#(proposed_file_name_input)" placeholder="Résolution NO 2025-368 – Titre – 2025-09-02.pdf">
+            <textarea id="routePreferredFileName" class="route-file-name-field" rows="3" data-initial="#(proposed_file_name_input)" placeholder="Résolution NO 2025-368 – Titre – 2025-09-02.pdf" spellcheck="false">#(proposed_file_name_input)</textarea>
         </label>
         <label class="inline-check">
             <input id="routeLearnCorrection" type="checkbox">
@@ -461,7 +520,10 @@
             <input id="routeNameFormat" type="text" placeholder="{class_code}-{type_doc}-{sujet}-{date}-{numero}">
         </label>
         <label>Code de classement (optionnel)
-            <input id="routeClassCode" type="text" list="classCodeOptionsList" value="#(suggested_class_code)">
+            <div class="class-picker">
+                <input id="routeClassCode" type="text" value="#(suggested_class_code)" placeholder="Tape un code, un titre ou un chemin" autocomplete="off" spellcheck="false">
+                <div id="routeClassPicker" class="class-picker-panel" hidden></div>
+            </div>
         </label>
         <p id="routeClassHint" class="soft-note"></p>
         <label>ID préréglage de routage (optionnel)
@@ -554,6 +616,15 @@ document.querySelectorAll("#classCodeOptionsList option").forEach((option) => {
         path: option.dataset.path || ""
     };
 });
+const classCodeEntries = Object.entries(classCodeDirectory)
+    .map(([code, entry]) => ({
+        code,
+        label: entry.label || code,
+        display: entry.display || code,
+        path: entry.path || "",
+        search: `${code} ${entry.label || ""} ${entry.display || ""} ${entry.path || ""}`.toLowerCase()
+    }))
+    .sort((left, right) => left.code.localeCompare(right.code, "fr", { numeric: true, sensitivity: "base" }));
 
 const suggestedClassCode = "#(suggested_class_code_raw)";
 const suggestedPreset = "#(suggested_preset_raw)";
@@ -595,6 +666,21 @@ function classCodeDisplay(code) {
     return entry ? entry.display : code;
 }
 
+function normalizedPreferredFileNameValue(rawValue) {
+    return String(rawValue || "")
+        .replace(/\s*\n+\s*/g, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+}
+
+function autoResizeTextArea(element) {
+    if (!element) {
+        return;
+    }
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 78)}px`;
+}
+
 function updateClassCodeHint(inputId, hintId) {
     const value = document.getElementById(inputId)?.value?.trim() || "";
     const hint = document.getElementById(hintId);
@@ -611,6 +697,113 @@ function updateClassCodeHint(inputId, hintId) {
         return;
     }
     hint.textContent = "Code saisi manuellement. Aucun libellé trouvé dans le plan importé.";
+}
+
+function findClassCodeMatches(query) {
+    const normalized = String(query || "").trim().toLowerCase();
+    if (!normalized) {
+        return classCodeEntries.slice(0, 12);
+    }
+    const exactCode = classCodeDirectory[query.trim()];
+    const ranked = classCodeEntries
+        .filter((entry) => entry.search.includes(normalized))
+        .sort((left, right) => {
+            const leftExact = left.code.toLowerCase() === normalized ? -2 : 0;
+            const rightExact = right.code.toLowerCase() === normalized ? -2 : 0;
+            const leftStarts = left.code.toLowerCase().startsWith(normalized) || left.label.toLowerCase().startsWith(normalized) ? -1 : 0;
+            const rightStarts = right.code.toLowerCase().startsWith(normalized) || right.label.toLowerCase().startsWith(normalized) ? -1 : 0;
+            const leftRank = leftExact + leftStarts;
+            const rightRank = rightExact + rightStarts;
+            if (leftRank !== rightRank) {
+                return leftRank - rightRank;
+            }
+            return left.code.localeCompare(right.code, "fr", { numeric: true, sensitivity: "base" });
+        })
+        .slice(0, 16);
+    if (exactCode && !ranked.some((entry) => entry.code === query.trim())) {
+        ranked.unshift({
+            code: query.trim(),
+            label: exactCode.label || query.trim(),
+            display: exactCode.display || query.trim(),
+            path: exactCode.path || "",
+            search: ""
+        });
+    }
+    return ranked;
+}
+
+function hideClassCodePickers() {
+    document.querySelectorAll(".class-picker-panel").forEach((panel) => {
+        panel.hidden = true;
+    });
+}
+
+function applyClassCodeSelection(inputId, panelId, hintId, code, refreshPreview = false) {
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById(panelId);
+    if (!input) {
+        return;
+    }
+    input.value = code;
+    if (panel) {
+        panel.hidden = true;
+    }
+    updateClassCodeHint(inputId, hintId);
+    if (refreshPreview) {
+        refreshRoutePreview();
+    }
+}
+
+function renderClassCodePicker(inputId, panelId, hintId, refreshPreview = false) {
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById(panelId);
+    if (!input || !panel) {
+        return;
+    }
+    const matches = findClassCodeMatches(input.value);
+    if (!matches.length) {
+        panel.innerHTML = `<div class="class-picker-empty">Aucun code correspondant.</div>`;
+        panel.hidden = false;
+        return;
+    }
+    panel.innerHTML = matches.map((entry) => {
+        const pathLine = entry.path ? `<small>${escapeHTML(entry.path)}</small>` : "";
+        return `
+            <button
+                type="button"
+                class="class-picker-option"
+                data-code="${escapeHTML(entry.code)}"
+                onmousedown="event.preventDefault()"
+            >
+                <strong>${escapeHTML(entry.code)} — ${escapeHTML(entry.label)}</strong>
+                ${pathLine}
+            </button>
+        `;
+    }).join("");
+    panel.querySelectorAll(".class-picker-option").forEach((button) => {
+        button.addEventListener("click", () => {
+            applyClassCodeSelection(inputId, panelId, hintId, button.dataset.code || "", refreshPreview);
+        });
+    });
+    panel.hidden = false;
+}
+
+function attachClassCodePicker(inputId, panelId, hintId, refreshPreview = false) {
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById(panelId);
+    if (!input || !panel) {
+        return;
+    }
+    input.addEventListener("focus", () => renderClassCodePicker(inputId, panelId, hintId, refreshPreview));
+    input.addEventListener("input", () => {
+        updateClassCodeHint(inputId, hintId);
+        renderClassCodePicker(inputId, panelId, hintId, refreshPreview);
+    });
+    input.addEventListener("blur", () => {
+        window.setTimeout(() => {
+            panel.hidden = true;
+        }, 140);
+    });
 }
 
 function setPreviewBoxState(payload) {
@@ -700,6 +893,8 @@ function setPreviewBoxState(payload) {
 function markPreferredFileNameDirty() {
     const input = document.getElementById("routePreferredFileName");
     if (!input) return;
+    input.value = normalizedPreferredFileNameValue(input.value);
+    autoResizeTextArea(input);
     const current = input.value.trim();
     const initial = (input.dataset.initial || "").trim();
     input.dataset.dirtyManual = current && current !== initial ? "1" : "0";
@@ -709,7 +904,7 @@ function updatePreviewForManualFileName() {
     markPreferredFileNameDirty();
     const input = document.getElementById("routePreferredFileName");
     if (!input) return;
-    const current = input.value.trim();
+    const current = normalizedPreferredFileNameValue(input.value);
     if (!current) return;
     if (input.dataset.dirtyManual === "1") {
         setPreviewBoxState({
@@ -752,6 +947,7 @@ async function refreshRoutePreview(forceFileName = false) {
                 preferredInput.value = payload.file_name;
                 preferredInput.dataset.initial = payload.file_name;
                 preferredInput.dataset.dirtyManual = "0";
+                autoResizeTextArea(preferredInput);
             }
         }
         const fallbackRule = document.getElementById("routeNamingRuleFallback");
@@ -829,11 +1025,8 @@ async function loadText() {
 window.addEventListener("DOMContentLoaded", () => {
     updateClassCodeHint("reviewClassSelect", "reviewClassHint");
     updateClassCodeHint("routeClassCode", "routeClassHint");
+    autoResizeTextArea(document.getElementById("routePreferredFileName"));
     document.getElementById("routePreferredFileName")?.addEventListener("input", updatePreviewForManualFileName);
-    document.getElementById("reviewClassSelect")?.addEventListener("input", () => updateClassCodeHint("reviewClassSelect", "reviewClassHint"));
-    document.getElementById("routeClassCode")?.addEventListener("input", () => {
-        updateClassCodeHint("routeClassCode", "routeClassHint");
-    });
     document.getElementById("routeClassCode")?.addEventListener("change", () => {
         updateClassCodeHint("routeClassCode", "routeClassHint");
         refreshRoutePreview();
@@ -843,6 +1036,13 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("routeNameFormat")?.addEventListener("change", () => refreshRoutePreview());
     document.getElementById("routeExportType")?.addEventListener("change", () => refreshRoutePreview());
     document.getElementById("routeNamingRuleSelect")?.addEventListener("change", () => refreshRoutePreview(true));
+    attachClassCodePicker("reviewClassSelect", "reviewClassPicker", "reviewClassHint", false);
+    attachClassCodePicker("routeClassCode", "routeClassPicker", "routeClassHint", true);
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest(".class-picker")) {
+            hideClassCodePickers();
+        }
+    });
     loadText();
 });
 
@@ -931,7 +1131,7 @@ function collectRoutePayload() {
     const namingRuleId = document.getElementById("routeNamingRuleSelect")?.value || "";
     const destinationFolder = document.getElementById("routeFolder")?.value || "";
     const nameFormat = document.getElementById("routeNameFormat")?.value || "";
-    const preferredFileName = document.getElementById("routePreferredFileName")?.value || "";
+    const preferredFileName = normalizedPreferredFileNameValue(document.getElementById("routePreferredFileName")?.value || "");
     const exportType = document.getElementById("routeExportType")?.value || "";
 
     return {
@@ -947,7 +1147,7 @@ function collectRoutePayload() {
 }
 
 function currentPreferredFileName() {
-    return (document.getElementById("routePreferredFileName")?.value || "").trim();
+    return normalizedPreferredFileNameValue(document.getElementById("routePreferredFileName")?.value || "");
 }
 
 function shouldLearnFilenameCorrection() {

@@ -1740,7 +1740,7 @@ private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
 }
 
 private func buildDashboardRecentJobsPayload(req: Request) async throws -> UIDashboardRecentJobsPayload {
-    let jobs = try await loadJobRecords(req: req, limit: 100)
+    let jobs = try await loadJobRecords(req: req, limit: 500)
     let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
     return buildDashboardRecentJobsPayload(
         jobs: jobs,
@@ -1760,7 +1760,6 @@ private func buildDashboardRecentJobsPayload(
             guard let recentCutoff else { return true }
             return job.createdAt > recentCutoff
         }
-        .prefix(15)
     let recentCounts = Dictionary(grouping: recentJobRecords, by: \.status)
     let recentJobs = recentJobRecords.map(makeUIJobSummary)
     let dashboardHasActiveProcessing =

@@ -69,6 +69,18 @@
             gap: 8px;
             flex-wrap: wrap;
         }
+        .count-pill {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 8px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: #ebf8f4;
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 700;
+            vertical-align: middle;
+        }
         .upload-form {
             display: grid;
             grid-template-columns: 1fr 1fr auto;
@@ -421,7 +433,7 @@
     </section>
 
     <section id="recent-jobs" class="section-head" style="margin-top: 18px;">
-        <h2>Tâches récentes</h2>
+        <h2>Tâches récentes <span id="recentJobsCountBadge" class="count-pill">#(recent_total_jobs)</span></h2>
         <div class="table-actions">
             <form action="/ui/dashboard/recent-jobs/clear" method="post" style="margin:0;">
                 <button class="btn-secondary" type="submit">Effacer la liste</button>
@@ -994,6 +1006,10 @@ if (dashboardAutoRefreshSeconds > 0) {
 }
 
 function renderRecentJobs(payload) {
+    const countBadge = document.getElementById("recentJobsCountBadge");
+    if (countBadge) {
+        countBadge.textContent = String(payload.recent_total_jobs || 0);
+    }
     renderRecentJobsStatus(payload);
     renderRecentJobsTable(payload);
 }

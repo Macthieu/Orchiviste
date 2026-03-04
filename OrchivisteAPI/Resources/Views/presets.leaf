@@ -110,6 +110,53 @@
         th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
         .mono { font-family: "SF Mono", Menlo, monospace; }
         .hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+        details.advanced {
+            margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fbf8f2;
+        }
+        details.advanced summary {
+            cursor: pointer;
+            font-weight: 700;
+        }
+        .taxonomy-browser-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .taxonomy-browser {
+            margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fcfaf5;
+            max-height: 420px;
+            overflow: auto;
+        }
+        .taxonomy-browser-row {
+            display: grid;
+            grid-template-columns: minmax(90px, 120px) minmax(220px, 1fr) minmax(260px, 2fr);
+            gap: 12px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .taxonomy-browser-row strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+        .taxonomy-browser-row:last-child {
+            border-bottom: 0;
+        }
+        .taxonomy-browser-empty {
+            padding: 14px 12px;
+            color: var(--muted);
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -175,10 +222,13 @@
                     <input type="text" name="taxonomy_id" value="#(selected_taxonomy_id)" placeholder="syged_2026">
                 </label>
             </div>
-            <label>JSON du plan de classification
-                <textarea name="taxonomy_json" rows="14" spellcheck="false">#(selected_taxonomy_json)</textarea>
-            </label>
-            <button class="btn" type="submit">Importer le plan</button>
+            <details class="advanced">
+                <summary>Éditer ou remplacer le JSON du plan</summary>
+                <label>JSON du plan de classification
+                    <textarea name="taxonomy_json" rows="14" spellcheck="false">#(selected_taxonomy_json)</textarea>
+                </label>
+                <button class="btn" type="submit">Importer le plan</button>
+            </details>
         </form>
         <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
         <h3>Importer depuis un PDF du plan</h3>
@@ -202,24 +252,14 @@
             <a href="/ui/presets?taxonomy_id=#(id)" style="margin-left: 8px;">#(id)</a>
             #endfor
         </div>
-        <label style="margin-top: 12px;">Recherche rapide code / titre
-            <input type="text" list="presetClassCodeList" placeholder="ADM-RES ou Résolutions">
-        </label>
-        <p class="hint">Le plan importé est utilisé pour afficher le titre des codes et faciliter la saisie dans les formulaires de routage.</p>
-        <table style="margin-top: 12px;">
-            <thead>
-            <tr><th>Code</th><th>Titre</th><th>Chemin</th></tr>
-            </thead>
-            <tbody>
-            #for(option in class_code_options):
-            <tr>
-                <td class="mono">#(option.code)</td>
-                <td>#(option.label)</td>
-                <td>#(option.path)</td>
-            </tr>
-            #endfor
-            </tbody>
-        </table>
+        <div class="taxonomy-browser-toolbar">
+            <label style="flex: 1 1 360px; margin: 0;">Recherche rapide code / titre / chemin
+                <input id="presetTaxonomySearch" type="text" list="presetClassCodeList" placeholder="ADM-RES, Résolutions, voirie, administration">
+            </label>
+            <p id="presetTaxonomyMeta" class="hint" style="margin: 0;">Chargement du navigateur de classification...</p>
+        </div>
+        <p class="hint">Le navigateur ci-dessous filtre le plan sans afficher toute la taxonomie d’un coup. Tape un code, un titre ou un morceau de chemin.</p>
+        <div id="presetTaxonomyBrowser" class="taxonomy-browser"></div>
     </section>
 
     <section class="card">
@@ -403,7 +443,7 @@
 </main>
 <datalist id="presetClassCodeList">
     #for(option in class_code_options):
-    <option value="#(option.code)">#(option.display)</option>
+    <option value="#(option.code)" data-label="#(option.label)" data-display="#(option.display)" data-path="#(option.path)">#(option.display)</option>
     #endfor
 </datalist>
 <script>
@@ -453,6 +493,60 @@ function handleRuleFolderSelection(fileInputId, pathInputId, hintId, namesFieldI
         hint.textContent = `Dossier local de référence: ${folderName} (${pdfEntries.length} PDF retenus).`;
     }
 }
+
+const presetTaxonomyEntries = Array.from(document.querySelectorAll("#presetClassCodeList option")).map((option) => ({
+    code: option.value,
+    label: option.dataset.label || option.textContent.trim() || option.value,
+    display: option.dataset.display || option.textContent.trim() || option.value,
+    path: option.dataset.path || "",
+    search: `${option.value} ${option.dataset.label || ""} ${option.dataset.display || ""} ${option.dataset.path || ""}`.toLowerCase()
+}));
+
+function escapePresetHTML(value) {
+    return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
+function renderPresetTaxonomyBrowser(query = "") {
+    const browser = document.getElementById("presetTaxonomyBrowser");
+    const meta = document.getElementById("presetTaxonomyMeta");
+    if (!browser || !meta) {
+        return;
+    }
+    const normalized = String(query || "").trim().toLowerCase();
+    const matches = presetTaxonomyEntries
+        .filter((entry) => !normalized || entry.search.includes(normalized))
+        .slice(0, 40);
+
+    meta.textContent = normalized
+        ? `${matches.length} résultat(s) affiché(s) sur ${presetTaxonomyEntries.length} codes chargés.`
+        : `${Math.min(matches.length, presetTaxonomyEntries.length)} code(s) affiché(s) sur ${presetTaxonomyEntries.length} chargés.`;
+
+    if (!matches.length) {
+        browser.innerHTML = `<div class="taxonomy-browser-empty">Aucun code correspondant à la recherche.</div>`;
+        return;
+    }
+
+    browser.innerHTML = matches.map((entry) => `
+        <div class="taxonomy-browser-row">
+            <div class="mono"><strong>${escapePresetHTML(entry.code)}</strong></div>
+            <div>${escapePresetHTML(entry.label)}</div>
+            <div>${escapePresetHTML(entry.path || "Chemin non précisé")}</div>
+        </div>
+    `).join("");
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+    const searchInput = document.getElementById("presetTaxonomySearch");
+    renderPresetTaxonomyBrowser(searchInput?.value || "");
+    searchInput?.addEventListener("input", () => {
+        renderPresetTaxonomyBrowser(searchInput.value);
+    });
+});
 </script>
 </body>
 </html>
