@@ -8,6 +8,12 @@ private struct UINamingContext: Encodable {
     let error: String?
     let legacy_default_name_format: String
     let runtime_fallback_active: Bool
+    let ranking_preview_text: String
+    let ranking_preview_file_name: String
+    let ranking_preview_sample_count: String
+    let ranking_preview_provider_status: String
+    let ranking_preview_rows: [UINamingRuleRankingSummary]
+    let ranking_preview_has_results: Bool
     let rules: [UINamingRuleSummary]
     let thesauri: [UINamingThesaurusSummary]
     let rule_drafts: [UINamingRuleDraftSummary]
@@ -31,6 +37,17 @@ private struct UINamingContext: Encodable {
     let draft_warnings: [String]
     let draft_has_conflicts: Bool
     let draft_has_warnings: Bool
+}
+
+private struct UINamingRuleRankingSummary: Encodable {
+    let rule_id: String
+    let label: String
+    let document_family: String
+    let final_score: String
+    let deterministic_score: String
+    let ml_score: String
+    let sources: String
+    let reasons: String
 }
 
 private struct UINamingFeedbackExampleSummary: Encodable {
@@ -140,6 +157,43 @@ func registerNamingUIRoutes(_ app: Application) {
         let selectedRuleDraft = selectedRuleDraftID.flatMap { id in
             ruleDrafts.first(where: { $0.draft_id == id })
         }
+        let rankingPreviewText = req.query[String.self, at: "ranking_text"] ?? ""
+        let rankingPreviewFileName = req.query[String.self, at: "ranking_file_name"] ?? ""
+        let rankingPreviewSampleCountRaw = req.query[String.self, at: "ranking_sample_count"] ?? "1"
+        let rankingPreviewSampleCount = max(1, parseOptionalInt(rankingPreviewSampleCountRaw) ?? 1)
+        let rankingRequest = namingNonEmpty(rankingPreviewText).map {
+            NamingPredictionRequest(
+                text: $0,
+                metadata: NamingSourceMetadata(
+                    fileName: namingNonEmpty(rankingPreviewFileName),
+                    originalName: namingNonEmpty(rankingPreviewFileName)
+                ),
+                sample_count: rankingPreviewSampleCount,
+                sample_file_names: namingNonEmpty(rankingPreviewFileName).map { [$0] } ?? []
+            )
+        }
+        let rankingResults = rankingRequest.map { request in
+            NamingRuleRanker().rank(request: request, candidates: ruleRecords)
+        } ?? []
+        let rankingRows = rankingResults.map {
+            UINamingRuleRankingSummary(
+                rule_id: $0.rule.rule_id,
+                label: $0.rule.definition.label,
+                document_family: $0.rule.definition.document_family,
+                final_score: namingFormatScore($0.score),
+                deterministic_score: namingFormatScore($0.deterministic_score),
+                ml_score: namingFormatScore($0.ml_score),
+                sources: $0.sources.isEmpty ? "-" : $0.sources.joined(separator: ", "),
+                reasons: $0.reasons.isEmpty ? "-" : Array($0.reasons.prefix(4)).joined(separator: " | ")
+            )
+        }
+        let rankingProviderStatus: String = {
+            guard rankingRequest != nil else { return "Aucun test exécuté" }
+            if rankingResults.contains(where: { $0.ml_score > 0 }) {
+                return "Core ML + heuristique déterministe"
+            }
+            return "Heuristique déterministe seulement"
+        }()
         let selectedRule = selectedRuleID.flatMap { id in
             rules.first(where: { $0.id == id })
         } ?? rules.first
@@ -167,6 +221,12 @@ func registerNamingUIRoutes(_ app: Application) {
             error: req.query[String.self, at: "error"],
             legacy_default_name_format: ConfigLoader.loadRoutingLocalSettings()?.default_name_format ?? "{class_code}-{type_doc}-{sujet}-{date}-{numero}",
             runtime_fallback_active: runtimeCatalog.fallback_active,
+            ranking_preview_text: rankingPreviewText,
+            ranking_preview_file_name: rankingPreviewFileName,
+            ranking_preview_sample_count: String(rankingPreviewSampleCount),
+            ranking_preview_provider_status: rankingProviderStatus,
+            ranking_preview_rows: rankingRows,
+            ranking_preview_has_results: !rankingRows.isEmpty,
             rules: ruleRecords.map {
                 UINamingRuleSummary(
                     id: $0.definition.id,
@@ -464,4 +524,8 @@ private func namingParseCSV(_ raw: String?) -> [String]? {
 private func parseOptionalInt(_ raw: String?) -> Int? {
     guard let raw = namingNonEmpty(raw) else { return nil }
     return Int(raw)
+}
+
+private func namingFormatScore(_ value: Double) -> String {
+    String(format: "%.3f", value)
 }

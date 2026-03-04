@@ -41,12 +41,23 @@ public struct NamingRulePrediction: Codable, Sendable {
 public struct RankedNamingRule: Sendable {
     public let rule: LoadedNamingRule
     public let score: Double
+    public let deterministic_score: Double
+    public let ml_score: Double
     public let reasons: [String]
     public let sources: [String]
 
-    public init(rule: LoadedNamingRule, score: Double, reasons: [String], sources: [String]) {
+    public init(
+        rule: LoadedNamingRule,
+        score: Double,
+        deterministic_score: Double,
+        ml_score: Double,
+        reasons: [String],
+        sources: [String]
+    ) {
         self.rule = rule
         self.score = score
+        self.deterministic_score = deterministic_score
+        self.ml_score = ml_score
         self.reasons = reasons
         self.sources = sources
     }
@@ -179,7 +190,14 @@ public struct NamingRuleRanker {
                 (deterministicByRule[candidate.rule_id] ?? []).map(\.source)
                     + (mlByRule[candidate.rule_id] ?? []).map(\.source)
             )).sorted()
-            return RankedNamingRule(rule: candidate, score: finalScore, reasons: reasons, sources: sources)
+            return RankedNamingRule(
+                rule: candidate,
+                score: finalScore,
+                deterministic_score: deterministicScore,
+                ml_score: mlScore,
+                reasons: reasons,
+                sources: sources
+            )
         }
         .sorted {
             if $0.score == $1.score {
@@ -220,6 +238,19 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
         } else {
             self.configuredVectorSize = nil
         }
+    }
+
+    public convenience init(
+        modelURL: URL? = nil,
+        ruleLabelMap: [String: String] = [:]
+    ) {
+        self.init(
+            modelURL: modelURL,
+            ruleLabelMap: ruleLabelMap,
+            inputName: nil,
+            outputName: nil,
+            vectorSize: nil
+        )
     }
 
     public func predict(
@@ -359,6 +390,12 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
 
     private func loadModel() -> MLModel? {
         guard let modelURL else { return nil }
+        if modelURL.pathExtension == "mlmodelc" {
+            return try? MLModel(contentsOf: modelURL)
+        }
+        if let compiledURL = try? MLModel.compileModel(at: modelURL) {
+            return try? MLModel(contentsOf: compiledURL)
+        }
         return try? MLModel(contentsOf: modelURL)
     }
 
@@ -499,6 +536,19 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
         outputName: String? = nil,
         vectorSize: Int? = nil
     ) {}
+
+    public convenience init(
+        modelURL: URL? = nil,
+        ruleLabelMap: [String: String] = [:]
+    ) {
+        self.init(
+            modelURL: modelURL,
+            ruleLabelMap: ruleLabelMap,
+            inputName: nil,
+            outputName: nil,
+            vectorSize: nil
+        )
+    }
 
     public func predict(
         request: NamingPredictionRequest,

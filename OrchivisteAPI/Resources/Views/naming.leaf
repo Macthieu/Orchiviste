@@ -205,6 +205,49 @@
         </form>
     </section>
 
+    <section class="card">
+        <h2>Tester le ranking des règles</h2>
+        <p class="hint">Colle un extrait représentatif du document et, si possible, le nom du fichier source. Cette vue sert à vérifier quelle règle serait priorisée et si Core ML apporte un signal utile.</p>
+        <form action="/ui/naming" method="get">
+            <div class="form-grid">
+                <label>Nom du fichier (optionnel)
+                    <input type="text" name="ranking_file_name" value="#(ranking_preview_file_name)" placeholder="resolution-2023-436.pdf">
+                </label>
+                <label>Nombre d’échantillons
+                    <input type="number" name="ranking_sample_count" min="1" max="50" value="#(ranking_preview_sample_count)">
+                </label>
+            </div>
+            <label>Texte de test
+                <textarea name="ranking_text" style="min-height:140px;" spellcheck="false">#(ranking_preview_text)</textarea>
+            </label>
+            <div class="editor-toolbar">
+                <button class="btn" type="submit">Calculer le ranking</button>
+                <a class="btn-secondary" href="/ui/naming">Réinitialiser</a>
+            </div>
+        </form>
+        <p class="hint" style="margin-top: 8px;">Statut du calcul : <strong>#(ranking_preview_provider_status)</strong></p>
+        #if(ranking_preview_has_results):
+        <table style="margin-top: 14px;">
+            <thead>
+            <tr><th>Règle</th><th>Famille</th><th>Score final</th><th>Déterministe</th><th>Core ML</th><th>Sources</th><th>Raisons</th></tr>
+            </thead>
+            <tbody>
+            #for(row in ranking_preview_rows):
+            <tr>
+                <td class="mono">#(row.rule_id)<br><strong>#(row.label)</strong></td>
+                <td>#(row.document_family)</td>
+                <td><strong>#(row.final_score)</strong></td>
+                <td>#(row.deterministic_score)</td>
+                <td>#(row.ml_score)</td>
+                <td>#(row.sources)</td>
+                <td>#(row.reasons)</td>
+            </tr>
+            #endfor
+            </tbody>
+        </table>
+        #endif
+    </section>
+
     <div class="grid">
         <section class="card">
             <h2>Règles déclaratives</h2>

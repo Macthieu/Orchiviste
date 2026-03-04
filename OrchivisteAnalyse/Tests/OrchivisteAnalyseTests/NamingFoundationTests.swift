@@ -2,6 +2,9 @@
 import XCTest
 @testable import OrchivisteAnalyseCore
 import OrchivisteSharedKit
+#if canImport(CoreML)
+import CoreML
+#endif
 
 final class NamingFoundationTests: XCTestCase {
     func testResolutionRuleNormalizesSentenceCaseTitleAndStructuredNumber() {
@@ -182,6 +185,49 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertEqual(vector[12], 1.0)
     }
 
+    #if canImport(CoreML)
+    func testCoreMLTinyDocClassifierSmokeLoadsModelAndRanksRules() throws {
+        let modelURL = namingRepositoryRoot()
+            .appendingPathComponent("ml/models-coreml/tiny_doc_classifier.mlpackage")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: modelURL.path))
+
+        let provider = CoreMLNamingPredictionProvider(
+            modelURL: modelURL,
+            vectorSize: 16
+        )
+        let ranker = NamingRuleRanker(
+            mlScorer: NamingMLScorer(providers: [provider])
+        )
+        let candidates = NamingFoundationSeeds.bootstrapFallbackRules().map {
+            LoadedNamingRule(
+                rule_id: $0.id,
+                version: $0.version,
+                status: .active,
+                source: .configFile,
+                definition: $0
+            )
+        }
+        let request = NamingPredictionRequest(
+            text: """
+            EXTRAIT DU PROCÈS-VERBAL D'UNE SÉANCE ORDINAIRE DU CONSEIL MUNICIPAL
+            Résolution n° 2023-436
+            FINANCEMENT PAR LE FONDS DE ROULEMENT – FINALISATION DE LA VOIRIE DE LA RUE NADON
+            """,
+            metadata: NamingSourceMetadata(
+                fileName: "resolution-2023-436.pdf",
+                originalName: "resolution-2023-436.pdf"
+            ),
+            sample_count: 2,
+            sample_file_names: ["resolution-2023-436.pdf", "resolution-2023-437.pdf"]
+        )
+
+        let ranked = ranker.rank(request: request, candidates: candidates)
+
+        XCTAssertFalse(ranked.isEmpty)
+        XCTAssertTrue(ranked.contains(where: { $0.sources.contains("coreml") }))
+    }
+    #endif
+
     func testRuntimeCatalogFallsBackWhenNothingIsLoaded() {
         let catalog = NamingRuntimeCatalogBuilder().build(
             activeRules: [],
@@ -196,6 +242,14 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertTrue(catalog.fallback_active)
         XCTAssertFalse(catalog.active_rules.isEmpty)
         XCTAssertFalse(catalog.active_thesauri.isEmpty)
+    }
+
+    private func namingRepositoryRoot(filePath: StaticString = #filePath) -> URL {
+        var url = URL(fileURLWithPath: "\(filePath)")
+        for _ in 0..<4 {
+            url.deleteLastPathComponent()
+        }
+        return url
     }
 }
 
