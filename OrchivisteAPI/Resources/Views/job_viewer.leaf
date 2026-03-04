@@ -140,6 +140,29 @@
             font-size: 12px;
             line-height: 1.45;
         }
+        .preview-ranking {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .preview-ranking table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .preview-ranking th,
+        .preview-ranking td {
+            text-align: left;
+            vertical-align: top;
+            padding: 6px 4px;
+            border-bottom: 1px solid var(--border);
+        }
+        .preview-ranking th {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 11px;
+        }
         .hint-list {
             margin: 8px 0 12px 18px;
             padding: 0;
@@ -324,6 +347,33 @@
             #else:
             <div id="routePreviewFolder" class="preview-meta" style="display:none;"></div>
             #endif
+            <div id="routePreviewRanking" class="preview-ranking" #if(proposed_ranking_present):style="display:block;"#else:style="display:none;"#endif>
+                <div id="routePreviewRankingStatus" class="preview-meta">Ranking: #(proposed_ranking_provider_status)</div>
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Règle</th>
+                        <th>Final</th>
+                        <th>Déterministe</th>
+                        <th>Core ML</th>
+                    </tr>
+                    </thead>
+                    <tbody id="routePreviewRankingBody">
+                    #for(row in proposed_ranking_rows):
+                    <tr>
+                        <td>
+                            <span class="mono">#(row.rule_id)</span><br>
+                            <strong>#(row.label)</strong><br>
+                            <span class="preview-meta">#(row.sources)</span>
+                        </td>
+                        <td>#(row.final_score)</td>
+                        <td>#(row.deterministic_score)</td>
+                        <td>#(row.ml_score)</td>
+                    </tr>
+                    #endfor
+                    </tbody>
+                </table>
+            </div>
             <div id="routePreviewFooter" class="preview-meta">
                 Cette proposition reprend la logique actuelle de routage. Un dossier ou un format saisi ci-dessous la remplacera au moment du routage.
             </div>
@@ -529,6 +579,9 @@ function setPreviewBoxState(payload) {
     const previewSource = document.getElementById("routePreviewSource");
     const previewRule = document.getElementById("routePreviewRule");
     const previewFolder = document.getElementById("routePreviewFolder");
+    const previewRanking = document.getElementById("routePreviewRanking");
+    const previewRankingStatus = document.getElementById("routePreviewRankingStatus");
+    const previewRankingBody = document.getElementById("routePreviewRankingBody");
     if (!previewBox || !previewName || !previewSource) return;
 
     const hasFileName = Boolean(payload.file_name);
@@ -555,6 +608,26 @@ function setPreviewBoxState(payload) {
             previewFolder.textContent = `Dossier cible: ${payload.destination_folder}`;
         } else {
             previewFolder.style.display = "none";
+        }
+    }
+    if (previewRanking && previewRankingStatus && previewRankingBody) {
+        const rows = Array.isArray(payload.ranking_rows) ? payload.ranking_rows : [];
+        previewRankingStatus.textContent = `Ranking: ${payload.ranking_provider_status || "Aucun ranking disponible"}`;
+        previewRankingBody.innerHTML = "";
+        if (rows.length > 0) {
+            previewRanking.style.display = "block";
+            for (const row of rows) {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><span class="mono">${row.rule_id}</span><br><strong>${row.label}</strong><br><span class="preview-meta">${row.sources}</span></td>
+                    <td>${row.final_score}</td>
+                    <td>${row.deterministic_score}</td>
+                    <td>${row.ml_score}</td>
+                `;
+                previewRankingBody.appendChild(tr);
+            }
+        } else {
+            previewRanking.style.display = "none";
         }
     }
 }

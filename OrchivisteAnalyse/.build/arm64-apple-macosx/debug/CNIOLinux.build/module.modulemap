@@ -1,4 +1,0 @@
-module CNIOLinux {
-    umbrella header "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/CNIOLinux/include/CNIOLinux.h"
-    export *
-}

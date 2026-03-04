@@ -1,4 +1,0 @@
-module CNIOBoringSSLShims {
-    umbrella header "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-ssl/Sources/CNIOBoringSSLShims/include/CNIOBoringSSLShims.h"
-    export *
-}

@@ -996,11 +996,23 @@ private struct ResolvedRoutingNaming {
     let namingRuleID: String?
 }
 
+struct RoutePreviewRankingRow {
+    let ruleID: String
+    let label: String
+    let finalScore: Double
+    let deterministicScore: Double
+    let mlScore: Double
+    let sources: [String]
+    let reasons: [String]
+}
+
 struct RoutePreview {
     let fileName: String?
     let destinationFolderDisplay: String?
     let namingRuleID: String?
     let namingSource: String
+    let rankingProviderStatus: String
+    let rankingRows: [RoutePreviewRankingRow]
 }
 
 func buildRoutePreview(
@@ -1087,6 +1099,11 @@ func buildRoutePreview(
         preset: selectedPreset,
         rules: namingRules
     )
+    let rankingRows = routePreviewRankingRows(
+        job: job,
+        analysis: effectiveAnalysis,
+        namingRules: namingRules
+    )
     let resolvedNaming = resolvedRoutingFileName(
         job: job,
         classCode: effectiveClassCode,
@@ -1137,7 +1154,102 @@ func buildRoutePreview(
         fileName: resolvedNaming.fileName,
         destinationFolderDisplay: destinationFolderDisplay,
         namingRuleID: resolvedNaming.namingRuleID,
-        namingSource: namingSource
+        namingSource: namingSource,
+        rankingProviderStatus: routePreviewRankingProviderStatus(rows: rankingRows),
+        rankingRows: rankingRows
+    )
+}
+
+private func routePreviewRankingRows(
+    job: JobRecord,
+    analysis: AnalysisResponse?,
+    namingRules: [NamingRuleDefinition]
+) -> [RoutePreviewRankingRow] {
+    guard !namingRules.isEmpty,
+          let request = routePreviewNamingPredictionRequest(job: job, analysis: analysis) else {
+        return []
+    }
+
+    let candidates = namingRules.map {
+        LoadedNamingRule(
+            rule_id: $0.id,
+            version: $0.version,
+            status: .active,
+            source: .configFile,
+            definition: $0
+        )
+    }
+
+    return NamingRuleRanker()
+        .rank(request: request, candidates: candidates)
+        .prefix(5)
+        .map {
+            RoutePreviewRankingRow(
+                ruleID: $0.rule.rule_id,
+                label: $0.rule.definition.label,
+                finalScore: $0.score,
+                deterministicScore: $0.deterministic_score,
+                mlScore: $0.ml_score,
+                sources: $0.sources,
+                reasons: Array($0.reasons.prefix(4))
+            )
+        }
+}
+
+private func routePreviewRankingProviderStatus(rows: [RoutePreviewRankingRow]) -> String {
+    guard !rows.isEmpty else {
+        return "Aucun ranking disponible"
+    }
+    if rows.contains(where: { $0.mlScore > 0 }) {
+        return "Core ML + heuristique déterministe"
+    }
+    return "Heuristique déterministe seulement"
+}
+
+private func routePreviewNamingPredictionRequest(
+    job: JobRecord,
+    analysis: AnalysisResponse?
+) -> NamingPredictionRequest? {
+    let fileName = URL(fileURLWithPath: job.fileURL).lastPathComponent
+    let preferredKeys = [
+        "metadata.type_document",
+        "metadata.numero_document",
+        "metadata.objet",
+        "metadata.date_document",
+        "metadata.organisme_emetteur",
+        "summary.title",
+        "summary.generated",
+        "resolution_titre",
+        "document_objet",
+        "objet",
+        "numero",
+        "date_document",
+        "organisme_emetteur",
+        "capture.section_titles",
+        "capture.boundary_markers"
+    ]
+    let champs = analysis?.champs ?? job.analysisChamps ?? [:]
+    let collectedText = preferredKeys.compactMap { key in
+        nonEmpty(champs[key])
+    }
+    let fallbackText = [
+        nonEmpty(job.analysisTypeDoc),
+        (job.analysisSujets ?? []).isEmpty ? nil : job.analysisSujets?.joined(separator: ", "),
+        nonEmpty(fileName)
+    ].compactMap { $0 }
+
+    let merged = (collectedText + fallbackText)
+        .joined(separator: "\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !merged.isEmpty else {
+        return nil
+    }
+
+    return NamingPredictionRequest(
+        text: merged,
+        metadata: NamingSourceMetadata(fileName: fileName, originalName: fileName),
+        sample_count: 1,
+        sample_file_names: [fileName]
     )
 }
 

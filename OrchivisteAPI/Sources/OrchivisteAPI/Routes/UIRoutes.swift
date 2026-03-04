@@ -199,6 +199,9 @@ private struct UIJobViewerContext: Encodable {
     let proposed_naming_rule_id: String
     let proposed_naming_rule_present: Bool
     let proposed_name_source: String
+    let proposed_ranking_provider_status: String
+    let proposed_ranking_rows: [UIRoutePreviewRankingPayload]
+    let proposed_ranking_present: Bool
     let preview_pages: Int
     let download_url: String
     let download_searchable_url: String
@@ -404,6 +407,18 @@ private struct UIRoutePreviewPayload: Content {
     let destination_folder: String
     let naming_rule_id: String?
     let naming_source: String
+    let ranking_provider_status: String
+    let ranking_rows: [UIRoutePreviewRankingPayload]
+}
+
+private struct UIRoutePreviewRankingPayload: Content {
+    let rule_id: String
+    let label: String
+    let final_score: String
+    let deterministic_score: String
+    let ml_score: String
+    let sources: String
+    let reasons: String
 }
 
 func registerUIRoutes(_ app: Application) {
@@ -1409,7 +1424,9 @@ func registerUIRoutes(_ app: Application) {
             file_name: preview?.fileName ?? "",
             destination_folder: preview?.destinationFolderDisplay ?? "",
             naming_rule_id: preview?.namingRuleID,
-            naming_source: preview?.namingSource ?? "Aucune proposition automatique"
+            naming_source: preview?.namingSource ?? "Aucune proposition automatique",
+            ranking_provider_status: preview?.rankingProviderStatus ?? "Aucun ranking disponible",
+            ranking_rows: (preview?.rankingRows ?? []).map(uiRoutePreviewRankingPayload)
         )
     }
 
@@ -1479,6 +1496,9 @@ func registerUIRoutes(_ app: Application) {
             proposed_naming_rule_id: routePreview?.namingRuleID ?? "",
             proposed_naming_rule_present: nonEmptyString(routePreview?.namingRuleID) != nil,
             proposed_name_source: routePreview?.namingSource ?? "Aucune proposition automatique",
+            proposed_ranking_provider_status: routePreview?.rankingProviderStatus ?? "Aucun ranking disponible",
+            proposed_ranking_rows: (routePreview?.rankingRows ?? []).map(uiRoutePreviewRankingPayload),
+            proposed_ranking_present: !(routePreview?.rankingRows ?? []).isEmpty,
             preview_pages: max(1, preview?.pages ?? 1),
             download_url: "/v1/jobs/\(job.id.uuidString)/download",
             download_searchable_url: "/ui/jobs/\(job.id.uuidString)/download-searchable",
@@ -3010,6 +3030,18 @@ private func runEnvCommand(executable: String, arguments: [String]) -> (stdout: 
     let stdout = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
     let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
     return (stdout, stderr, process.terminationStatus)
+}
+
+private func uiRoutePreviewRankingPayload(_ row: RoutePreviewRankingRow) -> UIRoutePreviewRankingPayload {
+    UIRoutePreviewRankingPayload(
+        rule_id: row.ruleID,
+        label: row.label,
+        final_score: String(format: "%.3f", row.finalScore),
+        deterministic_score: String(format: "%.3f", row.deterministicScore),
+        ml_score: String(format: "%.3f", row.mlScore),
+        sources: row.sources.isEmpty ? "-" : row.sources.joined(separator: ", "),
+        reasons: row.reasons.isEmpty ? "-" : row.reasons.joined(separator: " | ")
+    )
 }
 
 private extension JSONEncoder {

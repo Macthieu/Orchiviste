@@ -211,6 +211,8 @@ public struct NamingRuleRanker {
 #if canImport(CoreML)
 public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
     public let provider_id = "coreml"
+    private static let cacheLock = NSLock()
+    private static var modelCache: [String: MLModel] = [:]
     private let modelURL: URL?
     private let ruleLabelMap: [String: String]
     private let configuredInputName: String?
@@ -390,13 +392,28 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
 
     private func loadModel() -> MLModel? {
         guard let modelURL else { return nil }
+        let cacheKey = modelURL.path
+        Self.cacheLock.lock()
+        if let cached = Self.modelCache[cacheKey] {
+            Self.cacheLock.unlock()
+            return cached
+        }
+        Self.cacheLock.unlock()
+
+        let loadedModel: MLModel?
         if modelURL.pathExtension == "mlmodelc" {
-            return try? MLModel(contentsOf: modelURL)
+            loadedModel = try? MLModel(contentsOf: modelURL)
+        } else if let compiledURL = try? MLModel.compileModel(at: modelURL) {
+            loadedModel = try? MLModel(contentsOf: compiledURL)
+        } else {
+            loadedModel = try? MLModel(contentsOf: modelURL)
         }
-        if let compiledURL = try? MLModel.compileModel(at: modelURL) {
-            return try? MLModel(contentsOf: compiledURL)
+        if let loadedModel {
+            Self.cacheLock.lock()
+            Self.modelCache[cacheKey] = loadedModel
+            Self.cacheLock.unlock()
         }
-        return try? MLModel(contentsOf: modelURL)
+        return loadedModel
     }
 
     private func inferredVectorSize(from description: MLFeatureDescription?) -> Int? {

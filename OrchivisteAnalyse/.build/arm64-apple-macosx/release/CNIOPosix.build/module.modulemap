@@ -1,4 +1,0 @@
-module CNIOPosix {
-    umbrella header "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio/Sources/CNIOPosix/include/CNIOPosix.h"
-    export *
-}

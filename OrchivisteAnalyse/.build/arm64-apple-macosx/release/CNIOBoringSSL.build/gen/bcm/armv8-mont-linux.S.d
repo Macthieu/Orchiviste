@@ -1,6 +1,0 @@
-dependencies: \
-  /Volumes/MAC_HDD/Logiciel\ test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-ssl/Sources/CNIOBoringSSL/include/module.modulemap \
-  /Volumes/MAC_HDD/Logiciel\ test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-ssl/Sources/CNIOBoringSSL/gen/bcm/armv8-mont-linux.S \
-  /Volumes/MAC_HDD/Logiciel\ test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-ssl/Sources/CNIOBoringSSL/include/CNIOBoringSSL_asm_base.h \
-  /Volumes/MAC_HDD/Logiciel\ test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-ssl/Sources/CNIOBoringSSL/include/CNIOBoringSSL_target.h \
-  /Volumes/MAC_HDD/Logiciel\ test/Orchiviste/OrchivisteAnalyse/.build/checkouts/swift-nio-ssl/Sources/CNIOBoringSSL/include/CNIOBoringSSL_boringssl_prefix_symbols_asm.h

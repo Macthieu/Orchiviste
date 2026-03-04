@@ -1,3 +1,0 @@
-module InMemoryTracing {
-    header "/Volumes/MAC_HDD/Logiciel test/Orchiviste/OrchivisteAnalyse/.build/arm64-apple-macosx/release/InMemoryTracing.build/include/InMemoryTracing-Swift.h"
-}
