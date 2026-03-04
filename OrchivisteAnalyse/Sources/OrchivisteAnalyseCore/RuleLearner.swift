@@ -40,9 +40,20 @@ public struct RuleLearner: RuleLearning {
             ?? NamingFoundationSeeds.bootstrapFallbackThesaurus()
         let rankingRequest = makeRankingRequest(samples: effectiveSamples)
         let ranked = ranker.rank(request: rankingRequest, candidates: effectiveCatalog.active_rules)
-        let bestCandidate = ranked.first
+        let familyHint = inferDocumentFamilyHint(
+            folderPath: request.folder_path,
+            samples: effectiveSamples
+        )
+        let bestCandidate = selectBestCandidate(
+            from: ranked,
+            familyHint: familyHint
+        )
         let selectedConfidence = max(0.2, bestCandidate?.score ?? 0.2)
-        let selectedRule = selectRuleProposal(bestCandidate: bestCandidate, samples: effectiveSamples)
+        let selectedRule = selectRuleProposal(
+            bestCandidate: bestCandidate,
+            samples: effectiveSamples,
+            familyHint: familyHint
+        )
         let suggestedSynonyms = suggestSynonyms(for: selectedRule, samples: effectiveSamples)
 
         let detectedTokens = topTokens(in: effectiveSamples)
@@ -233,10 +244,11 @@ public struct RuleLearner: RuleLearning {
 
     private func selectRuleProposal(
         bestCandidate: RankedNamingRule?,
-        samples: [LearningDocumentSample]
+        samples: [LearningDocumentSample],
+        familyHint: String?
     ) -> NamingRuleDefinition {
         guard let bestCandidate else {
-            return buildMinimalDraftRule(from: samples)
+            return buildMinimalDraftRule(from: samples, familyHint: familyHint)
         }
         if bestCandidate.score >= 0.80 {
             return bestCandidate.rule.definition
@@ -244,7 +256,7 @@ public struct RuleLearner: RuleLearning {
         if bestCandidate.score >= 0.40 {
             return deriveRule(from: bestCandidate.rule.definition, samples: samples, score: bestCandidate.score)
         }
-        return buildMinimalDraftRule(from: samples)
+        return buildMinimalDraftRule(from: samples, familyHint: familyHint)
     }
 
     private func deriveRule(
@@ -280,9 +292,12 @@ public struct RuleLearner: RuleLearning {
         )
     }
 
-    private func buildMinimalDraftRule(from samples: [LearningDocumentSample]) -> NamingRuleDefinition {
+    private func buildMinimalDraftRule(
+        from samples: [LearningDocumentSample],
+        familyHint: String?
+    ) -> NamingRuleDefinition {
         let tokens = Array(topTokens(in: samples).prefix(5))
-        let typeHint = inferDocumentFamily(from: samples)
+        let typeHint = familyHint ?? inferDocumentFamily(from: samples)
         return NamingRuleDefinition(
             id: "draft-generic-\(timestampLabel())",
             label: "Règle générique proposée",
@@ -335,5 +350,34 @@ public struct RuleLearner: RuleLearning {
             let tokens = Array(topTokens(in: samples).prefix(5))
             return tokens.isEmpty ? [:] : ["document": tokens]
         }
+    }
+
+    private func selectBestCandidate(
+        from ranked: [RankedNamingRule],
+        familyHint: String?
+    ) -> RankedNamingRule? {
+        guard let familyHint else {
+            return ranked.first
+        }
+        if let matching = ranked.first(where: { $0.rule.definition.document_family == familyHint }) {
+            return matching
+        }
+        return ranked.first
+    }
+
+    private func inferDocumentFamilyHint(
+        folderPath: String,
+        samples: [LearningDocumentSample]
+    ) -> String? {
+        let folder = normalizedSearchText(folderPath)
+        if folder.contains("resolution") || folder.contains("resolutions") || folder.contains("proces verbal") {
+            return "resolution_conseil"
+        }
+        if folder.contains("entente") || folder.contains("contrat") || folder.contains("convention") || folder.contains("bail") {
+            return "entente_uniformisee"
+        }
+
+        let inferred = inferDocumentFamily(from: samples)
+        return inferred == "generic_document" ? nil : inferred
     }
 }

@@ -1,0 +1,118 @@
+{
+  "resolution_folder": "/Users/mathieubeaudin/Desktop/Résolution pour tester",
+  "entente_folder": "/Users/mathieubeaudin/Desktop/Entente à tester",
+  "summary": {
+    "resolution_conseil": {
+      "train": 103,
+      "eval": 26,
+      "total": 129
+    },
+    "avis_motion": {
+      "train": 12,
+      "eval": 3,
+      "total": 15
+    },
+    "depot": {
+      "train": 4,
+      "eval": 1,
+      "total": 5
+    },
+    "entente_uniformisee": {
+      "train": 313,
+      "eval": 78,
+      "total": 391
+    }
+  },
+  "excluded": {
+    "resolution_folder_count": 1,
+    "entente_folder_count": 33,
+    "resolution_folder_examples": [
+      {
+        "file": ".DS_Store",
+        "reason": "unsupported_extension"
+      }
+    ],
+    "entente_folder_examples": [
+      {
+        "file": ".DS_Store",
+        "reason": "unsupported_extension"
+      },
+      {
+        "file": "9152-6046 Québec Inc. - Promesse d’achat lot 2 978 063, cadastre du Québec - 2016.docx",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Agence de développement économique du Canada - Annexe Entente aide financière pour parc thématique Anisipi - 2021-2022.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Berry, Municipalité de - Lettre - Prolongation de l'entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Berry, Municipalité de - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - La Motte, Municipalité de - Lettre - Prolongation de l'entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - La Motte, Municipalité de - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Saint-Dominique-du-Rosaire, Municipalité de - Lettre - Prolongation entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Saint-Dominique-du-Rosaire, Municipalité de - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Saint-Félix-de-Dalquier, Municipalité de - Lettre - Prolongation de l'entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Saint-Félix-de-Dalquier, Municipalité de - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Saint-Mathieu-d'Harricana, Municipalité de - Lettre - Prolongation de l'entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Saint-Mathieu-d'Harricana, Municipalité de - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Sainte-Gertrude-Manneville, Municipalité de - Lettre - Prolongation entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Sainte-Gertrude-Manneville, Municipalité de - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Trécesson, Municipalité de canton - Lettre - Prolongation de l'entente actuelle contre l'incendie pour l'année 2008 - 2007-08-14.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Trécesson, Municipalité de canton - Lettre - Renouvellement concernant l'entente de protection contre l'incendie - 2008-10-10.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "Amos, ville d’ - Ville de la MRC d’Abitibi - Lettre - Schéma de couverture de risques en sécurité incendie Et entente de protection contre l'incendie - 2007-03-06.pdf",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "BOUTIN, Jacques - Promesse de vente pour 1242 de la Route 111 Est - 1997-04-09.docx",
+        "reason": "excluded_keyword"
+      },
+      {
+        "file": "C2V3 Inc. - Promesse d’achat pour lot 4 884 626 du cadastre du Québec - 2012-05-10.docx",
+        "reason": "excluded_keyword"
+      }
+    ]
+  }
+}

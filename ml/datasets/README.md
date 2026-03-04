@@ -75,3 +75,27 @@ Et, dans un environnement Python 3.11 local avec `torch` et `coremltools` :
 
 Ce bootstrap reste un point de depart. Le corpus de production doit ensuite etre enrichi
 avec des feedbacks humains valides et, idealement, du texte OCR ou natif reel.
+
+## Corpus externes (familles separees)
+
+Pour eviter de melanger des familles qui n'ont pas la meme regle de nommage
+(ex.: `Entente` vs `Resolution`), utiliser le prepareur externe :
+
+```bash
+python3 ml/scripts/prepare_external_training_corpora.py \
+  --resolution-folder "/Users/mathieubeaudin/Desktop/Résolution pour tester" \
+  --entente-folder "/Users/mathieubeaudin/Desktop/Entente à tester" \
+  --output-dir ml/datasets/labeled
+```
+
+Ce script produit des jeux distincts :
+
+- `classification_resolution_conseil_{train,eval}.jsonl`
+- `classification_avis_motion_{train,eval}.jsonl`
+- `classification_depot_{train,eval}.jsonl`
+- `classification_entente_uniformisee_{train,eval}.jsonl`
+- `classification_external_{train,eval}.jsonl`
+
+et un rapport d'inclusion/exclusion :
+
+- `classification_external_report.json`

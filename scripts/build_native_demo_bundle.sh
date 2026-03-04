@@ -13,6 +13,8 @@ fi
 BIN_DIR="$BUNDLE_DIR/bin"
 CONFIG_DIR="$BUNDLE_DIR/configs"
 VIEWS_DIR="$BUNDLE_DIR/resources/Views"
+MODELS_DIR="$BUNDLE_DIR/models-coreml"
+MODELS_SRC_DIR="$BUNDLE_DIR/models-src"
 LOG_DIR="$BUNDLE_DIR/logs"
 RUN_DIR="$BUNDLE_DIR/run"
 DB_DIR="$BUNDLE_DIR/state/db"
@@ -66,6 +68,8 @@ mkdir -p \
   "$BIN_DIR" \
   "$LOG_DIR" \
   "$RUN_DIR" \
+  "$MODELS_DIR" \
+  "$MODELS_SRC_DIR" \
   "$DB_DIR" \
   "$UI_STATE_DIR" \
   "$DATA_INBOX_DIR" \
@@ -83,6 +87,33 @@ chmod +x "$BIN_DIR/OrchivisteAPI" "$BIN_DIR/OrchivisteAnalyse"
 if [[ -n "$WORKER_BINARY" && -f "$WORKER_BINARY" ]]; then
   cp -f "$WORKER_BINARY" "$BIN_DIR/OrchivisteWorker"
   chmod +x "$BIN_DIR/OrchivisteWorker"
+fi
+
+ANALYSE_COREML_ENABLED=0
+ANALYSE_COREML_MODEL_PATH=""
+ANALYSE_COREML_LABELS_PATH=""
+ANALYSE_COREML_INPUT_VECTOR="input"
+ANALYSE_COREML_OUTPUT_SCORES="var_14"
+ANALYSE_COREML_VECTOR_SIZE="256"
+
+PREFERRED_COREML_MODEL="$ROOT_DIR/ml/models-coreml/document_classifier_external.mlpackage"
+PREFERRED_COREML_LABELS="$ROOT_DIR/ml/models-src/document_classifier_external.labels.json"
+FALLBACK_COREML_MODEL="$ROOT_DIR/ml/models-coreml/tiny_doc_classifier.mlpackage"
+
+if [[ -d "$PREFERRED_COREML_MODEL" ]]; then
+  rm -rf "$MODELS_DIR/document_classifier_external.mlpackage"
+  ditto "$PREFERRED_COREML_MODEL" "$MODELS_DIR/document_classifier_external.mlpackage"
+  ANALYSE_COREML_ENABLED=1
+  ANALYSE_COREML_MODEL_PATH="\$KIT_DIR/models-coreml/document_classifier_external.mlpackage"
+  if [[ -f "$PREFERRED_COREML_LABELS" ]]; then
+    cp -f "$PREFERRED_COREML_LABELS" "$MODELS_SRC_DIR/document_classifier_external.labels.json"
+    ANALYSE_COREML_LABELS_PATH="\$KIT_DIR/models-src/document_classifier_external.labels.json"
+  fi
+elif [[ -d "$FALLBACK_COREML_MODEL" ]]; then
+  rm -rf "$MODELS_DIR/tiny_doc_classifier.mlpackage"
+  ditto "$FALLBACK_COREML_MODEL" "$MODELS_DIR/tiny_doc_classifier.mlpackage"
+  ANALYSE_COREML_ENABLED=1
+  ANALYSE_COREML_MODEL_PATH="\$KIT_DIR/models-coreml/tiny_doc_classifier.mlpackage"
 fi
 
 write_file "$BUNDLE_DIR/demo.env" <<EOF
@@ -110,7 +141,12 @@ export ORCHIVISTE_OCR_ENABLED=1
 export ORCHIVISTE_ROUTE_OCR_SEARCHABLE_PDF=1
 export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_FM_ENABLED=1
 export ORCHIVISTE_ANALYSE_APPLE_TEXT_MAX_CHARS=12000
-export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_ENABLED=0
+export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_ENABLED=$ANALYSE_COREML_ENABLED
+export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_MODEL_PATH="$ANALYSE_COREML_MODEL_PATH"
+export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_INPUT_VECTOR="$ANALYSE_COREML_INPUT_VECTOR"
+export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_OUTPUT_SCORES="$ANALYSE_COREML_OUTPUT_SCORES"
+export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_LABELS_PATH="$ANALYSE_COREML_LABELS_PATH"
+export ORCHIVISTE_ANALYSE_PROVIDER_APPLE_COREML_VECTOR_SIZE=$ANALYSE_COREML_VECTOR_SIZE
 
 export ORCHIVISTE_DEMO_START_WORKER=0
 export ORCHIVISTE_REDIS_URL=redis://127.0.0.1:6379
@@ -325,6 +361,7 @@ Ce dossier contient un kit de demonstration natif precompile pour macOS.
 - le kit utilise les vues et configs copiees au moment du build
 - \`FoundationModels\` et \`Vision\` restent des fonctions natives macOS
 - le worker est copie dans \`bin/\`, mais le demarrage par defaut reste API + Analyse pour la demo
+- Core ML de classification est active par defaut si un modele local est detecte
 EOF
 
 chmod +x \
