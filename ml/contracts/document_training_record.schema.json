@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orchiviste.local/contracts/document_training_record.schema.json",
+  "title": "DocumentTrainingRecord",
+  "type": "object",
+  "required": [
+    "document_id",
+    "text_source",
+    "type_document",
+    "class_code",
+    "human_validated"
+  ],
+  "properties": {
+    "document_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_path": {
+      "type": "string"
+    },
+    "text_source": {
+      "type": "string",
+      "enum": ["native_text", "ocr", "hybrid"]
+    },
+    "text": {
+      "type": "string"
+    },
+    "text_path": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string",
+      "default": "fr"
+    },
+    "type_document": {
+      "type": "string"
+    },
+    "class_code": {
+      "type": "string"
+    },
+    "preset_id": {
+      "type": "string"
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "session_date": {
+      "type": "string"
+    },
+    "numero_document": {
+      "type": "string"
+    },
+    "validated_filename": {
+      "type": "string"
+    },
+    "human_validated": {
+      "type": "boolean"
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["validated", "needs_review", "rejected"]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    }
+  },
+  "oneOf": [
+    { "required": ["text"] },
+    { "required": ["text_path"] }
+  ]
+}
+

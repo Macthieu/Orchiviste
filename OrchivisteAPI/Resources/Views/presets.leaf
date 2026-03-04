@@ -157,6 +157,71 @@
             color: var(--muted);
             font-size: 13px;
         }
+        .taxonomy-browser-actions {
+            padding: 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: #f8f4ec;
+        }
+        .taxonomy-browser-actions button {
+            border: 1px solid var(--accent);
+            background: #ebf8f4;
+            color: var(--accent);
+            border-radius: 8px;
+            font-weight: 700;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+        .class-picker {
+            position: relative;
+        }
+        .class-picker-panel {
+            position: absolute;
+            z-index: 20;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            max-height: 260px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface);
+            box-shadow: 0 12px 24px rgba(31, 37, 42, 0.12);
+        }
+        .class-picker-panel[hidden] {
+            display: none;
+        }
+        .class-picker-option {
+            width: 100%;
+            border: 0;
+            border-bottom: 1px solid #efe7da;
+            background: transparent;
+            text-align: left;
+            padding: 10px;
+            cursor: pointer;
+            color: var(--ink);
+        }
+        .class-picker-option:hover,
+        .class-picker-option:focus {
+            background: #f5f0e6;
+            outline: none;
+        }
+        .class-picker-option strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+        .class-picker-option small {
+            display: block;
+            color: var(--muted);
+            line-height: 1.35;
+        }
+        .class-picker-empty {
+            padding: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -314,10 +379,16 @@
                     <input type="text" name="when_sujet" placeholder="Finance">
                 </label>
                 <label>Code (critère)
-                    <input type="text" name="when_class_code" list="presetClassCodeList" placeholder="ADM-PV">
+                    <div class="class-picker">
+                        <input id="presetWhenClassCode" type="text" name="when_class_code" list="presetClassCodeList" placeholder="Tape un code, un titre ou un chemin" autocomplete="off" spellcheck="false">
+                        <div id="presetWhenClassCodePicker" class="class-picker-panel" hidden></div>
+                    </div>
                 </label>
                 <label>Code de classement (action)
-                    <input type="text" name="class_code" list="presetClassCodeList" placeholder="ADM-PV">
+                    <div class="class-picker">
+                        <input id="presetActionClassCode" type="text" name="class_code" list="presetClassCodeList" placeholder="Tape un code, un titre ou un chemin" autocomplete="off" spellcheck="false">
+                        <div id="presetActionClassCodePicker" class="class-picker-panel" hidden></div>
+                    </div>
                 </label>
                 <label>Préréglage (action)
                     <input type="text" name="preset_id" placeholder="preset_pv">
@@ -408,7 +479,10 @@
                     <input type="text" name="name" placeholder="Preset Procès-Verbal" required>
                 </label>
                 <label>Code de classement
-                    <input type="text" name="class_code" list="presetClassCodeList" placeholder="ADM-PV">
+                    <div class="class-picker">
+                        <input id="presetCreateClassCode" type="text" name="class_code" list="presetClassCodeList" placeholder="Tape un code, un titre ou un chemin" autocomplete="off" spellcheck="false">
+                        <div id="presetCreateClassCodePicker" class="class-picker-panel" hidden></div>
+                    </div>
                 </label>
                 <label>Post-traitement (csv)
                     <input type="text" name="postprocess" placeholder="upper,trim">
@@ -501,6 +575,8 @@ const presetTaxonomyEntries = Array.from(document.querySelectorAll("#presetClass
     path: option.dataset.path || "",
     search: `${option.value} ${option.dataset.label || ""} ${option.dataset.display || ""} ${option.dataset.path || ""}`.toLowerCase()
 }));
+const presetTaxonomyPageSize = 200;
+let presetTaxonomyVisibleCount = presetTaxonomyPageSize;
 
 function escapePresetHTML(value) {
     return String(value || "")
@@ -519,32 +595,132 @@ function renderPresetTaxonomyBrowser(query = "") {
     }
     const normalized = String(query || "").trim().toLowerCase();
     const matches = presetTaxonomyEntries
-        .filter((entry) => !normalized || entry.search.includes(normalized))
-        .slice(0, 40);
+        .filter((entry) => !normalized || entry.search.includes(normalized));
+    const visibleCount = normalized
+        ? matches.length
+        : Math.min(matches.length, presetTaxonomyVisibleCount);
+    const visibleMatches = matches.slice(0, visibleCount);
 
     meta.textContent = normalized
-        ? `${matches.length} résultat(s) affiché(s) sur ${presetTaxonomyEntries.length} codes chargés.`
-        : `${Math.min(matches.length, presetTaxonomyEntries.length)} code(s) affiché(s) sur ${presetTaxonomyEntries.length} chargés.`;
+        ? `${visibleCount} résultat(s) affiché(s) sur ${presetTaxonomyEntries.length} codes chargés.`
+        : `${visibleCount} code(s) affiché(s) sur ${presetTaxonomyEntries.length} chargés.`;
 
     if (!matches.length) {
         browser.innerHTML = `<div class="taxonomy-browser-empty">Aucun code correspondant à la recherche.</div>`;
         return;
     }
 
-    browser.innerHTML = matches.map((entry) => `
+    const rows = visibleMatches.map((entry) => `
         <div class="taxonomy-browser-row">
             <div class="mono"><strong>${escapePresetHTML(entry.code)}</strong></div>
             <div>${escapePresetHTML(entry.label)}</div>
             <div>${escapePresetHTML(entry.path || "Chemin non précisé")}</div>
         </div>
     `).join("");
+    const canShowMore = !normalized && visibleCount < matches.length;
+    const actions = canShowMore ? `
+        <div class="taxonomy-browser-actions">
+            <button type="button" id="presetTaxonomyShowMoreButton">Afficher ${Math.min(presetTaxonomyPageSize, matches.length - visibleCount)} code(s) de plus</button>
+            <button type="button" id="presetTaxonomyShowAllButton">Afficher tous les ${matches.length} codes</button>
+        </div>
+    ` : "";
+
+    browser.innerHTML = `${rows}${actions}`;
+    document.getElementById("presetTaxonomyShowMoreButton")?.addEventListener("click", () => {
+        presetTaxonomyVisibleCount = Math.min(matches.length, presetTaxonomyVisibleCount + presetTaxonomyPageSize);
+        renderPresetTaxonomyBrowser(query);
+    });
+    document.getElementById("presetTaxonomyShowAllButton")?.addEventListener("click", () => {
+        presetTaxonomyVisibleCount = matches.length;
+        renderPresetTaxonomyBrowser(query);
+    });
 }
 
 window.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("presetTaxonomySearch");
     renderPresetTaxonomyBrowser(searchInput?.value || "");
     searchInput?.addEventListener("input", () => {
+        presetTaxonomyVisibleCount = presetTaxonomyPageSize;
         renderPresetTaxonomyBrowser(searchInput.value);
+    });
+
+    const classPickerInputs = [
+        ["presetWhenClassCode", "presetWhenClassCodePicker"],
+        ["presetActionClassCode", "presetActionClassCodePicker"],
+        ["presetCreateClassCode", "presetCreateClassCodePicker"]
+    ];
+
+    function hidePresetClassPickers() {
+        document.querySelectorAll(".class-picker-panel").forEach((panel) => {
+            panel.hidden = true;
+        });
+    }
+
+    function renderPresetClassPicker(inputId, panelId) {
+        const input = document.getElementById(inputId);
+        const panel = document.getElementById(panelId);
+        if (!input || !panel) {
+            return;
+        }
+        const normalized = String(input.value || "").trim().toLowerCase();
+        const matches = presetTaxonomyEntries
+            .filter((entry) => !normalized || entry.search.includes(normalized))
+            .sort((left, right) => {
+                const leftStarts = left.code.toLowerCase().startsWith(normalized) || left.label.toLowerCase().startsWith(normalized) ? -1 : 0;
+                const rightStarts = right.code.toLowerCase().startsWith(normalized) || right.label.toLowerCase().startsWith(normalized) ? -1 : 0;
+                if (leftStarts !== rightStarts) {
+                    return leftStarts - rightStarts;
+                }
+                return left.code.localeCompare(right.code, "fr", { numeric: true, sensitivity: "base" });
+            })
+            .slice(0, 16);
+
+        if (!matches.length) {
+            panel.innerHTML = `<div class="class-picker-empty">Aucun code correspondant.</div>`;
+            panel.hidden = false;
+            return;
+        }
+
+        panel.innerHTML = matches.map((entry) => `
+            <button
+                type="button"
+                class="class-picker-option"
+                data-code="${escapePresetHTML(entry.code)}"
+                onmousedown="event.preventDefault()"
+            >
+                <strong>${escapePresetHTML(entry.code)} — ${escapePresetHTML(entry.label)}</strong>
+                <small>${escapePresetHTML(entry.path || "Chemin non précisé")}</small>
+            </button>
+        `).join("");
+
+        panel.querySelectorAll(".class-picker-option").forEach((button) => {
+            button.addEventListener("click", () => {
+                input.value = button.dataset.code || "";
+                panel.hidden = true;
+            });
+        });
+        panel.hidden = false;
+    }
+
+    for (const [inputId, panelId] of classPickerInputs) {
+        const input = document.getElementById(inputId);
+        const panel = document.getElementById(panelId);
+        if (!input || !panel) {
+            continue;
+        }
+        input.addEventListener("focus", () => renderPresetClassPicker(inputId, panelId));
+        input.addEventListener("input", () => renderPresetClassPicker(inputId, panelId));
+        input.addEventListener("blur", () => {
+            window.setTimeout(() => {
+                panel.hidden = true;
+            }, 140);
+        });
+    }
+
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest(".class-picker")) {
+            hidePresetClassPickers();
+        }
     });
 });
 </script>

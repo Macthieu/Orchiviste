@@ -63,6 +63,7 @@ UI :
 - API et exploitation : [OrchivisteAPI/README.md](OrchivisteAPI/README.md)
 - Analyse sémantique : [OrchivisteAnalyse/README.md](OrchivisteAnalyse/README.md)
 - Déploiement Mac mini : [deploy/mac-mini/README.md](deploy/mac-mini/README.md)
+- Feuille de route ML : [ml/IMPLEMENTATION_PLAN.md](ml/IMPLEMENTATION_PLAN.md)
 
 ## Validation recommandée
 

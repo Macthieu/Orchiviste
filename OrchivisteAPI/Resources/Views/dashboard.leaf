@@ -164,6 +164,24 @@
         .table-wrap {
             overflow-x: auto;
         }
+        .batch-row td {
+            background: #f6f1e7;
+            color: var(--ink);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .batch-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #ebf8f4;
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 700;
+        }
         .status-strip {
             margin: 12px 0 8px;
             display: grid;
@@ -358,14 +376,14 @@
 </header>
 <main class="wrap">
     <section class="grid">
-        <article class="card"><div>Total des tâches</div><div class="kpi">#(total_jobs)</div></article>
-        <article class="card"><div>En attente</div><div class="kpi">#(pending_jobs)</div></article>
-        <article class="card"><div>En cours</div><div class="kpi">#(running_jobs)</div></article>
-        <article class="card"><div>Revue requise</div><div class="kpi">#(needs_review_jobs)</div></article>
-        <article class="card"><div>Terminées</div><div class="kpi">#(completed_jobs)</div></article>
-        <article class="card"><div>Agents</div><div class="kpi">#(worker_count)</div></article>
-        <article class="card"><div>File d'ingestion</div><div class="kpi">#(queue_ingest_depth)</div></article>
-        <article class="card"><div>File de rejet</div><div class="kpi">#(queue_dead_letter_depth)</div></article>
+        <article class="card"><div>Total des tâches</div><div id="kpiTotalJobs" class="kpi">#(total_jobs)</div></article>
+        <article class="card"><div>En attente</div><div id="kpiPendingJobs" class="kpi">#(pending_jobs)</div></article>
+        <article class="card"><div>En cours</div><div id="kpiRunningJobs" class="kpi">#(running_jobs)</div></article>
+        <article class="card"><div>Revue requise</div><div id="kpiNeedsReviewJobs" class="kpi">#(needs_review_jobs)</div></article>
+        <article class="card"><div>Terminées</div><div id="kpiCompletedJobs" class="kpi">#(completed_jobs)</div></article>
+        <article class="card"><div>Agents</div><div id="kpiWorkerCount" class="kpi">#(worker_count)</div></article>
+        <article class="card"><div>File d'ingestion</div><div id="kpiQueueIngestDepth" class="kpi">#(queue_ingest_depth)</div></article>
+        <article class="card"><div>File de rejet</div><div id="kpiQueueDeadLetterDepth" class="kpi">#(queue_dead_letter_depth)</div></article>
     </section>
 
     <section class="card upload-card">
@@ -505,7 +523,23 @@
         </thead>
         <tbody id="recentJobsBody">
         #for(job in recent_jobs):
-        <tr>
+        <tr
+            data-job-id="#(job.id)"
+            data-status="#(job.status)"
+            data-status-label="#(job.status_label)"
+            data-source-kind="#(job.source_kind)"
+            data-suggested-class-code="#(job.suggested_class_code)"
+            data-confidence="#(job.confidence)"
+            data-ocr-ok="#(job.ocr_ok)"
+            data-resolved-file-name="#(job.resolved_file_name)"
+            data-metadata-ok="#(job.metadata_ok)"
+            data-saved-folder-path="#(job.saved_folder_path)"
+            data-updated-at="#(job.updated_at)"
+            data-batch-id="#(job.batch_id)"
+            data-batch-label="#(job.batch_label)"
+            data-batch-total="#(job.batch_total)"
+            data-batch-index="#(job.batch_index)"
+        >
             <td class="mono"><a href="/ui/jobs/#(job.id)">#(job.id)</a></td>
             <td class="status-#(job.status)">#(job.status_label)</td>
             <td>#(job.source_kind)</td>
@@ -977,17 +1011,16 @@ if (folderIngestForm) {
     });
 }
 
-const dashboardAutoRefreshSeconds = Number("#(dashboard_auto_refresh_seconds)");
+const dashboardAutoRefreshSeconds = Math.max(4, Number("#(dashboard_auto_refresh_seconds)") || 0);
 if (dashboardAutoRefreshSeconds > 0) {
     const refreshDashboard = async () => {
-        const activeElement = document.activeElement;
-        const isEditingForm = activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName);
-        if (document.hidden || isEditingForm) {
+        if (document.hidden) {
             window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
             return;
         }
         try {
             const response = await fetch("/ui/dashboard/recent-jobs", {
+                cache: "no-store",
                 headers: {
                     "Accept": "application/json"
                 }
@@ -1002,7 +1035,7 @@ if (dashboardAutoRefreshSeconds > 0) {
         }
         window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
     };
-    window.setTimeout(refreshDashboard, dashboardAutoRefreshSeconds * 1000);
+    refreshDashboard();
 }
 
 function renderRecentJobs(payload) {
@@ -1010,8 +1043,28 @@ function renderRecentJobs(payload) {
     if (countBadge) {
         countBadge.textContent = String(payload.recent_total_jobs || 0);
     }
+    renderDashboardKPIs(payload);
     renderRecentJobsStatus(payload);
     renderRecentJobsTable(payload);
+}
+
+function renderDashboardKPIs(payload) {
+    const mapping = [
+        ["kpiTotalJobs", payload.total_jobs],
+        ["kpiPendingJobs", payload.pending_jobs],
+        ["kpiRunningJobs", payload.running_jobs],
+        ["kpiNeedsReviewJobs", payload.needs_review_jobs],
+        ["kpiCompletedJobs", payload.completed_jobs],
+        ["kpiWorkerCount", payload.worker_count],
+        ["kpiQueueIngestDepth", payload.queue_ingest_depth],
+        ["kpiQueueDeadLetterDepth", payload.queue_dead_letter_depth]
+    ];
+    for (const [id, value] of mapping) {
+        const node = document.getElementById(id);
+        if (node) {
+            node.textContent = String(value ?? 0);
+        }
+    }
 }
 
 function renderRecentJobsStatus(payload) {
@@ -1068,8 +1121,41 @@ function renderRecentJobsTable(payload) {
         body.innerHTML = `<tr><td id="recentJobsEmptyState" colspan="10" class="empty-state">${message}</td></tr>`;
         return;
     }
-    body.innerHTML = payload.recent_jobs.map((job) => `
-        <tr>
+    body.innerHTML = buildRecentJobsRows(payload.recent_jobs);
+}
+
+function buildRecentJobsRows(jobs) {
+    let currentBatchId = "";
+    return jobs.map((job) => {
+        const batchId = String(job.batch_id || "").trim();
+        let batchHeader = "";
+        if (batchId && batchId !== currentBatchId) {
+            currentBatchId = batchId;
+            const batchLabel = escapeHTML(job.batch_label || "Lot importé");
+            const batchTotal = Number(job.batch_total || 0);
+            const batchSuffix = batchTotal > 0
+                ? `<span class="batch-badge">${batchTotal} document(s)</span>`
+                : "";
+            batchHeader = `<tr class="batch-row"><td colspan="10">${batchLabel}${batchSuffix}</td></tr>`;
+        }
+        return `${batchHeader}
+        <tr
+            data-job-id="${escapeHTML(job.id)}"
+            data-status="${escapeHTML(job.status)}"
+            data-status-label="${escapeHTML(job.status_label)}"
+            data-source-kind="${escapeHTML(job.source_kind)}"
+            data-suggested-class-code="${escapeHTML(job.suggested_class_code)}"
+            data-confidence="${escapeHTML(job.confidence)}"
+            data-ocr-ok="${escapeHTML(job.ocr_ok)}"
+            data-resolved-file-name="${escapeHTML(job.resolved_file_name)}"
+            data-metadata-ok="${escapeHTML(job.metadata_ok)}"
+            data-saved-folder-path="${escapeHTML(job.saved_folder_path)}"
+            data-updated-at="${escapeHTML(job.updated_at)}"
+            data-batch-id="${escapeHTML(job.batch_id || "")}"
+            data-batch-label="${escapeHTML(job.batch_label || "")}"
+            data-batch-total="${escapeHTML(String(job.batch_total || 0))}"
+            data-batch-index="${escapeHTML(String(job.batch_index || 0))}"
+        >
             <td class="mono"><a href="/ui/jobs/${job.id}">${job.id}</a></td>
             <td class="status-${job.status}">${job.status_label}</td>
             <td>${job.source_kind}</td>
@@ -1080,8 +1166,35 @@ function renderRecentJobsTable(payload) {
             <td>${job.metadata_ok}</td>
             <td class="cell-path mono">${escapeHTML(job.saved_folder_path)}</td>
             <td>${job.updated_at}</td>
-        </tr>
-    `).join("");
+        </tr>`;
+    }).join("");
+}
+
+function hydrateInitialRecentJobsTable() {
+    const body = document.getElementById("recentJobsBody");
+    if (!body) {
+        return;
+    }
+    const rows = Array.from(body.querySelectorAll("tr[data-job-id]")).map((row) => ({
+        id: row.dataset.jobId || "",
+        status: row.dataset.status || "",
+        status_label: row.dataset.statusLabel || "",
+        source_kind: row.dataset.sourceKind || "",
+        suggested_class_code: row.dataset.suggestedClassCode || "",
+        confidence: row.dataset.confidence || "",
+        ocr_ok: row.dataset.ocrOk || "",
+        resolved_file_name: row.dataset.resolvedFileName || "",
+        metadata_ok: row.dataset.metadataOk || "",
+        saved_folder_path: row.dataset.savedFolderPath || "",
+        updated_at: row.dataset.updatedAt || "",
+        batch_id: row.dataset.batchId || "",
+        batch_label: row.dataset.batchLabel || "",
+        batch_total: Number(row.dataset.batchTotal || 0),
+        batch_index: Number(row.dataset.batchIndex || 0)
+    }));
+    if (rows.length) {
+        body.innerHTML = buildRecentJobsRows(rows);
+    }
 }
 
 function escapeHTML(value) {
@@ -1092,6 +1205,10 @@ function escapeHTML(value) {
         .replaceAll("\"", "&quot;")
         .replaceAll("'", "&#39;");
 }
+
+window.addEventListener("DOMContentLoaded", () => {
+    hydrateInitialRecentJobsTable();
+});
 </script>
 </body>
 </html>

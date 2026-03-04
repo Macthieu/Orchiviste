@@ -34,6 +34,16 @@ private struct UIDashboardContext: Encodable {
 }
 
 private struct UIDashboardRecentJobsPayload: Content {
+    let total_jobs: Int
+    let pending_jobs: Int
+    let running_jobs: Int
+    let needs_review_jobs: Int
+    let completed_jobs: Int
+    let failed_jobs: Int
+    let cancelled_jobs: Int
+    let worker_count: Int
+    let queue_ingest_depth: Int
+    let queue_dead_letter_depth: Int
     let recent_jobs: [UIJobSummary]
     let recent_jobs_empty: Bool
     let recent_jobs_present: Bool
@@ -116,6 +126,10 @@ private struct UIJobSummary: Content {
     let metadata_ok: String
     let saved_folder_path: String
     let updated_at: String
+    let batch_id: String
+    let batch_label: String
+    let batch_total: Int
+    let batch_index: Int
 }
 
 private struct UIKeyValueSummary: Encodable {
@@ -631,7 +645,13 @@ func registerUIRoutes(_ app: Application) {
             }
 
             var ingested = 0
-            for file in files {
+            let batchID = "ui-batch-\(formatUploadTimestamp(Date()))-\(UUID().uuidString.prefix(8))"
+            let batchFolderLabel = inputFolderRaw
+                .flatMap { nonEmptyString(URL(fileURLWithPath: $0).lastPathComponent) }
+                ?? files.first.map { $0.deletingPathExtension().lastPathComponent }
+                ?? "lot"
+            let batchLabel = "Lot \(batchFolderLabel)"
+            for (index, file) in files.enumerated() {
                 let requestBody = IngestRequest(
                     fileURL: file.path,
                     source: JobSource(kind: "local", url: nil, site: nil, library: nil, itemId: nil),
@@ -650,7 +670,13 @@ func registerUIRoutes(_ app: Application) {
                 )
                 if let merged = await req.application.appState.mergeAnalysisChamps(
                     jobId: taskId,
-                    values: buildFolderImportRouteHints(outputRoot: preferredOutputRoot)
+                    values: buildFolderImportRouteHints(
+                        outputRoot: preferredOutputRoot,
+                        batchID: batchID,
+                        batchLabel: batchLabel,
+                        batchTotal: files.count,
+                        batchIndex: index + 1
+                    )
                 ) {
                     try await JobPersistenceRepository.upsert(job: merged, on: req.db)
                 }
@@ -1217,32 +1243,23 @@ func registerUIRoutes(_ app: Application) {
     }
 
     app.get("ui") { req async throws -> View in
-        let jobs = try await loadJobRecords(req: req, limit: 100)
-        let workerCount = try await loadWorkerRecords(req: req).count
-        let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
+        let recentPayload = try await buildDashboardRecentJobsPayload(req: req)
         let routingSettings = ConfigLoader.loadRoutingLocalSettings()
         let uploadNotice = req.query[String.self, at: "upload_notice"]
         let uploadError = req.query[String.self, at: "upload_error"]
         let dashboardNotice = req.query[String.self, at: "dashboard_notice"]
         let dashboardError = req.query[String.self, at: "dashboard_error"]
-
-        let counts = Dictionary(grouping: jobs, by: \.status)
-        let recentPayload = buildDashboardRecentJobsPayload(
-            jobs: jobs,
-            queueIngestDepth: queueStats.ingest_depth,
-            dashboardState: ConfigLoader.loadDashboardState()
-        )
         let context = UIDashboardContext(
-            total_jobs: jobs.count,
-            pending_jobs: counts[.pending]?.count ?? 0,
-            running_jobs: counts[.running]?.count ?? 0,
-            needs_review_jobs: counts[.needs_review]?.count ?? 0,
-            completed_jobs: counts[.completed]?.count ?? 0,
-            failed_jobs: counts[.failed]?.count ?? 0,
-            cancelled_jobs: counts[.cancelled]?.count ?? 0,
-            worker_count: workerCount,
-            queue_ingest_depth: queueStats.ingest_depth,
-            queue_dead_letter_depth: queueStats.dead_letter_depth,
+            total_jobs: recentPayload.total_jobs,
+            pending_jobs: recentPayload.pending_jobs,
+            running_jobs: recentPayload.running_jobs,
+            needs_review_jobs: recentPayload.needs_review_jobs,
+            completed_jobs: recentPayload.completed_jobs,
+            failed_jobs: recentPayload.failed_jobs,
+            cancelled_jobs: recentPayload.cancelled_jobs,
+            worker_count: recentPayload.worker_count,
+            queue_ingest_depth: recentPayload.queue_ingest_depth,
+            queue_dead_letter_depth: recentPayload.queue_dead_letter_depth,
             recent_jobs: recentPayload.recent_jobs,
             recent_jobs_empty: recentPayload.recent_jobs_empty,
             recent_jobs_present: recentPayload.recent_jobs_present,
@@ -1741,10 +1758,13 @@ private func loadJobs(req: Request, limit: Int) async throws -> [UIJobSummary] {
 
 private func buildDashboardRecentJobsPayload(req: Request) async throws -> UIDashboardRecentJobsPayload {
     let jobs = try await loadJobRecords(req: req, limit: 500)
+    let workerCount = (try? await loadWorkerRecords(req: req).count) ?? 0
     let queueStats = await RedisQueueService.queueStats(application: req.application, logger: req.logger)
     return buildDashboardRecentJobsPayload(
         jobs: jobs,
         queueIngestDepth: queueStats.ingest_depth,
+        queueDeadLetterDepth: queueStats.dead_letter_depth,
+        workerCount: workerCount,
         dashboardState: ConfigLoader.loadDashboardState()
     )
 }
@@ -1752,9 +1772,12 @@ private func buildDashboardRecentJobsPayload(req: Request) async throws -> UIDas
 private func buildDashboardRecentJobsPayload(
     jobs: [JobRecord],
     queueIngestDepth: Int,
+    queueDeadLetterDepth: Int,
+    workerCount: Int,
     dashboardState: UIDashboardState?
 ) -> UIDashboardRecentJobsPayload {
     let recentCutoff = dashboardState?.recent_jobs_cleared_at
+    let counts = Dictionary(grouping: jobs, by: \.status)
     let recentJobRecords = jobs
         .filter { job in
             guard let recentCutoff else { return true }
@@ -1768,6 +1791,16 @@ private func buildDashboardRecentJobsPayload(
         queueIngestDepth > 0
 
     return UIDashboardRecentJobsPayload(
+        total_jobs: jobs.count,
+        pending_jobs: counts[.pending]?.count ?? 0,
+        running_jobs: counts[.running]?.count ?? 0,
+        needs_review_jobs: counts[.needs_review]?.count ?? 0,
+        completed_jobs: counts[.completed]?.count ?? 0,
+        failed_jobs: counts[.failed]?.count ?? 0,
+        cancelled_jobs: counts[.cancelled]?.count ?? 0,
+        worker_count: workerCount,
+        queue_ingest_depth: queueIngestDepth,
+        queue_dead_letter_depth: queueDeadLetterDepth,
         recent_jobs: recentJobs,
         recent_jobs_empty: recentJobs.isEmpty,
         recent_jobs_present: !recentJobs.isEmpty,
@@ -1785,7 +1818,11 @@ private func buildDashboardRecentJobsPayload(
 }
 
 private func makeUIJobSummary(_ job: JobRecord) -> UIJobSummary {
-    UIJobSummary(
+    let batchID = routeValue(job, key: "ui.batch_id") ?? ""
+    let batchLabel = routeValue(job, key: "ui.batch_label") ?? ""
+    let batchTotal = Int(routeValue(job, key: "ui.batch_total") ?? "") ?? 0
+    let batchIndex = Int(routeValue(job, key: "ui.batch_index") ?? "") ?? 0
+    return UIJobSummary(
         id: job.id.uuidString,
         status: job.status.rawValue,
         status_label: localizedJobStatus(job.status.rawValue),
@@ -1799,7 +1836,11 @@ private func makeUIJobSummary(_ job: JobRecord) -> UIJobSummary {
             ?? "-",
         metadata_ok: localizedMetadataFlag(metadataStatus(for: job)),
         saved_folder_path: routeSavedFolderPath(job) ?? "-",
-        updated_at: formatTimestamp(job.updatedAt)
+        updated_at: formatTimestamp(job.updatedAt),
+        batch_id: batchID,
+        batch_label: batchLabel,
+        batch_total: batchTotal,
+        batch_index: batchIndex
     )
 }
 
@@ -2381,10 +2422,20 @@ private func resolvedRequestedOutputRoot(raw: String?, defaultRoot: String) -> S
         .path
 }
 
-private func buildFolderImportRouteHints(outputRoot: String) -> [String: String] {
+private func buildFolderImportRouteHints(
+    outputRoot: String,
+    batchID: String,
+    batchLabel: String,
+    batchTotal: Int,
+    batchIndex: Int
+) -> [String: String] {
     [
         "route.auto_requested": "true",
-        "route.requested_output_root": outputRoot
+        "route.requested_output_root": outputRoot,
+        "ui.batch_id": batchID,
+        "ui.batch_label": batchLabel,
+        "ui.batch_total": "\(batchTotal)",
+        "ui.batch_index": "\(batchIndex)"
     ]
 }
 
