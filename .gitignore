@@ -5,6 +5,15 @@
 venv/
 env/
 
+# Swift Package Manager / Swift build artifacts
+.build/
+**/.build/
+.swiftpm/
+**/.swiftpm/
+
+# Local editor settings
+.vscode/
+
 # Python cache / compiled files
 __pycache__/
 *.py[cod]
@@ -24,6 +33,10 @@ dist/
 # ML artifacts (generated)
 ml/models-coreml/*.mlmodel
 ml/models-coreml/*.mlpackage
+ml/models-coreml/*.mlmodelc
+
+# Local notes / working material
+orchiviste_discussion_resume_coreml.pdf
 
 # Optional local experiment outputs
 ml/tmp/
