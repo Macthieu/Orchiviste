@@ -195,54 +195,159 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
     public let provider_id = "coreml"
     private let modelURL: URL?
     private let ruleLabelMap: [String: String]
+    private let configuredInputName: String?
+    private let configuredOutputName: String?
+    private let configuredVectorSize: Int?
     private lazy var model: MLModel? = loadModel()
 
-    public init(modelURL: URL? = nil, ruleLabelMap: [String: String] = [:]) {
+    public init(
+        modelURL: URL? = nil,
+        ruleLabelMap: [String: String] = [:],
+        inputName: String? = nil,
+        outputName: String? = nil,
+        vectorSize: Int? = nil
+    ) {
         self.modelURL = modelURL ?? CoreMLNamingPredictionProvider.defaultModelURL()
         self.ruleLabelMap = ruleLabelMap
+        self.configuredInputName = inputName ?? ProcessInfo.processInfo.environment["ORCHIVISTE_NAMING_COREML_INPUT_NAME"]
+        self.configuredOutputName = outputName ?? ProcessInfo.processInfo.environment["ORCHIVISTE_NAMING_COREML_OUTPUT_NAME"]
+        if let vectorSize {
+            self.configuredVectorSize = max(1, vectorSize)
+        } else if let raw = ProcessInfo.processInfo.environment["ORCHIVISTE_NAMING_COREML_VECTOR_SIZE"],
+                  let parsed = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  parsed > 0 {
+            self.configuredVectorSize = parsed
+        } else {
+            self.configuredVectorSize = nil
+        }
     }
 
     public func predict(
         request: NamingPredictionRequest,
         candidates: [LoadedNamingRule]
     ) -> [NamingRulePrediction] {
-        guard let model,
-              let inputName = model.modelDescription.inputDescriptionsByName.first(where: { $0.value.type == .string })?.key else {
+        guard let model else {
             return []
+        }
+
+        if let predictions = predictWithStringInput(model: model, request: request, candidates: candidates),
+           !predictions.isEmpty {
+            return predictions
+        }
+
+        if let predictions = predictWithVectorInput(model: model, request: request, candidates: candidates),
+           !predictions.isEmpty {
+            return predictions
+        }
+
+        return []
+    }
+
+    private func predictWithStringInput(
+        model: MLModel,
+        request: NamingPredictionRequest,
+        candidates: [LoadedNamingRule]
+    ) -> [NamingRulePrediction]? {
+        let inputName = configuredInputName ?? model.modelDescription.inputDescriptionsByName.first(where: { $0.value.type == .string })?.key
+        guard let inputName else {
+            return nil
         }
 
         guard let provider = try? MLDictionaryFeatureProvider(dictionary: [inputName: MLFeatureValue(string: request.text)]),
               let output = try? model.prediction(from: provider) else {
-            return []
+            return nil
         }
 
         let candidateIDs = Set(candidates.map(\.rule_id))
         if let probabilities = firstProbabilityDictionary(from: output) {
-            return probabilities.compactMap { rawLabel, score in
+            let predictions = probabilities.compactMap { entry -> NamingRulePrediction? in
+                let (rawLabel, score) = entry
                 let label = mappedRuleID(for: String(describing: rawLabel))
                 guard candidateIDs.contains(label) else { return nil }
                 return NamingRulePrediction(
                     rule_id: label,
                     score: max(0, min(1, score)),
                     source: provider_id,
-                    reasons: ["scoring Core ML"]
+                    reasons: ["scoring Core ML texte"]
                 )
             }
+            return predictions.isEmpty ? nil : predictions
         }
 
         if let label = firstLabel(from: output) {
             let ruleID = mappedRuleID(for: label)
-            guard candidateIDs.contains(ruleID) else { return [] }
+            guard candidateIDs.contains(ruleID) else { return nil }
             return [
                 NamingRulePrediction(
                     rule_id: ruleID,
                     score: 0.9,
                     source: provider_id,
-                    reasons: ["classification Core ML"]
+                    reasons: ["classification Core ML texte"]
                 )
             ]
         }
-        return []
+        return nil
+    }
+
+    private func predictWithVectorInput(
+        model: MLModel,
+        request: NamingPredictionRequest,
+        candidates: [LoadedNamingRule]
+    ) -> [NamingRulePrediction]? {
+        let inputName = configuredInputName
+            ?? model.modelDescription.inputDescriptionsByName.first(where: { $0.value.type == .multiArray })?.key
+        guard let inputName else {
+            return nil
+        }
+
+        let inputDescription = model.modelDescription.inputDescriptionsByName[inputName]
+        let vectorSize = configuredVectorSize
+            ?? inferredVectorSize(from: inputDescription)
+            ?? 16
+        let featureVector = Self.defaultFeatureVector(
+            request: request,
+            candidates: candidates,
+            targetLength: vectorSize
+        )
+
+        guard let featureProvider = try? vectorFeatureProvider(
+            featureVector: featureVector,
+            inputName: inputName
+        ),
+        let output = try? model.prediction(from: featureProvider),
+        let scores = scoreArray(from: output, preferredName: configuredOutputName) else {
+            return nil
+        }
+
+        let count = min(scores.count, candidates.count)
+        guard count > 0 else {
+            return []
+        }
+
+        return (0..<count).map { index in
+            NamingRulePrediction(
+                rule_id: candidates[index].rule_id,
+                score: normalizedVectorScore(scores[index]),
+                source: provider_id,
+                reasons: ["scoring Core ML vectoriel"]
+            )
+        }
+    }
+
+    private func vectorFeatureProvider(
+        featureVector: [Double],
+        inputName: String
+    ) throws -> MLDictionaryFeatureProvider {
+        let array = try MLMultiArray(
+            shape: [NSNumber(value: 1), NSNumber(value: featureVector.count)],
+            dataType: .double
+        )
+        for (index, value) in featureVector.enumerated() {
+            array[index] = NSNumber(value: value)
+        }
+        return try MLDictionaryFeatureProvider(dictionary: [
+            inputName: MLFeatureValue(multiArray: array)
+        ])
     }
 
     private func mappedRuleID(for rawLabel: String) -> String {
@@ -255,6 +360,42 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
     private func loadModel() -> MLModel? {
         guard let modelURL else { return nil }
         return try? MLModel(contentsOf: modelURL)
+    }
+
+    private func inferredVectorSize(from description: MLFeatureDescription?) -> Int? {
+        guard let shape = description?.multiArrayConstraint?.shape else {
+            return nil
+        }
+        let values = shape.map(\.intValue)
+        if let last = values.last, last > 0 {
+            return last
+        }
+        return nil
+    }
+
+    private func scoreArray(
+        from output: MLFeatureProvider,
+        preferredName: String?
+    ) -> [Double]? {
+        if let preferredName,
+           let feature = output.featureValue(for: preferredName)?.multiArrayValue {
+            return (0..<feature.count).map { feature[$0].doubleValue }
+        }
+        for name in output.featureNames {
+            guard let feature = output.featureValue(for: name)?.multiArrayValue else { continue }
+            return (0..<feature.count).map { feature[$0].doubleValue }
+        }
+        return nil
+    }
+
+    private func normalizedVectorScore(_ raw: Double) -> Double {
+        if raw.isNaN || raw.isInfinite {
+            return 0
+        }
+        if raw >= 0, raw <= 1 {
+            return raw
+        }
+        return 1.0 / (1.0 + exp(-raw))
     }
 
     private func firstProbabilityDictionary(from output: MLFeatureProvider) -> [String: Double]? {
@@ -292,12 +433,72 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
         }
         return URL(fileURLWithPath: raw)
     }
+
+    static func defaultFeatureVector(
+        request: NamingPredictionRequest,
+        candidates: [LoadedNamingRule],
+        targetLength: Int = 16
+    ) -> [Double] {
+        let text = request.text
+        let lowered = text.lowercased()
+        let characters = Array(text)
+        let wordCount = max(1, text.split { $0.isWhitespace || $0.isNewline }.count)
+        let uppercaseCount = characters.filter(\.isUppercase).count
+        let digitCount = characters.filter(\.isNumber).count
+        let dashCount = characters.filter { "-–—".contains($0) }.count
+        let lines = max(1, text.split(separator: "\n").count)
+        let uniqueWords = Set(
+            lowered.split { !$0.isLetter && !$0.isNumber }
+                .map(String.init)
+                .filter { !$0.isEmpty }
+        ).count
+
+        let keywordGroups = [
+            ["résolution", "resolution", "procès-verbal", "proces-verbal", "conseil municipal"],
+            ["entente", "contrat", "convention", "bail", "protocole", "avenant"],
+            ["avis de motion", "règlement", "reglement"],
+            ["dépôt", "declaration", "rapport financier"]
+        ]
+
+        var features: [Double] = [
+            min(1.0, Double(text.count) / 4000.0),
+            min(1.0, Double(wordCount) / 800.0),
+            min(1.0, Double(lines) / 120.0),
+            Double(uppercaseCount) / Double(max(1, characters.count)),
+            Double(digitCount) / Double(max(1, characters.count)),
+            Double(dashCount) / Double(max(1, characters.count)),
+            min(1.0, Double(uniqueWords) / Double(wordCount)),
+            min(1.0, Double(request.sample_count) / 25.0),
+            min(1.0, Double(candidates.count) / 20.0),
+            request.metadata?.fileName?.lowercased().hasSuffix(".pdf") == true ? 1.0 : 0.0,
+            request.metadata?.originalName?.lowercased().hasSuffix(".pdf") == true ? 1.0 : 0.0,
+            request.sample_file_names.isEmpty ? 0.0 : 1.0
+        ]
+
+        features.append(contentsOf: keywordGroups.map { group in
+            group.contains { lowered.contains($0) } ? 1.0 : 0.0
+        })
+
+        if features.count > targetLength {
+            return Array(features.prefix(targetLength))
+        }
+        if features.count < targetLength {
+            features.append(contentsOf: repeatElement(0.0, count: targetLength - features.count))
+        }
+        return features
+    }
 }
 #else
 public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
     public let provider_id = "coreml"
 
-    public init(modelURL: URL? = nil, ruleLabelMap: [String: String] = [:]) {}
+    public init(
+        modelURL: URL? = nil,
+        ruleLabelMap: [String: String] = [:],
+        inputName: String? = nil,
+        outputName: String? = nil,
+        vectorSize: Int? = nil
+    ) {}
 
     public func predict(
         request: NamingPredictionRequest,

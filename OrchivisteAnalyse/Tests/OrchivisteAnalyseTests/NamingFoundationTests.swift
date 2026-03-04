@@ -150,6 +150,38 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertGreaterThan(ranked.first?.score ?? 0, 0.1)
     }
 
+    func testCoreMLDefaultFeatureVectorHasExpectedShape() {
+        let request = NamingPredictionRequest(
+            text: """
+            EXTRAIT DU PROCÈS-VERBAL D'UNE SÉANCE ORDINAIRE DU CONSEIL MUNICIPAL
+            Résolution n° 2023-436
+            FINANCEMENT PAR LE FONDS DE ROULEMENT
+            """,
+            metadata: NamingSourceMetadata(fileName: "resolution.pdf", originalName: "resolution.pdf"),
+            sample_count: 3,
+            sample_file_names: ["resolution-1.pdf", "resolution-2.pdf"]
+        )
+        let candidates = NamingFoundationSeeds.bootstrapFallbackRules().map {
+            LoadedNamingRule(
+                rule_id: $0.id,
+                version: $0.version,
+                status: .active,
+                source: .configFile,
+                definition: $0
+            )
+        }
+
+        let vector = CoreMLNamingPredictionProvider.defaultFeatureVector(
+            request: request,
+            candidates: candidates,
+            targetLength: 16
+        )
+
+        XCTAssertEqual(vector.count, 16)
+        XCTAssertEqual(vector[9], 1.0)
+        XCTAssertEqual(vector[12], 1.0)
+    }
+
     func testRuntimeCatalogFallsBackWhenNothingIsLoaded() {
         let catalog = NamingRuntimeCatalogBuilder().build(
             activeRules: [],
