@@ -364,6 +364,7 @@ enum IDPSemanticPipeline {
         typeDoc: String
     ) -> ExtractedSemanticFields {
         var extracted = ExtractedSemanticFields()
+        let datePattern = #"(?i)\b(?:20\d{2}[-/]\d{2}[-/]\d{2}|\d{4}-\d{2}-\d{2}|[0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})\b"#
 
         assignFirstMatch(
             key: "montant_total",
@@ -391,7 +392,7 @@ enum IDPSemanticPipeline {
         )
         assignFirstMatch(
             key: "date_document",
-            pattern: #"(?i)\b(?:20\d{2}[-/]\d{2}[-/]\d{2}|\d{4}-\d{2}-\d{2}|[0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})\b"#,
+            pattern: datePattern,
             source: "regex_document_date",
             rawText: rawText,
             confidence: 0.78,
@@ -411,6 +412,12 @@ enum IDPSemanticPipeline {
             source: "regex_issuer_heading",
             rawText: rawText,
             confidence: 0.72,
+            into: &extracted
+        )
+        extractMunicipalAdministrativeFields(
+            rawText: rawText,
+            typeDoc: typeDoc,
+            datePattern: datePattern,
             into: &extracted
         )
         if extracted.fields["document_objet"] == nil,
@@ -433,6 +440,193 @@ enum IDPSemanticPipeline {
         }
 
         return extracted
+    }
+
+    private static func extractMunicipalAdministrativeFields(
+        rawText: String,
+        typeDoc: String,
+        datePattern: String,
+        into extracted: inout ExtractedSemanticFields
+    ) {
+        let fieldPatterns: [(key: String, pattern: String, source: String, confidence: Double)] = [
+            (
+                "annee_financiere",
+                #"(?i)\b(?:annee|année)\s+financiere\s*[:\-]?\s*((?:19|20)\d{2}(?:\s*[-/]\s*(?:19|20)\d{2})?)\b"#,
+                "regex_fiscal_year",
+                0.74
+            ),
+            (
+                "numero_du_lot",
+                #"(?i)\blot(?:s)?\s*(?:n[°o]\s*)?(?:num[eé]ro\s*)?([0-9][0-9 \u00A0]{2,}(?:[-/][0-9]{1,6})?)\b"#,
+                "regex_lot_number",
+                0.72
+            ),
+            (
+                "numero_de_transaction",
+                #"(?i)\b(?:num[eé]ro\s+de\s+transaction|transaction)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_transaction_number",
+                0.76
+            ),
+            (
+                "numero_de_reglement",
+                #"(?i)\b(?:r[eè]glement)\s*(?:n[°o]|no|num[eé]ro)?\s*[:#\-]?\s*([A-Z]{0,5}\s*[-/]?\s*[0-9]{1,5}(?:[-/][0-9]{1,5})?)\b"#,
+                "regex_regulation_number",
+                0.78
+            ),
+            (
+                "numero_reference_emission",
+                #"(?i)\b(?:num[eé]ro\s+de\s+r[eé]f[ée]rence\s+d[’']?[ée]mission|r[eé]f[ée]rence\s+d[’']?[ée]mission)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_issue_reference_number",
+                0.73
+            ),
+            (
+                "nom_du_service",
+                #"(?im)^\s*(?:nom\s+du\s+service|service)\s*[:\-]\s*([^\n\r]{3,90})$"#,
+                "regex_service_name",
+                0.65
+            ),
+            (
+                "nom_du_sous_service",
+                #"(?im)^\s*(?:nom\s+du\s+sous[- ]service|sous[- ]service)\s*[:\-]\s*([^\n\r]{3,90})$"#,
+                "regex_sub_service_name",
+                0.65
+            ),
+            (
+                "numero_du_poste_budgetaire",
+                #"(?i)\b(?:num[eé]ro\s+du\s+poste\s+budg[eé]taire|poste\s+budg[eé]taire)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{1,})\b"#,
+                "regex_budget_line_number",
+                0.76
+            ),
+            (
+                "numero_de_projet",
+                #"(?i)\b(?:num[eé]ro\s+de\s+projet|projet)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_project_number",
+                0.76
+            ),
+            (
+                "numero_comptable",
+                #"(?i)\b(?:num[eé]ro\s+comptable|compte\s+comptable)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_accounting_number",
+                0.75
+            ),
+            (
+                "numero_entente",
+                #"(?i)\b(?:num[eé]ro\s+d[’']?entente|entente)\s*(?:n[°o]|no|num[eé]ro)?\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_agreement_number",
+                0.71
+            ),
+            (
+                "numero_de_fournisseur",
+                #"(?i)\b(?:num[eé]ro\s+de\s+fournisseur|fournisseur)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_supplier_number",
+                0.76
+            ),
+            (
+                "numero_de_facture_fournisseur",
+                #"(?i)\b(?:num[eé]ro\s+de\s+facture(?:\s+fournisseur)?|facture)\s*(?:n[°o]|no|num[eé]ro)?\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_supplier_invoice_number",
+                0.80
+            ),
+            (
+                "numero_de_demande_de_prix",
+                #"(?i)\b(?:num[eé]ro\s+de\s+demande\s+de\s+prix|demande\s+de\s+prix|appel\s+d[’']offres)\s*(?:n[°o]|no|num[eé]ro)?\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_rfq_number",
+                0.77
+            ),
+            (
+                "numero_de_reception",
+                #"(?i)\b(?:num[eé]ro\s+de\s+r[eé]ception|r[eé]ception)\s*[:#\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})\b"#,
+                "regex_receipt_number",
+                0.72
+            ),
+            (
+                "date_de_debut",
+                #"(?i)\b(?:date\s+de\s+d[ée]but|d[ée]but(?:\s+du)?|entr[eé]e?\s+en\s+vigueur\s+le)\s*[:\-]?\s*(\d{1,2}\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+(?:19|20)\d{2}|(?:19|20)\d{2}[-/]\d{2}[-/]\d{2})"#,
+                "regex_start_date",
+                0.75
+            ),
+            (
+                "date_de_fin",
+                #"(?i)\b(?:date\s+de\s+fin|fin(?:\s+du)?|se\s+termine\s+le|jusqu[’']?au)\s*[:\-]?\s*(\d{1,2}\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+(?:19|20)\d{2}|(?:19|20)\d{2}[-/]\d{2}[-/]\d{2})"#,
+                "regex_end_date",
+                0.75
+            ),
+            (
+                "annee_de_fermeture",
+                #"(?i)\b(?:annee|année)\s+de\s+fermeture\s*[:\-]?\s*((?:19|20)\d{2})\b"#,
+                "regex_closing_year",
+                0.74
+            ),
+            (
+                "annee_de_reception",
+                #"(?i)\b(?:annee|année)\s+de\s+r[eé]ception\s*[:\-]?\s*((?:19|20)\d{2})\b"#,
+                "regex_receipt_year",
+                0.74
+            )
+        ]
+
+        for item in fieldPatterns {
+            assignFirstMatchIfMissing(
+                key: item.key,
+                pattern: item.pattern,
+                source: item.source,
+                rawText: rawText,
+                confidence: item.confidence,
+                into: &extracted
+            )
+        }
+
+        if extracted.fields["annee_financiere"] == nil {
+            if let fromDate = firstYear(in: extracted.fields["date_document"]) {
+                extracted.fields["annee_financiere"] = fromDate
+                extracted.fieldSources["annee_financiere"] = AnalysisFieldSource(
+                    source: "derived_fiscal_year_from_date_document",
+                    confidence: 0.61,
+                    evidence: clippedEvidence(fromDate)
+                )
+            } else if let fallbackYear = firstMatch(in: rawText, pattern: #"\b((?:19|20)\d{2})\b"#) {
+                extracted.fields["annee_financiere"] = fallbackYear
+                extracted.fieldSources["annee_financiere"] = AnalysisFieldSource(
+                    source: "regex_fallback_year",
+                    confidence: 0.55,
+                    evidence: clippedEvidence(fallbackYear)
+                )
+            }
+        }
+
+        if typeDoc == "Entente" || typeDoc == "Autre" {
+            assignFirstMatchIfMissing(
+                key: "cocontractant",
+                pattern: #"(?is)\bET\s*:\s*([^\n\r]{3,120})"#,
+                source: "regex_counterparty_block",
+                rawText: rawText,
+                confidence: 0.66,
+                into: &extracted
+            )
+        }
+
+        if extracted.fields["periode"] == nil {
+            if let range = firstMatch(
+                in: rawText,
+                pattern: #"(?i)\b((?:19|20)\d{2}\s*[-/]\s*(?:19|20)\d{2})\b"#
+            ) {
+                extracted.fields["periode"] = range.replacingOccurrences(of: " ", with: "")
+                extracted.fieldSources["periode"] = AnalysisFieldSource(
+                    source: "regex_year_range",
+                    confidence: 0.67,
+                    evidence: clippedEvidence(range)
+                )
+            } else if let startYear = firstYear(in: extracted.fields["date_de_debut"]),
+                      let endYear = firstYear(in: extracted.fields["date_de_fin"]) {
+                let derivedRange = "\(startYear)-\(endYear)"
+                extracted.fields["periode"] = derivedRange
+                extracted.fieldSources["periode"] = AnalysisFieldSource(
+                    source: "derived_period_from_start_end_dates",
+                    confidence: 0.63,
+                    evidence: clippedEvidence(derivedRange)
+                )
+            }
+        }
     }
 
     private static func validate(
@@ -634,6 +828,27 @@ enum IDPSemanticPipeline {
             source: source,
             confidence: confidence,
             evidence: clippedEvidence(value)
+        )
+    }
+
+    private static func assignFirstMatchIfMissing(
+        key: String,
+        pattern: String,
+        source: String,
+        rawText: String,
+        confidence: Double,
+        into extracted: inout ExtractedSemanticFields
+    ) {
+        guard extracted.fields[key] == nil else {
+            return
+        }
+        assignFirstMatch(
+            key: key,
+            pattern: pattern,
+            source: source,
+            rawText: rawText,
+            confidence: confidence,
+            into: &extracted
         )
     }
 
@@ -861,6 +1076,13 @@ enum IDPSemanticPipeline {
             text: summaryParts.joined(separator: " "),
             highlights: orderedUnique(highlights).prefixing(4)
         )
+    }
+
+    private static func firstYear(in raw: String?) -> String? {
+        guard let value = nonEmpty(raw) else {
+            return nil
+        }
+        return firstMatch(in: value, pattern: #"\b((?:19|20)\d{2})\b"#)
     }
 
     private static func sanitizedSemanticDisplayValue(_ raw: String?) -> String? {

@@ -235,6 +235,8 @@ private struct UIJobViewerContext: Encodable {
     let extended_metadata_present: Bool
     let accounting_metadata: [UIKeyValueSummary]
     let accounting_metadata_present: Bool
+    let municipal_metadata: [UIKeyValueSummary]
+    let municipal_metadata_present: Bool
     let metadata_complements: [UIKeyValueSummary]
     let metadata_complements_present: Bool
     let suggested_metadata_json: String
@@ -1487,12 +1489,14 @@ func registerUIRoutes(_ app: Application) {
         let metadataItems = suggestedMetadataItems(for: job)
         let extendedMetadataItems = extendedMetadataItems(for: job)
         let accountingMetadataItems = accountingMetadataItems(for: job)
+        let municipalMetadataItems = municipalAdministrationMetadataItems(for: job)
         let metadataComplements = metadataComplementItems(
             for: job,
             excluding: Set(
                 metadataItems.map(\.label)
                     + extendedMetadataItems.map(\.label)
                     + accountingMetadataItems.map(\.label)
+                    + municipalMetadataItems.map(\.label)
             )
         )
         let reviewReasonItems = explainReviewReasons(job.analysisChamps)
@@ -1551,6 +1555,8 @@ func registerUIRoutes(_ app: Application) {
             extended_metadata_present: !extendedMetadataItems.isEmpty,
             accounting_metadata: accountingMetadataItems,
             accounting_metadata_present: !accountingMetadataItems.isEmpty,
+            municipal_metadata: municipalMetadataItems,
+            municipal_metadata_present: !municipalMetadataItems.isEmpty,
             metadata_complements: metadataComplements,
             metadata_complements_present: !metadataComplements.isEmpty,
             suggested_metadata_json: suggestedMetadataJSON(for: job),
@@ -2216,6 +2222,74 @@ private func accountingMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] 
     }
 }
 
+private func municipalAdministrationMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] {
+    let fiscalYear = preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+        "metadata.annee_financiere", "annee_financiere", "fiscal_year", "budget_year"
+    ], fallback: inferredFiscalYear(for: job))
+
+    let metadata: [(String, String?)] = [
+        ("Année financière", fiscalYear),
+        ("Numéro du lot", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_du_lot", "numero_du_lot", "metadata.numero_lot", "numero_lot", "lot_number"
+        ], fallback: "")),
+        ("Numéro de transaction", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_transaction", "numero_de_transaction", "metadata.numero_transaction", "numero_transaction", "transaction_number"
+        ], fallback: "")),
+        ("Numéro de règlement", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_reglement", "numero_de_reglement", "metadata.numero_reglement", "numero_reglement", "regulation_number"
+        ], fallback: "")),
+        ("Numéro de référence d'émission", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_reference_emission", "numero_reference_emission", "metadata.numero_de_reference_emission", "numero_de_reference_emission", "issue_reference_number"
+        ], fallback: "")),
+        ("Nom du service", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.nom_du_service", "nom_du_service", "metadata.service", "service", "service_name"
+        ], fallback: "")),
+        ("Nom du sous-service", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.nom_du_sous_service", "nom_du_sous_service", "metadata.sous_service", "sous_service", "sub_service_name"
+        ], fallback: "")),
+        ("Numéro du poste budgétaire", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_du_poste_budgetaire", "numero_du_poste_budgetaire", "metadata.numero_poste_budgetaire", "numero_poste_budgetaire", "budget_line_number"
+        ], fallback: "")),
+        ("Numéro de projet", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_projet", "numero_de_projet", "metadata.numero_projet", "numero_projet", "project_number"
+        ], fallback: "")),
+        ("Numéro comptable", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_comptable", "numero_comptable", "accounting_number"
+        ], fallback: "")),
+        ("Numéro d'entente", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_entente", "numero_entente", "agreement_number"
+        ], fallback: "")),
+        ("Numéro de fournisseur", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_fournisseur", "numero_de_fournisseur", "metadata.numero_fournisseur", "numero_fournisseur", "supplier_number", "vendor_number"
+        ], fallback: "")),
+        ("Numéro de facture fournisseur", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_facture_fournisseur", "numero_de_facture_fournisseur", "metadata.numero_facture_fournisseur", "numero_facture_fournisseur", "supplier_invoice_number"
+        ], fallback: "")),
+        ("Numéro de demande de prix", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_demande_de_prix", "numero_de_demande_de_prix", "metadata.numero_demande_de_prix", "numero_demande_de_prix", "rfq_number"
+        ], fallback: "")),
+        ("Numéro de réception", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_de_reception", "numero_de_reception", "metadata.numero_reception", "numero_reception", "receipt_number"
+        ], fallback: "")),
+        ("Date de début", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.date_de_debut", "date_de_debut", "metadata.date_debut", "date_debut", "start_date"
+        ], fallback: "")),
+        ("Date de fin", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.date_de_fin", "date_de_fin", "metadata.date_fin", "date_fin", "end_date"
+        ], fallback: "")),
+        ("Année de fermeture", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.annee_de_fermeture", "annee_de_fermeture", "metadata.annee_fermeture", "annee_fermeture", "closing_year"
+        ], fallback: "")),
+        ("Année de réception", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.annee_de_reception", "annee_de_reception", "metadata.annee_reception", "annee_reception", "receipt_year"
+        ], fallback: ""))
+    ]
+    return metadata.compactMap { label, value in
+        guard let resolved = nonEmptyString(value), resolved != "N/D" else { return nil }
+        return UIKeyValueSummary(label: label, value: resolved)
+    }
+}
+
 private func metadataComplementItems(
     for job: JobRecord,
     excluding labelsToExclude: Set<String>
@@ -2254,6 +2328,7 @@ private func suggestedMetadataJSON(for job: JobRecord) -> String {
     let mergedItems = suggestedMetadataItems(for: job)
         + extendedMetadataItems(for: job)
         + accountingMetadataItems(for: job)
+        + municipalAdministrationMetadataItems(for: job)
         + metadataComplementItems(for: job, excluding: [])
     for item in mergedItems {
         let normalizedKey = item.label
@@ -2288,6 +2363,7 @@ private func analysisSummaryText(for job: JobRecord) -> String {
     let period = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.periode", "periode", "metadata.duree", "duree"], fallback: "")
     let totalAmount = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.montant_total", "montant_total"], fallback: "")
     let dueDate = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_echeance", "date_echeance", "due_date"], fallback: "")
+    let fiscalYear = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.annee_financiere", "annee_financiere"], fallback: inferredFiscalYear(for: job))
     let subjectText = nonEmptyString((job.analysisSujets ?? []).joined(separator: ", ")) ?? ""
 
     if let summary = nonEmptyString(job.analysisChamps?["summary.generated"]),
@@ -2325,6 +2401,9 @@ private func analysisSummaryText(for job: JobRecord) -> String {
     }
     if !dueDate.isEmpty {
         parts.append("Échéance repérée: \(dueDate).")
+    }
+    if !fiscalYear.isEmpty && fiscalYear != "N/D" {
+        parts.append("Année financière suggérée: \(fiscalYear).")
     }
     if !subjectText.isEmpty {
         parts.append("Sujets détectés: \(subjectText).")
@@ -2434,6 +2513,7 @@ private func analysisSummaryPoints(for job: JobRecord) -> [String] {
     let merged = suggestedMetadataItems(for: job)
         + extendedMetadataItems(for: job)
         + accountingMetadataItems(for: job)
+        + municipalAdministrationMetadataItems(for: job)
     let metadataPoints = merged.map { "\($0.label): \($0.value)" }
     points += metadataPoints
     var seen = Set<String>()
@@ -2480,6 +2560,42 @@ private func inferredCounterparty(from issuer: String) -> String {
         return part
     }
     return ""
+}
+
+private func inferredFiscalYear(for job: JobRecord) -> String {
+    let candidateValues: [String?] = [
+        job.analysisChamps?["metadata.date_document"],
+        job.analysisChamps?["date_document"],
+        job.analysisChamps?["date"],
+        job.analysisChamps?["metadata.date_facture"],
+        job.analysisChamps?["date_facture"],
+        job.analysisChamps?["metadata.date_debut"],
+        job.analysisChamps?["date_debut"],
+        job.analysisChamps?["metadata.date_fin"],
+        job.analysisChamps?["date_fin"],
+        job.fileURL
+    ]
+    for raw in candidateValues {
+        if let year = firstYearToken(in: raw) {
+            return year
+        }
+    }
+    return "N/D"
+}
+
+private func firstYearToken(in raw: String?) -> String? {
+    guard let value = sanitizedAnalysisDisplayValue(raw) else {
+        return nil
+    }
+    guard let regex = try? NSRegularExpression(pattern: #"\b(19|20)\d{2}\b"#, options: []) else {
+        return nil
+    }
+    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+    guard let match = regex.firstMatch(in: value, options: [], range: range),
+          let matchRange = Range(match.range, in: value) else {
+        return nil
+    }
+    return String(value[matchRange])
 }
 
 private func prettifiedMetadataLabel(_ rawKey: String) -> String {

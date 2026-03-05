@@ -428,6 +428,17 @@
         </div>
         #endif
 
+        #if(municipal_metadata_present):
+        <div class="meta-block">
+            <h5>Métadonnées administration municipale</h5>
+            <dl>
+                #for(item in municipal_metadata):
+                <dt>#(item.label)</dt><dd>#(item.value)</dd>
+                #endfor
+            </dl>
+        </div>
+        #endif
+
         #if(metadata_complements_present):
         <div class="meta-block">
             <h5>Métadonnées complémentaires détectées</h5>
