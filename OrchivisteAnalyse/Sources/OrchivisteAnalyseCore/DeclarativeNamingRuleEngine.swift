@@ -267,11 +267,20 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         case "adoption_date":
             return extractAdoptionDate(from: text)
         case "agreement_counterparty":
+            if let hinted = extractAgreementCounterpartyFromHints(metadata: metadata) {
+                return hinted
+            }
             return extractAgreementCounterparty(from: text, metadata: metadata)
         case "agreement_object":
-            return extractAgreementObject(from: text)
+            if let hinted = extractAgreementObjectFromHints(metadata: metadata) {
+                return hinted
+            }
+            return extractAgreementObject(from: text, metadata: metadata)
         case "agreement_period":
-            return extractAgreementPeriod(from: text)
+            if let hinted = extractAgreementPeriodFromHints(metadata: metadata) {
+                return hinted
+            }
+            return extractAgreementPeriod(from: text, metadata: metadata)
         default:
             return nil
         }
@@ -315,9 +324,16 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
     }
 
     private func extractAgreementCounterparty(from text: String, metadata: NamingSourceMetadata?) -> String? {
+        if let fileName = metadata?.fileName ?? metadata?.originalName,
+           let inferred = extractAgreementPartsFromFileName(fileName),
+           let counterparty = inferred.counterparty {
+            return cleanupCounterparties(counterparty)
+        }
+
         let patterns = [
-            #"(?i)(?:entre|avec)\s+(?:la\s+)?ville\s+d[' ]amos\s+et\s+([^,\n.;:]+)"#,
-            #"(?i)([^,\n.;:]+?)\s+(?:et|,)\s+(?:la\s+)?ville\s+d[' ]amos"#
+            #"(?i)(?:entre|avec)\s+(?:la\s+)?ville\s+d['’ ]amos(?:,|\s)+(?:et|avec)\s+([^\n.;:]+)"#,
+            #"(?i)(?:entre|avec)\s+([^\n.;:]+?)\s+(?:et|avec)\s+(?:la\s+)?ville\s+d['’ ]amos"#,
+            #"(?is)\bentre\s+les\s+soussign[ée]s?\s*[:\-]?\s*(?:la\s+)?ville\s+d['’ ]amos[^\\n]{0,140}?(?:et|avec)\s+([^\n.;:]+)"#
         ]
         for pattern in patterns {
             if let match = firstMatch(pattern: pattern, in: text) {
@@ -325,32 +341,111 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             }
         }
 
-        if let fileName = metadata?.fileName,
-           let match = firstMatch(pattern: #"(?i)([A-Za-zÀ-ÿ0-9 '&.-]{3,})\s*[-–]\s*Entente"#, in: fileName) {
-            return cleanupCounterparties(match)
-        }
-
         let organizationHints = significantLines(from: text)
             .filter { $0.range(of: #"(?i)\b(?:inc\.?|lt[ée]e?|s\.?e\.?n\.?c\.?|compagnie|corporation)\b"#, options: .regularExpression) != nil }
         return organizationHints.first
     }
 
-    private func extractAgreementObject(from text: String) -> String? {
-        let lines = significantLines(from: text)
-        for line in lines {
-            let normalized = normalizedSearchText(line)
-            if normalized.contains("entente") || normalized.contains("contrat") || normalized.contains("convention") || normalized.contains("bail") {
-                let cleaned = stripAgreementFamilyLeadIn(line)
+    private func extractAgreementCounterpartyFromHints(metadata: NamingSourceMetadata?) -> String? {
+        guard let hints = metadata?.hints else {
+            return nil
+        }
+        let directKeys = [
+            "cocontractant",
+            "metadata.cocontractant",
+            "organisme_tiers",
+            "metadata.organisme_tiers"
+        ]
+        for key in directKeys {
+            if let value = nonEmptyNamingValue(hints[key]) {
+                return cleanupCounterparties(value)
+            }
+        }
+
+        let issuerKeys = ["organisme_emetteur", "metadata.organisme_emetteur", "comite"]
+        for key in issuerKeys {
+            if let value = nonEmptyNamingValue(hints[key]),
+               let extracted = extractCounterpartyFromIssuerValue(value) {
+                return cleanupCounterparties(extracted)
+            }
+        }
+        return nil
+    }
+
+    private func extractAgreementObject(from text: String, metadata: NamingSourceMetadata?) -> String? {
+        let textPatterns = [
+            #"(?i)\b(?:entente|contrat|convention|bail|protocole|avenant)\s+(?:pour|de|d['’]|relative\s+a|relatif\s+a|d['’]utilisation|utilisation)\s+([^\n.;:]{8,220})"#,
+            #"(?is)\bobjet\s*[:\-]\s*([^\n]{8,220})"#
+        ]
+        for pattern in textPatterns {
+            if let match = firstMatch(pattern: pattern, in: text) {
+                let cleaned = stripAgreementObjectLeadIn(match)
                 if cleaned.count >= 8 {
                     return cleaned
                 }
             }
         }
+
+        let lines = significantLines(from: text)
+        for line in lines {
+            let normalized = normalizedSearchText(line)
+            if normalized.contains("entente") || normalized.contains("contrat") || normalized.contains("convention") || normalized.contains("bail") {
+                let cleaned = stripAgreementObjectLeadIn(stripAgreementFamilyLeadIn(line))
+                if cleaned.count >= 8 {
+                    return cleaned
+                }
+            }
+        }
+
+        if let fileName = metadata?.fileName ?? metadata?.originalName,
+           let inferred = extractAgreementPartsFromFileName(fileName),
+           let object = inferred.object {
+            return stripAgreementObjectLeadIn(object)
+        }
+
         return significantUppercaseLine(in: text)
     }
 
-    private func extractAgreementPeriod(from text: String) -> String? {
+    private func extractAgreementObjectFromHints(metadata: NamingSourceMetadata?) -> String? {
+        guard let hints = metadata?.hints else {
+            return nil
+        }
+        let keys = [
+            "objet",
+            "metadata.objet",
+            "document_objet",
+            "summary.title",
+            "summary.generated"
+        ]
+        for key in keys {
+            if let value = nonEmptyNamingValue(hints[key]) {
+                let cleaned = stripAgreementObjectLeadIn(stripAgreementFamilyLeadIn(value))
+                if cleaned.count >= 6 {
+                    return cleaned
+                }
+            }
+        }
+        return nil
+    }
+
+    private func extractAgreementPeriod(from text: String, metadata: NamingSourceMetadata?) -> String? {
         let normalized = normalizedSearchText(text)
+        let explicitRangePatterns = [
+            #"\b((?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2})\b"#,
+            #"\b((?:19|20)\d{2}\s*[-–]\s*ind[ée]termin[ée]e?)\b"#
+        ]
+        for pattern in explicitRangePatterns {
+            if let match = firstMatch(pattern: pattern, in: normalized) {
+                return normalizePeriod(match)
+            }
+        }
+
+        if let fileName = metadata?.fileName ?? metadata?.originalName,
+           let inferred = extractAgreementPartsFromFileName(fileName),
+           let period = inferred.period {
+            return normalizePeriod(period)
+        }
+
         let years = extractYears(from: normalized)
         if normalized.contains("indeterminee") || normalized.contains("indéterminée") {
             if let start = years.min() {
@@ -361,6 +456,30 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         guard !years.isEmpty else { return nil }
         if let minYear = years.min(), let maxYear = years.max() {
             return minYear == maxYear ? "\(minYear)" : "\(minYear)-\(maxYear)"
+        }
+        return nil
+    }
+
+    private func extractAgreementPeriodFromHints(metadata: NamingSourceMetadata?) -> String? {
+        guard let hints = metadata?.hints else {
+            return nil
+        }
+        let keys = [
+            "periode",
+            "metadata.periode",
+            "duree",
+            "metadata.duree",
+            "date_document",
+            "metadata.date_document",
+            "date"
+        ]
+        for key in keys {
+            if let value = nonEmptyNamingValue(hints[key]) {
+                let normalized = normalizePeriod(value)
+                if !normalized.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
+                    return normalized
+                }
+            }
         }
         return nil
     }
@@ -405,6 +524,94 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             return true
         }
         return false
+    }
+
+    private func extractAgreementPartsFromFileName(_ rawFileName: String) -> (counterparty: String?, object: String?, period: String?)? {
+        let cleanedStem = cleanedAgreementStem(rawFileName)
+        guard cleanedStem.count >= 8 else { return nil }
+
+        let pattern = #"(?i)^\s*(.+?)\s*[-–]\s*(?:entente|contrat|convention|bail|protocole|avenant)\s*(.*?)\s*[-–]\s*((?:19|20)\d{2}(?:\s*[-–]\s*(?:19|20)\d{2}|(?:\s*[-–]\s*ind[ée]termin[ée]e?)?)?)\s*$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: cleanedStem, range: NSRange(cleanedStem.startIndex..<cleanedStem.endIndex, in: cleanedStem)) else {
+            return nil
+        }
+
+        func capture(_ index: Int) -> String? {
+            guard index < match.numberOfRanges,
+                  let range = Range(match.range(at: index), in: cleanedStem) else {
+                return nil
+            }
+            let value = cleanedStem[range].trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : String(value)
+        }
+
+        let counterparty = capture(1).map(cleanupCounterparties)
+        let object = capture(2).map(stripAgreementObjectLeadIn)
+        let period = capture(3).map(normalizePeriod)
+        return (counterparty: counterparty, object: object, period: period)
+    }
+
+    private func cleanedAgreementStem(_ rawFileName: String) -> String {
+        let stem = URL(fileURLWithPath: rawFileName).deletingPathExtension().lastPathComponent
+        var cleaned = FilenameGuardrails.normalizeFrenchTypography(stem)
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let uploadPrefixPatterns = [
+            #"^\d{8}-\d{6}-\d+-"#,
+            #"^\d{8,14}-\d+-"#,
+            #"^\d{8,14}-"#
+        ]
+        for pattern in uploadPrefixPatterns {
+            cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func stripAgreementObjectLeadIn(_ value: String) -> String {
+        FilenameGuardrails.normalizeFrenchTypography(value)
+            .replacingOccurrences(
+                of: #"(?i)^\s*(?:pour|sur|de|d['’]|relative\s+a|relatif\s+a|concernant|d['’]utilisation|utilisation|aide\s+financiere|d['’]aide\s+financiere|de\s+soutien\s+financier)\s+"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+    }
+
+    private func extractCounterpartyFromIssuerValue(_ raw: String) -> String? {
+        let normalized = FilenameGuardrails.normalizeFrenchTypography(raw)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            return nil
+        }
+
+        let patterns = [
+            #"(?i)\b(?:la\s+)?ville\s+d['’ ]amos\s*(?:,|\s)+(?:et|avec)\s+(.+)$"#,
+            #"(?i)^(.+?)\s*(?:et|avec)\s+(?:la\s+)?ville\s+d['’ ]amos\b"#
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(
+                in: normalized,
+                range: NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+               ),
+               match.numberOfRanges > 1,
+               let range = Range(match.range(at: 1), in: normalized) {
+                let value = normalized[range].trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+                if !value.isEmpty {
+                    return String(value)
+                }
+            }
+        }
+        return nil
+    }
+
+    private func nonEmptyNamingValue(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func extractResolutionTitleBlock(lines: [String], startIndex: Int) -> String? {
@@ -592,7 +799,7 @@ private func applyFeedbackExamples(
 }
 
 private func stripAgreementFamilyLeadIn(_ value: String) -> String {
-    let pattern = #"(?i)^\s*(entente|contrat|convention|bail|protocole|avenant)(?:\s+(?:pour|de|d'|relatif\s+a|relative\s+a|d'utilisation|de bon voisinage))?\s*"#
+    let pattern = #"(?i)^\s*(entente|contrat|convention|bail|protocole|avenant)(?:\s+(?:pour|sur|de|d'|relatif\s+a|relative\s+a|concernant|d'utilisation|de bon voisinage))?\s*"#
     let stripped = value.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
     return FilenameGuardrails.normalizeFrenchTypography(stripped)
 }

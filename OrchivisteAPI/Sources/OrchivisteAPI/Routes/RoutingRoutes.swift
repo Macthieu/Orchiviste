@@ -1485,24 +1485,43 @@ func overlayNamingFields(
     sourceURL: URL
 ) -> [String: String] {
     let champs = analysis?.champs ?? job.analysisChamps ?? [:]
+    let inferredFromName = inferAgreementFieldsFromFileName(sourceURL: sourceURL)
     let date = preferredNamingDate(from: champs)
     let numero = nonEmpty(champs["numero"])
+        ?? nonEmpty(champs["numero_document"])
         ?? nonEmpty(champs["metadata.numero_document"])
-    let title = preferredNamingTitle(from: champs)
+    var title = preferredNamingTitle(from: champs)
+        ?? nonEmpty(champs["objet"])
         ?? nonEmpty(champs["metadata.objet"])
         ?? nonEmpty(champs["document_objet"])
         ?? nonEmpty(champs["summary.title"])
-    let object = nonEmpty(champs["document_objet"])
+    var object = nonEmpty(champs["document_objet"])
+        ?? nonEmpty(champs["objet"])
         ?? nonEmpty(champs["metadata.objet"])
         ?? nonEmpty(champs["summary.title"])
         ?? title
-    let counterparty = nonEmpty(champs["cocontractant"])
+    var counterparty = nonEmpty(champs["cocontractant"])
         ?? nonEmpty(champs["metadata.cocontractant"])
         ?? nonEmpty(champs["organisme_tiers"])
         ?? nonEmpty(champs["metadata.organisme_tiers"])
+        ?? extractCounterpartyFromIssuer(champs["organisme_emetteur"])
+        ?? extractCounterpartyFromIssuer(champs["metadata.organisme_emetteur"])
     let period = nonEmpty(champs["periode"])
         ?? nonEmpty(champs["metadata.periode"])
+        ?? nonEmpty(champs["duree"])
+        ?? nonEmpty(champs["metadata.duree"])
+        ?? inferredFromName.period
         ?? date.flatMap { String($0.prefix(4)) }
+
+    if counterparty == nil {
+        counterparty = inferredFromName.counterparty
+    }
+    if object == nil || looksLikeWeakRoutingTitle(object ?? "") {
+        object = inferredFromName.object ?? object
+    }
+    if title == nil || looksLikeWeakRoutingTitle(title ?? "") {
+        title = inferredFromName.object ?? title
+    }
 
     var values: [String: String] = [:]
     if let numero { values["numero"] = numero }
@@ -1513,6 +1532,92 @@ func overlayNamingFields(
     if let period { values["periode"] = period }
     values["original"] = sourceURL.deletingPathExtension().lastPathComponent
     return values
+}
+
+private func extractCounterpartyFromIssuer(_ raw: String?) -> String? {
+    guard let raw = nonEmpty(raw) else {
+        return nil
+    }
+    let normalized = raw
+        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let patterns = [
+        #"(?i)\b(?:la\s+)?ville\s+d['’ ]amos\s*(?:,|\s)+(?:et|avec)\s+(.+)$"#,
+        #"(?i)^(.+?)\s*(?:et|avec)\s+(?:la\s+)?ville\s+d['’ ]amos\b"#
+    ]
+    for pattern in patterns {
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(
+            in: normalized,
+            range: NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+           ),
+           match.numberOfRanges > 1,
+           let range = Range(match.range(at: 1), in: normalized) {
+            let value = normalized[range]
+                .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+            if !value.isEmpty {
+                return String(value)
+            }
+        }
+    }
+    return nil
+}
+
+private func inferAgreementFieldsFromFileName(sourceURL: URL) -> (counterparty: String?, object: String?, period: String?) {
+    let stem = sourceURL.deletingPathExtension().lastPathComponent
+    var cleaned = stem
+        .replacingOccurrences(of: "_", with: " ")
+        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let uploadPrefixPatterns = [
+        #"^\d{8}-\d{6}-\d+-"#,
+        #"^\d{8,14}-\d+-"#,
+        #"^\d{8,14}-"#
+    ]
+    for pattern in uploadPrefixPatterns {
+        cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+    }
+    cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard cleaned.count >= 8 else {
+        return (nil, nil, nil)
+    }
+
+    let pattern = #"(?i)^\s*(.+?)\s*[-–]\s*(?:entente|contrat|convention|bail|protocole|avenant)\s*(.*?)\s*[-–]\s*((?:19|20)\d{2}(?:\s*[-–]\s*(?:19|20)\d{2}|(?:\s*[-–]\s*ind[ée]termin[ée]e?)?)?)\s*$"#
+    guard let regex = try? NSRegularExpression(pattern: pattern),
+          let match = regex.firstMatch(in: cleaned, range: NSRange(cleaned.startIndex..<cleaned.endIndex, in: cleaned)) else {
+        return (nil, nil, nil)
+    }
+
+    func capture(_ index: Int) -> String? {
+        guard index < match.numberOfRanges,
+              let range = Range(match.range(at: index), in: cleaned) else {
+            return nil
+        }
+        let value = cleaned[range].trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : String(value)
+    }
+
+    let counterparty = capture(1)?.trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+    let object = capture(2)
+        .flatMap(nonEmpty)
+        .map {
+            $0.replacingOccurrences(
+                of: #"(?i)^\s*(?:pour|de|d['’]|relative\s+a|relatif\s+a|d['’]utilisation|utilisation|aide\s+financiere|d['’]aide\s+financiere|de\s+soutien\s+financier)\s+"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+        }
+    let period = capture(3)
+        .flatMap(nonEmpty)
+        .map {
+            $0.replacingOccurrences(of: #"\s*[-–]\s*"#, with: "-", options: .regularExpression)
+                .replacingOccurrences(of: #"(?i)ind[ée]termin[ée]e?"#, with: "Indéterminée", options: .regularExpression)
+        }
+
+    return (counterparty, object, period)
 }
 
 private func preferredNamingDate(from champs: [String: String]) -> String? {
@@ -1643,7 +1748,40 @@ func shouldUseOverlayField(key: String, existing: String?, incoming: String?) ->
             && existing.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) == nil
     case "cocontractant":
         let normalizedExisting = normalizedRoutingComparisonToken(existing)
-        return normalizedExisting == "ville d amos" || normalizedExisting == "amos"
+        let normalizedIncoming = normalizedRoutingComparisonToken(incoming)
+        if normalizedIncoming.isEmpty || normalizedIncoming == normalizedExisting {
+            return false
+        }
+        if normalizedExisting == "ville d amos" || normalizedExisting == "amos" {
+            return true
+        }
+        let weakExistingSignals = [
+            "la ville d amos",
+            "ville d amos"
+        ]
+        if weakExistingSignals.contains(where: { normalizedExisting.contains($0) }) {
+            return true
+        }
+        let organizationSignals = [
+            "inc", "ltee", "s e n c", "municipalite", "conseil", "association", "corporation", "entreprise"
+        ]
+        let existingHasOrgSignal = organizationSignals.contains(where: { normalizedExisting.contains($0) })
+        let incomingHasOrgSignal = organizationSignals.contains(where: { normalizedIncoming.contains($0) })
+        if incomingHasOrgSignal && !existingHasOrgSignal {
+            return true
+        }
+        if normalizedExisting.split(separator: " ").count >= 16 && normalizedIncoming.split(separator: " ").count <= 8 {
+            return true
+        }
+        return false
+    case "periode":
+        let normalizedExisting = normalizedRoutingComparisonToken(existing)
+        if normalizedExisting.isEmpty || normalizedExisting == "n d" {
+            return true
+        }
+        let incomingLooksValid = incoming.range(of: #"^\d{4}(?:-\d{4}|-Indéterminée)?$"#, options: .regularExpression) != nil
+        let existingLooksValid = existing.range(of: #"^\d{4}(?:-\d{4}|-Indéterminée)?$"#, options: .regularExpression) != nil
+        return incomingLooksValid && !existingLooksValid
     default:
         return false
     }

@@ -120,6 +120,85 @@ final class NamingFoundationTests: XCTestCase {
         )
     }
 
+    func testEntenteRuleExtractsCounterpartyObjectAndPeriodFromPrefixedFileName() {
+        let engine = DeclarativeNamingRuleEngine()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!
+        let text = "ENTENTE"
+        let metadata = NamingSourceMetadata(
+            fileName: "20260304-192016-2-CATALAN,_Aurore_&_GENNARETTI,_Fabio_-_Entente_pour_installation_ruches_sur_lot_4_702_312,_cadastre_du_Quebec_-_2021-2026.pdf",
+            originalName: "CATALAN, Aurore & GENNARETTI, Fabio - Entente pour installation ruches sur lot 4 702 312, cadastre du Quebec - 2021-2026.pdf"
+        )
+
+        let result = engine.validate(
+            NamingRuleValidationRequest(
+                rule: rule,
+                text: text,
+                metadata: metadata,
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
+            )
+        )
+
+        XCTAssertEqual(result.normalized_fields["cocontractant"], "CATALAN, Aurore & GENNARETTI, Fabio")
+        XCTAssertEqual(result.normalized_fields["objet"], "installation ruches sur lot 4 702 312, cadastre du Quebec")
+        XCTAssertEqual(result.normalized_fields["periode"], "2021-2026")
+        XCTAssertEqual(
+            result.rendered_filename,
+            "CATALAN, Aurore & GENNARETTI, Fabio – Entente pour installation ruches sur lot 4 702 312, cadastre du Quebec – 2021-2026.pdf"
+        )
+    }
+
+    func testEntenteRuleExtractsCounterpartyAndObjectFromAgreementBody() {
+        let engine = DeclarativeNamingRuleEngine()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!
+        let text = """
+        ENTENTE
+        ENTRE la Ville d'Amos et Entreprise autobus Plante Inc.
+        Objet : Entente pour location d'autobus et service de transport guide pour Anisipi.
+        Cette entente est valide pour les années 2023-2025.
+        """
+
+        let result = engine.validate(
+            NamingRuleValidationRequest(
+                rule: rule,
+                text: text,
+                metadata: NamingSourceMetadata(fileName: "entente.pdf"),
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
+            )
+        )
+
+        XCTAssertEqual(result.normalized_fields["cocontractant"], "Entreprise autobus Plante Inc")
+        XCTAssertEqual(result.normalized_fields["objet"], "location d'autobus et service transport guide Anisipi")
+        XCTAssertEqual(result.normalized_fields["periode"], "2023-2025")
+    }
+
+    func testEntenteRuleUsesMetadataHintsForCounterpartyObjectAndPeriod() {
+        let engine = DeclarativeNamingRuleEngine()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!
+        let metadata = NamingSourceMetadata(
+            fileName: "20260304-215522-4.pdf",
+            originalName: "20260304-215522-4.pdf",
+            hints: [
+                "objet": "Entente sur surveillance de piste cyclable",
+                "organisme_emetteur": "Ville d'Amos et Vélo MRC Abitibi",
+                "date_document": "15 mai\n2022"
+            ]
+        )
+
+        let result = engine.validate(
+            NamingRuleValidationRequest(
+                rule: rule,
+                text: "ENTENTE",
+                metadata: metadata,
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
+            )
+        )
+
+        XCTAssertEqual(result.normalized_fields["cocontractant"], "Vélo MRC Abitibi")
+        XCTAssertEqual(result.normalized_fields["periode"], "2022")
+        XCTAssertTrue((result.normalized_fields["objet"] ?? "").contains("surveillance"))
+        XCTAssertTrue((result.normalized_fields["objet"] ?? "").contains("piste cyclable"))
+    }
+
     func testNamingRuleRankerScoresResolutionRuleFromLoadedCatalog() {
         let ranker = NamingRuleRanker()
         let resolution = LoadedNamingRule(
