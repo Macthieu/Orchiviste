@@ -46,6 +46,12 @@ FAMILY_SPECS: dict[str, FamilySpec] = {
         class_code="ADM-ENT",
         preset_id="preset_default",
     ),
+    "permis_construction": FamilySpec(
+        key="permis_construction",
+        type_document="Permis",
+        class_code="URB-PER",
+        preset_id="preset_permis",
+    ),
 }
 
 
@@ -66,6 +72,12 @@ ENTENTE_EXCLUDED_KEYWORDS = [
     "annexe",
 ]
 
+PERMIS_NUMBER_PATTERNS = [
+    re.compile(r"(?i)permis(?:\s+de\s+construction)?\s*(?:no|n°|numero)?\s*([a-z]{0,4}-?(?:19|20)\d{2}-\d{1,6}[a-z]?)"),
+    re.compile(r"\b((?:19|20)\d{2}-\d{3,6}[a-z]?)\b", flags=re.IGNORECASE),
+]
+MATRICULE_PATTERN = re.compile(r"\b(\d{4}-\d{2}-\d{4})\b")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -83,6 +95,11 @@ def parse_args() -> argparse.Namespace:
         "--entente-folder",
         required=True,
         help="Dossier source des ententes déjà renommées."
+    )
+    parser.add_argument(
+        "--permis-folder",
+        default="",
+        help="Dossier source des permis (optionnel, ex: PDF Permis)."
     )
     parser.add_argument(
         "--output-dir",
@@ -114,17 +131,30 @@ def main() -> int:
     args = parse_args()
     resolution_folder = Path(args.resolution_folder)
     entente_folder = Path(args.entente_folder)
+    permis_folder = Path(args.permis_folder) if args.permis_folder else None
     output_dir = Path(args.output_dir)
 
     if not resolution_folder.exists():
         raise SystemExit(f"Dossier introuvable: {resolution_folder}")
     if not entente_folder.exists():
         raise SystemExit(f"Dossier introuvable: {entente_folder}")
+    if permis_folder is not None and not permis_folder.exists():
+        raise SystemExit(f"Dossier introuvable: {permis_folder}")
 
-    family_records: dict[str, list[dict[str, Any]]] = {key: [] for key in FAMILY_SPECS}
+    enabled_families = [
+        "resolution_conseil",
+        "avis_motion",
+        "depot",
+        "entente_uniformisee",
+    ]
+    if permis_folder is not None:
+        enabled_families.append("permis_construction")
+
+    family_records: dict[str, list[dict[str, Any]]] = {key: [] for key in enabled_families}
     excluded: dict[str, list[dict[str, str]]] = {
         "resolution_folder": [],
         "entente_folder": [],
+        "permis_folder": [],
     }
 
     scan_resolution_folder(
@@ -137,6 +167,12 @@ def main() -> int:
         family_records=family_records,
         excluded=excluded["entente_folder"],
     )
+    if permis_folder is not None:
+        scan_permis_folder(
+            folder=permis_folder,
+            family_records=family_records,
+            excluded=excluded["permis_folder"],
+        )
 
     if args.max_per_family > 0:
         for family_key, records in family_records.items():
@@ -150,7 +186,8 @@ def main() -> int:
     merged_eval: list[dict[str, Any]] = []
     split_summary: dict[str, dict[str, int]] = {}
 
-    for family_key, records in family_records.items():
+    for family_key in enabled_families:
+        records = family_records[family_key]
         rng.shuffle(records)
         eval_count = int(round(len(records) * eval_ratio))
         eval_records = records[:eval_count]
@@ -175,12 +212,15 @@ def main() -> int:
     report = {
         "resolution_folder": str(resolution_folder),
         "entente_folder": str(entente_folder),
+        "permis_folder": str(permis_folder) if permis_folder is not None else None,
         "summary": split_summary,
         "excluded": {
             "resolution_folder_count": len(excluded["resolution_folder"]),
             "entente_folder_count": len(excluded["entente_folder"]),
+            "permis_folder_count": len(excluded["permis_folder"]),
             "resolution_folder_examples": excluded["resolution_folder"][:20],
             "entente_folder_examples": excluded["entente_folder"][:20],
+            "permis_folder_examples": excluded["permis_folder"][:20],
         },
     }
     report_path = output_dir / "classification_external_report.json"
@@ -253,6 +293,48 @@ def scan_entente_folder(
         )
 
 
+def scan_permis_folder(
+    folder: Path,
+    family_records: dict[str, list[dict[str, Any]]],
+    excluded: list[dict[str, str]],
+) -> None:
+    spec = FAMILY_SPECS["permis_construction"]
+    for path in sorted(folder.iterdir()):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            excluded.append({"file": path.name, "reason": "unsupported_extension"})
+            continue
+
+        parsed = parse_permis_filename(path.stem)
+        if not parsed["looks_like_permis"]:
+            excluded.append({"file": path.name, "reason": "cannot_detect_permis_pattern"})
+            continue
+
+        text_hints: list[str] = []
+        if parsed["matricule"]:
+            text_hints.append(f"matricule {parsed['matricule']}")
+        if parsed["permit_number"]:
+            text_hints.append(f"permis de construction no {parsed['permit_number']}")
+        if parsed["permit_year"]:
+            text_hints.append(f"annee permis {parsed['permit_year']}")
+
+        family_records["permis_construction"].append(
+            make_record(
+                path=path,
+                spec=spec,
+                origin="permis_folder",
+                human_validated=True,
+                additional_metadata={
+                    "matricule": parsed["matricule"],
+                    "numero_permis": parsed["permit_number"],
+                    "annee_permis": parsed["permit_year"],
+                },
+                text_hints=text_hints,
+            )
+        )
+
+
 def detect_resolution_family(stem: str) -> str | None:
     normalized = normalize_text(stem)
     if "avis motion" in normalized:
@@ -269,6 +351,8 @@ def make_record(
     spec: FamilySpec,
     origin: str,
     human_validated: bool,
+    additional_metadata: dict[str, Any] | None = None,
+    text_hints: list[str] | None = None,
 ) -> dict[str, Any]:
     stem = path.stem
     numero = infer_numero(stem)
@@ -276,11 +360,23 @@ def make_record(
     subjects = infer_subjects(stem)
     normalized_stem = re.sub(r"[_\-]+", " ", stem).strip()
 
+    weak_text_lines = [spec.type_document, spec.class_code, normalized_stem]
+    if text_hints:
+        weak_text_lines.extend([hint for hint in text_hints if hint.strip()])
+
+    metadata: dict[str, Any] = {
+        "source_origin": origin,
+        "family_key": spec.key,
+        "weak_supervision": not human_validated,
+    }
+    if additional_metadata:
+        metadata.update({key: value for key, value in additional_metadata.items() if value not in (None, "")})
+
     return {
         "document_id": f"external::{spec.key}::{stable_id(path.name)}",
         "source_path": str(path),
         "text_source": "hybrid",
-        "text": f"{spec.type_document}\n{spec.class_code}\n{normalized_stem}",
+        "text": "\n".join(weak_text_lines),
         "language": "fr",
         "type_document": spec.type_document,
         "class_code": spec.class_code,
@@ -291,11 +387,7 @@ def make_record(
         "validated_filename": path.name,
         "human_validated": human_validated,
         "review_status": "validated" if human_validated else "needs_review",
-        "metadata": {
-            "source_origin": origin,
-            "family_key": spec.key,
-            "weak_supervision": not human_validated,
-        },
+        "metadata": metadata,
     }
 
 
@@ -311,7 +403,7 @@ def infer_subjects(stem: str) -> list[str]:
 
 
 def infer_numero(stem: str) -> str | None:
-    match = re.search(r"\b(?:20\d{2}-\d{1,4}|VA1-\d{1,4}|VA-\d{1,4})\b", stem, flags=re.IGNORECASE)
+    match = re.search(r"\b(?:(?:19|20)\d{2}-\d{1,6}|VA1-\d{1,4}|VA-\d{1,4})\b", stem, flags=re.IGNORECASE)
     return match.group(0).upper() if match else None
 
 
@@ -325,6 +417,39 @@ def infer_date(stem: str) -> str | None:
 def normalize_text(raw: str) -> str:
     lowered = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii").lower()
     return re.sub(r"\s+", " ", lowered).strip()
+
+
+def parse_permis_filename(stem: str) -> dict[str, str | bool | None]:
+    normalized_stem = normalize_text(stem)
+    matricule_match = MATRICULE_PATTERN.search(stem)
+    matricule = matricule_match.group(1) if matricule_match else None
+
+    permit_number = None
+    for pattern in PERMIS_NUMBER_PATTERNS:
+        match = pattern.search(stem)
+        if match:
+            permit_number = match.group(1).upper()
+            break
+
+    permit_year = None
+    if permit_number:
+        year_match = re.search(r"\b((?:19|20)\d{2})-", permit_number)
+        if year_match:
+            permit_year = year_match.group(1)
+
+    looks_like_permis = (
+        "permis" in normalized_stem
+        or "demande de permis" in normalized_stem
+        or permit_number is not None
+        or matricule is not None
+    )
+
+    return {
+        "looks_like_permis": looks_like_permis,
+        "matricule": matricule,
+        "permit_number": permit_number,
+        "permit_year": permit_year,
+    }
 
 
 def stable_id(name: str) -> str:

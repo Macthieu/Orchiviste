@@ -4,7 +4,7 @@ import OrchivisteSharedKit
 public enum NamingFoundationSeeds {
     /// Fallback de secours uniquement. Le runtime normal charge désormais les règles depuis `configs/naming/rules`.
     public static func bootstrapFallbackRules() -> [NamingRuleDefinition] {
-        [bootstrapResolutionRule(), bootstrapEntenteRule()]
+        [bootstrapResolutionRule(), bootstrapEntenteRule(), bootstrapPermisRule()]
     }
 
     /// Fallback de secours uniquement. Le runtime normal charge désormais les thésaurus depuis `configs/naming/thesaurus`.
@@ -36,6 +36,12 @@ public enum NamingFoundationSeeds {
                     aliases: ["resolution", "résolution", "resolution du conseil municipal"],
                     kind: "document_family",
                     normalized_output: "Résolution"
+                ),
+                NamingThesaurusEntry(
+                    canonical: "Permis de construction",
+                    aliases: ["permis", "permis de construction", "demande de permis"],
+                    kind: "document_family",
+                    normalized_output: "Permis de construction"
                 ),
                 NamingThesaurusEntry(
                     canonical: "Cadastre du Québec",
@@ -215,6 +221,66 @@ public enum NamingFoundationSeeds {
             metadata: NamingRuleMetadata(
                 suggested_class_code: "ADM-ENT",
                 canonical_output_label: "Entente"
+            )
+        )
+    }
+
+    private static func bootstrapPermisRule() -> NamingRuleDefinition {
+        NamingRuleDefinition(
+            id: "rule_permis_construction",
+            label: "Permis de construction",
+            version: "1.0.0",
+            document_family: "permis_construction",
+            template: "{matricule} – Permis de construction NO {numero_permis}.pdf",
+            conditions: NamingRuleCondition(
+                signals_any: ["permis de construction", "demande de permis", "batiment principal", "ville d'amos"],
+                regex_any: [
+                    #"(?i)permis\s+de\s+construction\s*(?:n[°o]|no|numero)\s*[A-Z0-9-]{4,}"#,
+                    #"(?i)demande\s+de\s+permis"#
+                ],
+                source_document_families: ["Permis", "Autre"]
+            ),
+            fields: [
+                NamingFieldDefinition(
+                    key: "matricule",
+                    label: "Matricule",
+                    required: true,
+                    strategies: [
+                        NamingFieldStrategy(kind: "semantic", semantic_hint: "permit_matricule"),
+                        NamingFieldStrategy(kind: "regex", pattern: #"\b(\d{4}-\d{2}-\d{4})\b"#)
+                    ]
+                ),
+                NamingFieldDefinition(
+                    key: "numero_permis",
+                    label: "Numéro de permis",
+                    required: true,
+                    strategies: [
+                        NamingFieldStrategy(kind: "semantic", semantic_hint: "permit_number"),
+                        NamingFieldStrategy(kind: "regex", pattern: #"(?i)permis(?:\s+de\s+construction)?\s*(?:n[°o]|no|numero)\s*([A-Z]{0,4}-?(?:19|20)\d{2}-\d{1,6}[A-Z]?)"#),
+                        NamingFieldStrategy(kind: "regex", pattern: #"\b((?:19|20)\d{2}-\d{3,6}[A-Z]?)\b"#)
+                    ]
+                )
+            ],
+            normalization: [
+                "trim", "collapse_spaces", "separator_en_dash",
+                "clean_extension_spacing", "unicode_french", "strip_technical_mentions"
+            ],
+            forbidden_terms: ["signé", "non signé", "OCR", "numérisé", "scanné", "version finale", "PDF/A"],
+            validations: [
+                NamingValidationRule(
+                    kind: "matches_regex",
+                    parameter: #"^\d{4}-\d{2}-\d{4}\s–\sPermis de construction NO\s[A-Z0-9-]{4,}\.pdf$"#,
+                    message: "Le format attendu est : matricule – Permis de construction NO numéro.pdf"
+                ),
+                NamingValidationRule(kind: "max_length", parameter: "255")
+            ],
+            metadata: NamingRuleMetadata(
+                suggested_class_code: "URB-PER",
+                canonical_output_label: "Permis de construction",
+                notes: [
+                    "Le numéro de permis et le matricule sont prioritaires pour le classement.",
+                    "Ne jamais ajouter de mention technique (OCR, signé, PDF/A)."
+                ]
             )
         )
     }

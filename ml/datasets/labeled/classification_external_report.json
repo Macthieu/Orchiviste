@@ -1,6 +1,7 @@
 {
   "resolution_folder": "/Users/mathieubeaudin/Desktop/Résolution pour tester",
   "entente_folder": "/Users/mathieubeaudin/Desktop/Entente à tester",
+  "permis_folder": "PDF Permis",
   "summary": {
     "resolution_conseil": {
       "train": 103,
@@ -21,11 +22,17 @@
       "train": 313,
       "eval": 78,
       "total": 391
+    },
+    "permis_construction": {
+      "train": 133,
+      "eval": 33,
+      "total": 166
     }
   },
   "excluded": {
     "resolution_folder_count": 1,
     "entente_folder_count": 33,
+    "permis_folder_count": 0,
     "resolution_folder_examples": [
       {
         "file": ".DS_Store",
@@ -113,6 +120,7 @@
         "file": "C2V3 Inc. - Promesse d’achat pour lot 4 884 626 du cadastre du Québec - 2012-05-10.docx",
         "reason": "excluded_keyword"
       }
-    ]
+    ],
+    "permis_folder_examples": []
   }
 }

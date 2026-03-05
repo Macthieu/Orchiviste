@@ -210,6 +210,13 @@ public struct RuleLearner: RuleLearning {
                 "Nettoyer les mots-outils dans l'objet",
                 "Inférer une période compacte AAAA ou AAAA-AAAA"
             ].compactMap { $0 }
+        case "permis_construction":
+            return [
+                scoringNote,
+                "Forcer le format Permis de construction NO",
+                "Privilégier la date de séance/document et non la date de création fichier",
+                "Extraire numéro de permis et matricule avant rendu final"
+            ].compactMap { $0 }
         default:
             return [scoringNote, "Nettoyer les mentions techniques", "Normaliser la typographie française"].compactMap { $0 }
         }
@@ -334,6 +341,9 @@ public struct RuleLearner: RuleLearning {
         if haystack.contains("entente") || haystack.contains("contrat") || haystack.contains("convention") || haystack.contains("bail") {
             return "entente_uniformisee"
         }
+        if haystack.contains("permis") || haystack.contains("demande de permis") || haystack.contains("construction") {
+            return "permis_construction"
+        }
         return "generic_document"
     }
 
@@ -346,6 +356,8 @@ public struct RuleLearner: RuleLearning {
             return ["resolution": ["résolution", "resolution", "extrait du procès-verbal"]]
         case "entente_uniformisee":
             return ["entente": ["contrat", "convention", "bail", "protocole", "avenant"]]
+        case "permis_construction":
+            return ["permis": ["demande de permis", "permis de construction", "autorisation de construction"]]
         default:
             let tokens = Array(topTokens(in: samples).prefix(5))
             return tokens.isEmpty ? [:] : ["document": tokens]
@@ -375,6 +387,9 @@ public struct RuleLearner: RuleLearning {
         }
         if folder.contains("entente") || folder.contains("contrat") || folder.contains("convention") || folder.contains("bail") {
             return "entente_uniformisee"
+        }
+        if folder.contains("permis") || folder.contains("construction") || folder.contains("urbanisme") {
+            return "permis_construction"
         }
 
         let inferred = inferDocumentFamily(from: samples)

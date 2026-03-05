@@ -158,6 +158,10 @@ func validateNamingRuleDefinition(_ rule: NamingRuleDefinition) -> [NamingRuleVa
         switch field.key {
         case "numero":
             sampleValue = "2025-16"
+        case "numero_permis":
+            sampleValue = "1983-00235"
+        case "matricule":
+            sampleValue = "0581-88-3568"
         case "date":
             sampleValue = "2026-03-02"
         case "titre":

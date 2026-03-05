@@ -37,6 +37,16 @@
     },
     {
       "aliases": [
+        "permis",
+        "permis de construction",
+        "demande de permis"
+      ],
+      "canonical": "Permis de construction",
+      "kind": "document_family",
+      "normalized_output": "Permis de construction"
+    },
+    {
+      "aliases": [
         "cadastre du quebec",
         "cadastre du québec"
       ],

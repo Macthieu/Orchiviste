@@ -85,6 +85,7 @@ Pour eviter de melanger des familles qui n'ont pas la meme regle de nommage
 python3 ml/scripts/prepare_external_training_corpora.py \
   --resolution-folder "/Users/mathieubeaudin/Desktop/Résolution pour tester" \
   --entente-folder "/Users/mathieubeaudin/Desktop/Entente à tester" \
+  --permis-folder "PDF Permis" \
   --output-dir ml/datasets/labeled
 ```
 
@@ -94,6 +95,7 @@ Ce script produit des jeux distincts :
 - `classification_avis_motion_{train,eval}.jsonl`
 - `classification_depot_{train,eval}.jsonl`
 - `classification_entente_uniformisee_{train,eval}.jsonl`
+- `classification_permis_construction_{train,eval}.jsonl` (si `--permis-folder` est fourni)
 - `classification_external_{train,eval}.jsonl`
 
 et un rapport d'inclusion/exclusion :

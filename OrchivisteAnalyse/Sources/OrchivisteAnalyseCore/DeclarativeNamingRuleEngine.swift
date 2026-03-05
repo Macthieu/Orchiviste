@@ -266,6 +266,10 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             return extractResolutionTitle(from: text)
         case "adoption_date":
             return extractAdoptionDate(from: text)
+        case "permit_number":
+            return extractPermitNumber(from: text, metadata: metadata)
+        case "permit_matricule":
+            return extractPermitMatricule(from: text, metadata: metadata)
         case "agreement_counterparty":
             if let hinted = extractAgreementCounterpartyFromHints(metadata: metadata) {
                 return hinted
@@ -635,6 +639,81 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         guard !collected.isEmpty else { return nil }
         return collected.joined(separator: " ")
     }
+
+    private func extractPermitNumber(from text: String, metadata: NamingSourceMetadata?) -> String? {
+        if let hinted = extractPermitNumberFromHints(metadata: metadata) {
+            return hinted
+        }
+
+        let patterns = [
+            #"(?i)permis(?:\s+de\s+construction)?\s*(?:n[°o]|no|numero)\s*([A-Z]{0,4}-?(?:19|20)\d{2}-\d{1,6}[A-Z]?)"#,
+            #"(?i)demande\s+de\s+permis\s*(?:n[°o]|no|numero)?\s*([A-Z]{0,4}-?(?:19|20)\d{2}-\d{1,6}[A-Z]?)"#,
+            #"\b((?:19|20)\d{2}-\d{3,6}[A-Z]?)\b"#
+        ]
+        for pattern in patterns {
+            if let value = firstMatch(pattern: pattern, in: text) {
+                return normalizePermitNumber(value)
+            }
+        }
+
+        if let fileName = metadata?.fileName ?? metadata?.originalName {
+            let stem = URL(fileURLWithPath: fileName).deletingPathExtension().lastPathComponent
+            for pattern in patterns {
+                if let value = firstMatch(pattern: pattern, in: stem) {
+                    return normalizePermitNumber(value)
+                }
+            }
+        }
+        return nil
+    }
+
+    private func extractPermitMatricule(from text: String, metadata: NamingSourceMetadata?) -> String? {
+        if let hinted = extractPermitMatriculeFromHints(metadata: metadata) {
+            return hinted
+        }
+
+        let pattern = #"\b(\d{4}-\d{2}-\d{4})\b"#
+        if let value = firstMatch(pattern: pattern, in: text) {
+            return value
+        }
+        if let fileName = metadata?.fileName ?? metadata?.originalName {
+            let stem = URL(fileURLWithPath: fileName).deletingPathExtension().lastPathComponent
+            if let value = firstMatch(pattern: pattern, in: stem) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func extractPermitNumberFromHints(metadata: NamingSourceMetadata?) -> String? {
+        guard let hints = metadata?.hints else { return nil }
+        let keys = [
+            "numero_permis",
+            "metadata.numero_permis",
+            "numero_document",
+            "metadata.numero_document",
+            "numero",
+            "permit_number"
+        ]
+        for key in keys {
+            if let value = nonEmptyNamingValue(hints[key]) {
+                return normalizePermitNumber(value)
+            }
+        }
+        return nil
+    }
+
+    private func extractPermitMatriculeFromHints(metadata: NamingSourceMetadata?) -> String? {
+        guard let hints = metadata?.hints else { return nil }
+        let keys = ["matricule", "metadata.matricule", "numero_matricule"]
+        for key in keys {
+            if let value = nonEmptyNamingValue(hints[key]),
+               let matricule = firstMatch(pattern: #"\b(\d{4}-\d{2}-\d{4})\b"#, in: value) {
+                return matricule
+            }
+        }
+        return nil
+    }
 }
 
 private func normalizeDocumentNumber(_ value: String) -> String {
@@ -655,6 +734,16 @@ private func normalizeDocumentNumber(_ value: String) -> String {
         return normalized
     }
     return "\(parts[0])-\(sequence)"
+}
+
+private func normalizePermitNumber(_ value: String) -> String {
+    let normalized = FilenameGuardrails.normalizeFrenchTypography(value)
+        .uppercased()
+        .replacingOccurrences(of: #"(?i)permis(?:\s+de\s+construction)?\s*(?:n[°o]|no|numero)\s*"#, with: "", options: .regularExpression)
+        .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        .replacingOccurrences(of: #"^NO"#, with: "", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized
 }
 
 private func normalizeDateString(_ raw: String) -> String? {

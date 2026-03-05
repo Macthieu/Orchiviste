@@ -47,3 +47,22 @@ ml/runs/
 ml/datasets/labeled/*.jsonl
 ml/models-src/*.labels.json
 ml/models-src/*.metrics.json
+
+# Private corpora / local document sets (never commit)
+PDF Permis/
+**/PDF Permis/
+
+# Never commit raw document files
+*.pdf
+*.PDF
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.tif
+*.tiff
+*.jpg
+*.jpeg
+*.png

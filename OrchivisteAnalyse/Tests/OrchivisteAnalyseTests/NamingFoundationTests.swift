@@ -199,6 +199,32 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertTrue((result.normalized_fields["objet"] ?? "").contains("piste cyclable"))
     }
 
+    func testPermisRuleExtractsMatriculeAndPermitNumberFromFilename() {
+        let engine = DeclarativeNamingRuleEngine()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_permis_construction" }!
+        let metadata = NamingSourceMetadata(
+            fileName: "0581-88-3568 - Permis de construction NO 1959-00044.pdf",
+            originalName: "0581-88-3568 - Permis de construction NO 1959-00044.pdf"
+        )
+
+        let result = engine.validate(
+            NamingRuleValidationRequest(
+                rule: rule,
+                text: "VILLE D'AMOS DEMANDE DE PERMIS",
+                metadata: metadata,
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
+            )
+        )
+
+        XCTAssertEqual(result.normalized_fields["matricule"], "0581-88-3568")
+        XCTAssertEqual(result.normalized_fields["numero_permis"], "1959-00044")
+        XCTAssertEqual(
+            result.rendered_filename,
+            "0581-88-3568 – Permis de construction NO 1959-00044.pdf"
+        )
+        XCTAssertFalse(result.issues.contains(where: { $0.level == .error }))
+    }
+
     func testNamingRuleRankerScoresResolutionRuleFromLoadedCatalog() {
         let ranker = NamingRuleRanker()
         let resolution = LoadedNamingRule(
