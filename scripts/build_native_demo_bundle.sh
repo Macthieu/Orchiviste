@@ -182,11 +182,16 @@ mkdir -p \
 
 is_running() {
   local pidfile="$1"
+  local binary="$2"
   [[ -f "$pidfile" ]] || return 1
   local pid
   pid="$(cat "$pidfile" 2>/dev/null || true)"
   [[ -n "$pid" ]] || return 1
-  kill -0 "$pid" 2>/dev/null
+  kill -0 "$pid" 2>/dev/null || return 1
+  local command
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  [[ -n "$command" ]] || return 1
+  [[ "$command" == *"$binary"* ]]
 }
 
 start_service() {
@@ -196,10 +201,11 @@ start_service() {
   local logfile="$LOG_DIR/$name.log"
   local binary="$KIT_DIR/bin/$3"
 
-  if is_running "$pidfile"; then
+  if is_running "$pidfile" "$binary"; then
     echo "$name déjà en cours."
     return 0
   fi
+  rm -f "$pidfile"
 
   if [[ ! -x "$binary" ]]; then
     echo "Binaire manquant: $binary" >&2
@@ -226,7 +232,8 @@ start_service "api" "http://127.0.0.1:${ORCHIVISTE_API_PORT:-28780}/v1/health" "
 
 if [[ "${ORCHIVISTE_DEMO_START_WORKER:-0}" == "1" && -x "$KIT_DIR/bin/OrchivisteWorker" ]]; then
   worker_pidfile="$RUN_DIR/worker.pid"
-  if ! is_running "$worker_pidfile"; then
+  worker_binary="$KIT_DIR/bin/OrchivisteWorker"
+  if ! is_running "$worker_pidfile" "$worker_binary"; then
     nohup /bin/zsh -lc "cd \"$KIT_DIR\" && exec \"$KIT_DIR/bin/OrchivisteWorker\"" >> "$LOG_DIR/worker.log" 2>&1 < /dev/null &
     echo $! > "$worker_pidfile"
     echo "worker lancé."
@@ -251,13 +258,21 @@ RUN_DIR="$KIT_DIR/run"
 stop_pidfile() {
   local name="$1"
   local pidfile="$RUN_DIR/$name.pid"
+  local binary=""
+  case "$name" in
+    api) binary="$KIT_DIR/bin/OrchivisteAPI" ;;
+    analyse) binary="$KIT_DIR/bin/OrchivisteAnalyse" ;;
+    worker) binary="$KIT_DIR/bin/OrchivisteWorker" ;;
+  esac
   if [[ ! -f "$pidfile" ]]; then
     echo "$name arrêté."
     return 0
   fi
   local pid
   pid="$(cat "$pidfile" 2>/dev/null || true)"
-  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+  local command
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && [[ "$command" == *"$binary"* ]]; then
     kill "$pid" 2>/dev/null || true
     for _ in {1..10}; do
       if ! kill -0 "$pid" 2>/dev/null; then
@@ -268,6 +283,8 @@ stop_pidfile() {
     if kill -0 "$pid" 2>/dev/null; then
       kill -9 "$pid" 2>/dev/null || true
     fi
+  elif [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    echo "$name: PID $pid ne correspond pas au binaire attendu, suppression du pidfile seulement."
   fi
   rm -f "$pidfile"
   echo "$name arrêté."
@@ -288,13 +305,24 @@ RUN_DIR="$KIT_DIR/run"
 service_status() {
   local name="$1"
   local pidfile="$RUN_DIR/$name.pid"
+  local binary=""
+  case "$name" in
+    api) binary="$KIT_DIR/bin/OrchivisteAPI" ;;
+    analyse) binary="$KIT_DIR/bin/OrchivisteAnalyse" ;;
+    worker) binary="$KIT_DIR/bin/OrchivisteWorker" ;;
+  esac
   if [[ -f "$pidfile" ]]; then
     local pid
     pid="$(cat "$pidfile" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    local command
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && [[ "$command" == *"$binary"* ]]; then
       echo "$name: actif (PID $pid)"
       return 0
     fi
+    echo "$name: arrêté (PID obsolète supprimé)"
+    rm -f "$pidfile"
+    return 0
   fi
   echo "$name: arrêté"
 }

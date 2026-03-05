@@ -58,34 +58,64 @@ enum NamingFeedbackService {
         }
         let normalized = engine.normalizeFields(extracted, rule: rule, thesaurus: thesaurus)
         let correctedFields = parseFields(from: correctedFileName, template: rule.template)
+        let semanticMatches = semanticFeedbackMatches(
+            correctedFields: correctedFields,
+            sourceFields: normalized,
+            analysis: analysis
+        )
 
         var learnedAliases: [String] = []
+        var learnedAliasFingerprints = Set<String>()
         let candidateFieldKeys = ["titre", "objet", "cocontractant"]
-        for key in candidateFieldKeys {
-            guard let sourceValue = normalized[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  let correctedValue = correctedFields[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !sourceValue.isEmpty,
-                  !correctedValue.isEmpty,
-                  normalizedFeedbackToken(sourceValue) != normalizedFeedbackToken(correctedValue) else {
-                continue
+        func recordAliasIfNeeded(sourceValue: String, correctedValue: String, fieldKey: String) {
+            let sourceTrimmed = sourceValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let correctedTrimmed = correctedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !sourceTrimmed.isEmpty,
+                  !correctedTrimmed.isEmpty,
+                  normalizedFeedbackToken(sourceTrimmed) != normalizedFeedbackToken(correctedTrimmed) else {
+                return
+            }
+            let fingerprint = "\(fieldKey)|\(normalizedFeedbackToken(sourceTrimmed))|\(normalizedFeedbackToken(correctedTrimmed))"
+            guard !learnedAliasFingerprints.contains(fingerprint) else {
+                return
             }
             thesaurus = upsertingFeedbackAlias(
                 in: thesaurus,
-                sourceValue: sourceValue,
-                correctedValue: correctedValue,
-                fieldKey: key
+                sourceValue: sourceTrimmed,
+                correctedValue: correctedTrimmed,
+                fieldKey: fieldKey
             )
-            learnedAliases.append("\(sourceValue) -> \(correctedValue)")
+            learnedAliasFingerprints.insert(fingerprint)
+            learnedAliases.append("\(sourceTrimmed) -> \(correctedTrimmed)")
+        }
+
+        for key in candidateFieldKeys {
+            guard let sourceValue = normalized[key],
+                  let correctedValue = correctedFields[key] else {
+                continue
+            }
+            recordAliasIfNeeded(sourceValue: sourceValue, correctedValue: correctedValue, fieldKey: key)
+        }
+        for match in semanticMatches where candidateFieldKeys.contains(match.field_key) {
+            recordAliasIfNeeded(
+                sourceValue: match.source_value,
+                correctedValue: match.corrected_value,
+                fieldKey: match.field_key
+            )
         }
 
         let preservedAcronyms = extractUppercaseAcronyms(from: correctedFields["titre"] ?? correctedFields["objet"] ?? "")
+        let feedbackNotes = mergedFeedbackNotes(
+            baseNotes: request.notes,
+            semanticMatches: semanticMatches
+        )
         let updatedRule = appendFeedback(
             to: rule,
             sourceFileName: sourceURL.lastPathComponent,
             correctedFileName: correctedFileName,
             sourceFields: normalized,
             correctedFields: correctedFields,
-            notes: request.notes,
+            notes: feedbackNotes,
             preservedAcronyms: preservedAcronyms
         )
 
@@ -103,7 +133,7 @@ enum NamingFeedbackService {
                     corrected_filename: correctedFileName,
                     source_fields: normalized,
                     corrected_fields: correctedFields.isEmpty ? nil : correctedFields,
-                    notes: request.notes
+                    notes: feedbackNotes
                 )
             )
         )
@@ -128,6 +158,20 @@ private func sanitizeCorrectedFileName(_ raw: String) -> String {
 }
 
 private func parseFields(from fileName: String, template: String) -> [String: String] {
+    if let strict = parseFields(from: fileName, template: template, flexibleLiterals: false), !strict.isEmpty {
+        return strict
+    }
+    if let flexible = parseFields(from: fileName, template: template, flexibleLiterals: true), !flexible.isEmpty {
+        return flexible
+    }
+    return [:]
+}
+
+private func parseFields(
+    from fileName: String,
+    template: String,
+    flexibleLiterals: Bool
+) -> [String: String]? {
     let placeholderRegex = try? NSRegularExpression(pattern: #"\{([^}]+)\}"#)
     let range = NSRange(template.startIndex..<template.endIndex, in: template)
     let matches = placeholderRegex?.matches(in: template, range: range) ?? []
@@ -143,20 +187,22 @@ private func parseFields(from fileName: String, template: String) -> [String: St
               let keyRange = Range(match.range(at: 1), in: template) else {
             continue
         }
-        pattern += NSRegularExpression.escapedPattern(for: String(template[cursor..<fullRange.lowerBound]))
+        let literal = String(template[cursor..<fullRange.lowerBound])
+        pattern += literalPattern(literal, flexible: flexibleLiterals)
         pattern += "(.+?)"
         fieldKeys.append(String(template[keyRange]))
         cursor = fullRange.upperBound
     }
-    pattern += NSRegularExpression.escapedPattern(for: String(template[cursor...]))
+    pattern += literalPattern(String(template[cursor...]), flexible: flexibleLiterals)
     pattern += "$"
 
-    guard let regex = try? NSRegularExpression(pattern: pattern),
+    let options: NSRegularExpression.Options = flexibleLiterals ? [.caseInsensitive] : []
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: options),
           let match = regex.firstMatch(
             in: fileName,
             range: NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)
           ) else {
-        return [:]
+        return nil
     }
 
     var fields: [String: String] = [:]
@@ -171,12 +217,51 @@ private func parseFields(from fileName: String, template: String) -> [String: St
     return fields
 }
 
+private func literalPattern(_ literal: String, flexible: Bool) -> String {
+    guard flexible else {
+        return NSRegularExpression.escapedPattern(for: literal)
+    }
+
+    var pattern = ""
+    var previousWasWhitespace = false
+    for character in literal {
+        if character.isWhitespace {
+            if !previousWasWhitespace {
+                pattern += #"\s+"#
+                previousWasWhitespace = true
+            }
+            continue
+        }
+        previousWasWhitespace = false
+        if character == "–" || character == "-" {
+            pattern += #"\s*[–-]\s*"#
+            continue
+        }
+        pattern += NSRegularExpression.escapedPattern(for: String(character))
+    }
+    return pattern
+}
+
 private func normalizedFeedbackToken(_ raw: String) -> String {
     raw
         .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
         .lowercased()
         .replacingOccurrences(of: #"[^a-z0-9]+"#, with: " ", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func feedbackSimilarityScore(_ lhs: String, _ rhs: String) -> Double {
+    let lhsTokens = Set(normalizedFeedbackToken(lhs).split(separator: " ").map(String.init))
+    let rhsTokens = Set(normalizedFeedbackToken(rhs).split(separator: " ").map(String.init))
+    guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else {
+        return 0
+    }
+    let intersection = lhsTokens.intersection(rhsTokens).count
+    let union = lhsTokens.union(rhsTokens).count
+    guard union > 0 else {
+        return 0
+    }
+    return Double(intersection) / Double(union)
 }
 
 private func upsertingFeedbackAlias(
@@ -294,4 +379,193 @@ private func extractUppercaseAcronyms(from value: String) -> [String] {
             }
         )
     ).sorted()
+}
+
+private struct NamingSemanticMatch {
+    let field_key: String
+    let source_key: String
+    let source_value: String
+    let corrected_value: String
+    let score: Double
+}
+
+private func semanticFeedbackMatches(
+    correctedFields: [String: String],
+    sourceFields: [String: String],
+    analysis: AnalysisResponse?
+) -> [NamingSemanticMatch] {
+    guard !correctedFields.isEmpty else {
+        return []
+    }
+    let candidates = semanticSourceCandidates(sourceFields: sourceFields, analysis: analysis)
+    guard !candidates.isEmpty else {
+        return []
+    }
+
+    var matches: [NamingSemanticMatch] = []
+    for (fieldKey, correctedValue) in correctedFields {
+        let correctedTrimmed = correctedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !correctedTrimmed.isEmpty else {
+            continue
+        }
+        guard let pool = candidates[fieldKey], !pool.isEmpty else {
+            continue
+        }
+        let best = pool.max { lhs, rhs in
+            semanticScore(for: fieldKey, correctedValue: correctedTrimmed, sourceValue: lhs.value)
+                < semanticScore(for: fieldKey, correctedValue: correctedTrimmed, sourceValue: rhs.value)
+        }
+        guard let best else { continue }
+        let bestScore = semanticScore(for: fieldKey, correctedValue: correctedTrimmed, sourceValue: best.value)
+        guard bestScore >= semanticThreshold(for: fieldKey) else {
+            continue
+        }
+        matches.append(
+            NamingSemanticMatch(
+                field_key: fieldKey,
+                source_key: best.source_key,
+                source_value: best.value,
+                corrected_value: correctedTrimmed,
+                score: bestScore
+            )
+        )
+    }
+    return matches
+}
+
+private func semanticSourceCandidates(
+    sourceFields: [String: String],
+    analysis: AnalysisResponse?
+) -> [String: [(source_key: String, value: String)]] {
+    var result: [String: [(source_key: String, value: String)]] = [:]
+
+    func appendCandidate(_ fieldKey: String, sourceKey: String, value: String?) {
+        guard let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return
+        }
+        let normalized = FilenameGuardrails.normalizeFrenchTypography(raw)
+        guard !normalized.isEmpty else {
+            return
+        }
+        var list = result[fieldKey] ?? []
+        if !list.contains(where: { normalizedFeedbackToken($0.value) == normalizedFeedbackToken(normalized) }) {
+            list.append((source_key: sourceKey, value: normalized))
+        }
+        result[fieldKey] = list
+    }
+
+    for (key, value) in sourceFields {
+        appendCandidate(key, sourceKey: "source_fields.\(key)", value: value)
+    }
+
+    guard let analysis else {
+        return result
+    }
+
+    for (key, value) in analysis.champs {
+        appendCandidate(key, sourceKey: "analysis.\(key)", value: value)
+    }
+
+    let aliasesByField: [String: [String]] = [
+        "titre": ["objet", "document_objet", "resolution_titre", "summary.title", "summary.generated", "metadata.objet"],
+        "objet": ["titre", "document_objet", "resolution_titre", "summary.title", "summary.generated", "metadata.objet"],
+        "cocontractant": ["organisme_emetteur", "metadata.organisme_emetteur", "comite"],
+        "date": ["date_document", "metadata.date_document", "date"],
+        "date_document": ["date", "metadata.date_document", "date_document"],
+        "numero": ["numero_document", "metadata.numero_document", "numero"],
+        "periode": ["date_document", "date", "periode"]
+    ]
+
+    for (fieldKey, aliases) in aliasesByField {
+        for alias in aliases {
+            appendCandidate(fieldKey, sourceKey: "analysis.\(alias)", value: analysis.champs[alias] ?? sourceFields[alias])
+        }
+    }
+
+    return result
+}
+
+private func semanticScore(for fieldKey: String, correctedValue: String, sourceValue: String) -> Double {
+    switch fieldKey {
+    case "date", "date_document", "periode":
+        let correctedYears = extractSemanticYears(correctedValue)
+        let sourceYears = extractSemanticYears(sourceValue)
+        if !correctedYears.isEmpty && correctedYears == sourceYears {
+            return 1.0
+        }
+        if !correctedYears.isEmpty && !sourceYears.isEmpty && !Set(correctedYears).intersection(Set(sourceYears)).isEmpty {
+            return 0.8
+        }
+        return feedbackSimilarityScore(correctedValue, sourceValue)
+    case "numero":
+        let correctedNumber = extractSemanticDocumentNumber(correctedValue)
+        let sourceNumber = extractSemanticDocumentNumber(sourceValue)
+        if let correctedNumber, let sourceNumber, correctedNumber == sourceNumber {
+            return 1.0
+        }
+        return feedbackSimilarityScore(correctedValue, sourceValue)
+    default:
+        return feedbackSimilarityScore(correctedValue, sourceValue)
+    }
+}
+
+private func semanticThreshold(for fieldKey: String) -> Double {
+    switch fieldKey {
+    case "titre", "objet", "cocontractant":
+        return 0.42
+    case "date", "date_document", "periode", "numero":
+        return 0.60
+    default:
+        return 0.70
+    }
+}
+
+private func extractSemanticYears(_ value: String) -> [Int] {
+    let regex = try? NSRegularExpression(pattern: #"\b(19|20)\d{2}\b"#)
+    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+    return regex?.matches(in: value, range: range).compactMap { match in
+        guard let swiftRange = Range(match.range, in: value) else {
+            return nil
+        }
+        return Int(value[swiftRange])
+    } ?? []
+}
+
+private func extractSemanticDocumentNumber(_ value: String) -> String? {
+    let regex = try? NSRegularExpression(pattern: #"\b(19|20)\d{2}\s*[-–]\s*\d{1,4}\b"#)
+    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+    guard let match = regex?.firstMatch(in: value, range: range),
+          let swiftRange = Range(match.range, in: value) else {
+        return nil
+    }
+    return normalizedFeedbackToken(String(value[swiftRange]))
+}
+
+private func mergedFeedbackNotes(
+    baseNotes: String?,
+    semanticMatches: [NamingSemanticMatch]
+) -> String? {
+    let trimmedBase = baseNotes?.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !semanticMatches.isEmpty else {
+        return trimmedBase?.isEmpty == true ? nil : trimmedBase
+    }
+
+    let semanticSummary = semanticMatches
+        .sorted { lhs, rhs in
+            if lhs.field_key == rhs.field_key {
+                return lhs.score > rhs.score
+            }
+            return lhs.field_key < rhs.field_key
+        }
+        .map { match in
+            let score = String(format: "%.2f", match.score)
+            return match.field_key + " <= " + match.source_key + " (" + score + ")"
+        }
+        .joined(separator: "; ")
+
+    let notePrefix = "auto_semantic_compare[\(semanticSummary)]"
+    if let trimmedBase, !trimmedBase.isEmpty {
+        return "\(trimmedBase)\n\(notePrefix)"
+    }
+    return notePrefix
 }

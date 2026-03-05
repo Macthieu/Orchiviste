@@ -505,8 +505,8 @@
             <textarea id="routePreferredFileName" class="route-file-name-field" rows="3" data-initial="#(proposed_file_name_input)" placeholder="Résolution NO 2025-368 – Titre – 2025-09-02.pdf" spellcheck="false">#(proposed_file_name_input)</textarea>
         </label>
         <label class="inline-check">
-            <input id="routeLearnCorrection" type="checkbox">
-            <span>Mémoriser cette correction pour les prochains cas similaires</span>
+            <input id="routeLearnCorrection" type="checkbox" checked>
+            <span>Mémoriser automatiquement cette correction pour les prochains cas similaires</span>
         </label>
         <input id="routeNamingRuleFallback" type="hidden" value="#(proposed_naming_rule_id)">
         <button class="btn" type="button" onclick="submitNamingFeedback().catch(() => {})">Mémoriser la correction</button>
@@ -1115,6 +1115,15 @@ async function submitReview(routeAfterReview = false) {
                 return;
             }
         }
+        if (shouldLearnFilenameCorrection()) {
+            try {
+                await submitNamingFeedback(true);
+            } catch (error) {
+                if (output) {
+                    output.value = `${error.message}\nLa revue est enregistrée, mais la correction de nommage n'a pas été mémorisée.`;
+                }
+            }
+        }
         window.location.reload();
         return;
     }
@@ -1151,11 +1160,12 @@ function currentPreferredFileName() {
 }
 
 function shouldLearnFilenameCorrection() {
-    const checkbox = document.getElementById("routeLearnCorrection");
     const ruleId = feedbackNamingRuleId();
     const current = currentPreferredFileName();
     const initial = (document.getElementById("routePreferredFileName")?.dataset.initial || "").trim();
-    return Boolean(checkbox?.checked && ruleId.trim() && current && current !== initial);
+    const checkbox = document.getElementById("routeLearnCorrection");
+    const autoLearnEnabled = checkbox ? checkbox.checked : true;
+    return Boolean(autoLearnEnabled && ruleId.trim() && current && current !== initial);
 }
 
 async function submitNamingFeedback(silent = false) {
@@ -1195,10 +1205,6 @@ async function submitNamingFeedback(silent = false) {
     const preferredInput = document.getElementById("routePreferredFileName");
     if (preferredInput) {
         preferredInput.dataset.initial = correctedFileName;
-    }
-    const checkbox = document.getElementById("routeLearnCorrection");
-    if (checkbox) {
-        checkbox.checked = false;
     }
     if (output && !silent) {
         output.value = `Correction mémorisée pour ${json.rule_id}.`;

@@ -400,8 +400,17 @@ func registerNamingUIRoutes(_ app: Application) {
         }
         do {
             try ConfigLoader.saveNamingRule(draft.proposed_rule)
+            let draftPath = ConfigLoader.namingRuleDraftsDirectory()
+                .appendingPathComponent("\(id).json")
+            try? FileManager.default.removeItem(at: draftPath)
+
             return req.redirect(to: "/ui/naming?notice=\(namingQuery("Brouillon appliqué comme règle active."))&rule_id=\(namingQuery(draft.proposed_rule.id))")
         } catch {
+            req.logger.error("Échec application brouillon de règle.", metadata: [
+                "draft_id": .string(id),
+                "rule_id": .string(draft.proposed_rule.id),
+                "error": .string(error.localizedDescription)
+            ])
             return req.redirect(to: "/ui/naming?error=\(namingQuery("Erreur interne pendant l'application du brouillon."))")
         }
     }
