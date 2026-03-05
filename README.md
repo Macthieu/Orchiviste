@@ -31,6 +31,16 @@ Orchiviste est conçu pour assister concrètement le travail d'archiviste:
 - classement vers une arborescence cible et/ou SharePoint
 - mise en revue des cas ambigus plutôt que décision automatique risquée
 
+## Positionnement
+
+Par rapport aux outils génériques d'OCR/IDP/EDMS, Orchiviste se distingue par un focus opérationnel sur l'archivistique municipale:
+
+- règles de nommage métier déclaratives et modifiables
+- séparation claire entre décision automatique et validation humaine
+- workflow de revue (`needs_review`) traçable
+- extraction de métadonnées orientée gestion documentaire municipale
+- intégration directe au classement/routage (local et SharePoint)
+
 ## Principes de nommage
 
 - nom significatif, précis et concis
