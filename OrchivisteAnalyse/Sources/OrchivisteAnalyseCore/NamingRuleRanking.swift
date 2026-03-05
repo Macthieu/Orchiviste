@@ -43,6 +43,7 @@ public struct RankedNamingRule: Sendable {
     public let score: Double
     public let deterministic_score: Double
     public let ml_score: Double
+    public let semantic_score: Double
     public let reasons: [String]
     public let sources: [String]
 
@@ -51,6 +52,7 @@ public struct RankedNamingRule: Sendable {
         score: Double,
         deterministic_score: Double,
         ml_score: Double,
+        semantic_score: Double = 0,
         reasons: [String],
         sources: [String]
     ) {
@@ -58,6 +60,7 @@ public struct RankedNamingRule: Sendable {
         self.score = score
         self.deterministic_score = deterministic_score
         self.ml_score = ml_score
+        self.semantic_score = semantic_score
         self.reasons = reasons
         self.sources = sources
     }
@@ -135,7 +138,12 @@ public struct DeterministicNamingPredictionProvider: NamingPredictionProvider {
 public struct NamingMLScorer {
     private let providers: [NamingPredictionProvider]
 
-    public init(providers: [NamingPredictionProvider] = [CoreMLNamingPredictionProvider()]) {
+    public init(
+        providers: [NamingPredictionProvider] = [
+            CoreMLNamingPredictionProvider(),
+            EmbeddingNamingPredictionProvider(),
+        ]
+    ) {
         self.providers = providers
     }
 
@@ -150,6 +158,8 @@ public struct NamingMLScorer {
 public struct NamingRuleRanker {
     private let deterministic: NamingPredictionProvider
     private let mlScorer: NamingMLScorer
+    private static let coreMLSourceID = "coreml"
+    private static let semanticSourceID = EmbeddingNamingPredictionProvider.providerSourceID
 
     public init(
         deterministic: NamingPredictionProvider = DeterministicNamingPredictionProvider(),
@@ -172,10 +182,29 @@ public struct NamingRuleRanker {
 
         return candidates.compactMap { candidate in
             let deterministicScore = deterministicByRule[candidate.rule_id]?.map(\.score).max() ?? 0
-            let mlScore = mlByRule[candidate.rule_id]?.map(\.score).max() ?? 0
+            let mlScore = maxScore(
+                for: candidate.rule_id,
+                in: mlByRule,
+                source: Self.coreMLSourceID
+            )
+            let semanticScore = maxScore(
+                for: candidate.rule_id,
+                in: mlByRule,
+                source: Self.semanticSourceID
+            )
+            let auxiliaryScore = maxScoreExcluding(
+                for: candidate.rule_id,
+                in: mlByRule,
+                excludedSources: [Self.coreMLSourceID, Self.semanticSourceID]
+            )
+            let assistedScore = blendedAssistedScore(
+                coreMLScore: mlScore,
+                semanticScore: semanticScore,
+                auxiliaryScore: auxiliaryScore
+            )
             let finalScore: Double
-            if mlScore > 0 {
-                finalScore = min(1.0, (deterministicScore * 0.35) + (mlScore * 0.65))
+            if assistedScore > 0 {
+                finalScore = min(1.0, (deterministicScore * 0.30) + (assistedScore * 0.70))
             } else {
                 finalScore = deterministicScore
             }
@@ -195,6 +224,7 @@ public struct NamingRuleRanker {
                 score: finalScore,
                 deterministic_score: deterministicScore,
                 ml_score: mlScore,
+                semantic_score: semanticScore,
                 reasons: reasons,
                 sources: sources
             )
@@ -206,6 +236,441 @@ public struct NamingRuleRanker {
             return $0.score > $1.score
         }
     }
+
+    private func maxScore(
+        for ruleID: String,
+        in groupedPredictions: [String: [NamingRulePrediction]],
+        source: String
+    ) -> Double {
+        groupedPredictions[ruleID]?
+            .filter { $0.source == source }
+            .map(\.score)
+            .max() ?? 0
+    }
+
+    private func maxScoreExcluding(
+        for ruleID: String,
+        in groupedPredictions: [String: [NamingRulePrediction]],
+        excludedSources: Set<String>
+    ) -> Double {
+        groupedPredictions[ruleID]?
+            .filter { !excludedSources.contains($0.source) }
+            .map(\.score)
+            .max() ?? 0
+    }
+
+    private func maxScoreExcluding(
+        for ruleID: String,
+        in groupedPredictions: [String: [NamingRulePrediction]],
+        excludedSources: [String]
+    ) -> Double {
+        maxScoreExcluding(
+            for: ruleID,
+            in: groupedPredictions,
+            excludedSources: Set(excludedSources)
+        )
+    }
+
+    private func blendedAssistedScore(
+        coreMLScore: Double,
+        semanticScore: Double,
+        auxiliaryScore: Double
+    ) -> Double {
+        if coreMLScore > 0, semanticScore > 0 {
+            return min(1.0, (coreMLScore * 0.65) + (semanticScore * 0.35))
+        }
+        if coreMLScore > 0 {
+            return max(coreMLScore, auxiliaryScore)
+        }
+        if semanticScore > 0 {
+            return max(semanticScore, auxiliaryScore)
+        }
+        return auxiliaryScore
+    }
+}
+
+public struct EmbeddingNamingPredictionProvider: NamingPredictionProvider {
+    public static let providerSourceID = "embedding_similarity"
+    public let provider_id = providerSourceID
+
+    private let enabled: Bool
+    private let indexPath: String?
+    private let topK: Int
+    private let minScore: Double
+
+    public init(
+        enabled: Bool? = nil,
+        indexPath: String? = nil,
+        topK: Int? = nil,
+        minScore: Double? = nil
+    ) {
+        let resolvedPath = indexPath
+            ?? namingTrimmedEnvironment("ORCHIVISTE_NAMING_EMBEDDINGS_INDEX_PATH")
+            ?? namingTrimmedEnvironment("ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_INDEX_PATH")
+        self.indexPath = resolvedPath
+        let defaultEnabled = resolvedPath != nil
+        self.enabled = enabled ?? namingEnvironmentBool(
+            "ORCHIVISTE_NAMING_EMBEDDINGS_ENABLED",
+            defaultValue: defaultEnabled
+        )
+        self.topK = max(
+            1,
+            topK
+                ?? namingEnvironmentInt("ORCHIVISTE_NAMING_EMBEDDINGS_TOP_K")
+                ?? namingEnvironmentInt("ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_TOP_K")
+                ?? 8
+        )
+        self.minScore = max(
+            0,
+            minScore
+                ?? namingEnvironmentDouble("ORCHIVISTE_NAMING_EMBEDDINGS_MIN_SCORE")
+                ?? namingEnvironmentDouble("ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_MIN_SCORE")
+                ?? 0.12
+        )
+    }
+
+    public func predict(
+        request: NamingPredictionRequest,
+        candidates: [LoadedNamingRule]
+    ) -> [NamingRulePrediction] {
+        guard enabled,
+              let indexPath,
+              !indexPath.isEmpty,
+              !candidates.isEmpty else {
+            return []
+        }
+
+        let mergedText = [
+            request.text,
+            request.metadata?.fileName,
+            request.metadata?.originalName,
+            request.sample_file_names.joined(separator: " ")
+        ]
+        .compactMap { $0 }
+        .joined(separator: "\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !mergedText.isEmpty else {
+            return []
+        }
+
+        let matches: [ScoredNamingEmbeddingReference]
+        do {
+            matches = try NamingEmbeddingReferenceRuntime.shared.search(
+                indexPath: indexPath,
+                text: mergedText,
+                topK: topK
+            )
+        } catch {
+            return []
+        }
+        guard !matches.isEmpty else {
+            return []
+        }
+
+        let candidatesByID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.rule_id, $0) })
+        var predictionsByRule: [String: NamingRulePrediction] = [:]
+
+        for match in matches where match.score >= minScore {
+            let targets = predictionTargets(
+                for: match.record,
+                candidates: candidates,
+                candidatesByID: candidatesByID
+            )
+            for target in targets {
+                let weightedScore = max(0, min(1, match.score * target.weight))
+                guard weightedScore >= max(0.05, minScore * 0.60) else {
+                    continue
+                }
+
+                let reason = "embedding \(target.reason): \(match.record.reference_id)=\(String(format: "%.3f", match.score))"
+                let existingScore = predictionsByRule[target.ruleID]?.score ?? 0
+                if weightedScore > existingScore {
+                    predictionsByRule[target.ruleID] = NamingRulePrediction(
+                        rule_id: target.ruleID,
+                        score: weightedScore,
+                        source: provider_id,
+                        reasons: [reason]
+                    )
+                }
+            }
+        }
+
+        return predictionsByRule.values.sorted {
+            if $0.score == $1.score {
+                return $0.rule_id < $1.rule_id
+            }
+            return $0.score > $1.score
+        }
+    }
+
+    private func predictionTargets(
+        for record: NamingEmbeddingReferenceRecord,
+        candidates: [LoadedNamingRule],
+        candidatesByID: [String: LoadedNamingRule]
+    ) -> [EmbeddingPredictionTarget] {
+        var targets: [String: EmbeddingPredictionTarget] = [:]
+        func upsert(ruleID: String, weight: Double, reason: String) {
+            guard candidatesByID[ruleID] != nil else { return }
+            let normalizedWeight = max(0, min(1, weight))
+            if let existing = targets[ruleID], existing.weight >= normalizedWeight {
+                return
+            }
+            targets[ruleID] = EmbeddingPredictionTarget(
+                ruleID: ruleID,
+                weight: normalizedWeight,
+                reason: reason
+            )
+        }
+
+        if let directRuleID = namingTrimmed(record.rule_id) {
+            upsert(ruleID: directRuleID, weight: 1.00, reason: "rule_id")
+        }
+        if namingNormalizedKey(record.reference_kind) == "namingrule",
+           let ruleID = namingTrimmed(record.reference_id) {
+            upsert(ruleID: ruleID, weight: 0.96, reason: "reference_id")
+        }
+
+        if let classCode = namingNormalizedKey(record.class_code) {
+            for candidate in candidates {
+                let candidateCode = namingNormalizedKey(candidate.definition.metadata?.suggested_class_code)
+                if candidateCode == classCode {
+                    upsert(
+                        ruleID: candidate.rule_id,
+                        weight: 0.80,
+                        reason: "class_code"
+                    )
+                }
+            }
+        }
+
+        if let documentType = namingCanonicalDocumentType(
+            namingTrimmed(record.metadata_type_document) ?? namingTrimmed(record.label)
+        ) {
+            for candidate in candidates where candidateMatchesDocumentType(candidate, documentType: documentType) {
+                upsert(
+                    ruleID: candidate.rule_id,
+                    weight: 0.72,
+                    reason: "document_type"
+                )
+            }
+        }
+
+        return Array(targets.values)
+    }
+
+    private func candidateMatchesDocumentType(
+        _ candidate: LoadedNamingRule,
+        documentType: String
+    ) -> Bool {
+        let signatures: [String?] = [
+            candidate.definition.document_family,
+            candidate.definition.label,
+            candidate.definition.metadata?.canonical_output_label
+        ] + (candidate.definition.conditions.source_document_families ?? [])
+        let normalizedSignatures = Set(
+            signatures.compactMap(namingCanonicalDocumentType)
+        )
+        return normalizedSignatures.contains(documentType)
+    }
+}
+
+private struct EmbeddingPredictionTarget {
+    let ruleID: String
+    let weight: Double
+    let reason: String
+}
+
+private struct NamingEmbeddingReferenceRecord: Decodable, Sendable {
+    let reference_id: String
+    let reference_kind: String
+    let text: String
+    let label: String?
+    let class_code: String?
+    let rule_id: String?
+    let preset_id: String?
+    let path_hint: String?
+    let metadata_type_document: String?
+}
+
+private struct ScoredNamingEmbeddingReference: Sendable {
+    let record: NamingEmbeddingReferenceRecord
+    let score: Double
+}
+
+private final class NamingEmbeddingReferenceRuntime {
+    static let shared = NamingEmbeddingReferenceRuntime()
+
+    private let lock = NSLock()
+    private var cache: [String: [NamingEmbeddingReferenceRecord]] = [:]
+
+    private init() {}
+
+    func search(
+        indexPath: String,
+        text: String,
+        topK: Int
+    ) throws -> [ScoredNamingEmbeddingReference] {
+        let references = try loadReferences(indexPath: indexPath)
+        let scored = references
+            .map { record in
+                ScoredNamingEmbeddingReference(
+                    record: record,
+                    score: namingTokenSimilarity(lhs: text, rhs: record.text)
+                )
+            }
+            .filter { $0.score > 0 }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.record.reference_id < rhs.record.reference_id
+            }
+        if scored.isEmpty {
+            return []
+        }
+        return Array(scored.prefix(max(1, topK)))
+    }
+
+    private func loadReferences(indexPath: String) throws -> [NamingEmbeddingReferenceRecord] {
+        lock.lock()
+        if let cached = cache[indexPath] {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        let url = URL(fileURLWithPath: indexPath)
+        let data = try Data(contentsOf: url)
+        let references: [NamingEmbeddingReferenceRecord]
+
+        if url.pathExtension.lowercased() == "jsonl" {
+            let lines = String(decoding: data, as: UTF8.self)
+                .split(whereSeparator: \.isNewline)
+                .map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            references = lines.compactMap { line in
+                try? JSONDecoder().decode(NamingEmbeddingReferenceRecord.self, from: Data(line.utf8))
+            }
+        } else {
+            references = try JSONDecoder().decode([NamingEmbeddingReferenceRecord].self, from: data)
+        }
+
+        lock.lock()
+        cache[indexPath] = references
+        lock.unlock()
+        return references
+    }
+}
+
+private func namingEnvironmentBool(_ key: String, defaultValue: Bool) -> Bool {
+    guard let raw = ProcessInfo.processInfo.environment[key]?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased(),
+          !raw.isEmpty else {
+        return defaultValue
+    }
+    return ["1", "true", "yes", "on"].contains(raw)
+}
+
+private func namingEnvironmentInt(_ key: String) -> Int? {
+    guard let raw = ProcessInfo.processInfo.environment[key]?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else {
+        return nil
+    }
+    return Int(raw)
+}
+
+private func namingEnvironmentDouble(_ key: String) -> Double? {
+    guard let raw = ProcessInfo.processInfo.environment[key]?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else {
+        return nil
+    }
+    return Double(raw)
+}
+
+private func namingTrimmedEnvironment(_ key: String) -> String? {
+    guard let raw = ProcessInfo.processInfo.environment[key]?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else {
+        return nil
+    }
+    return raw
+}
+
+private func namingTrimmed(_ value: String?) -> String? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !value.isEmpty else {
+        return nil
+    }
+    return value
+}
+
+private func namingNormalizedKey(_ value: String?) -> String? {
+    guard let value = namingTrimmed(value) else {
+        return nil
+    }
+    let normalized = normalizedSearchText(value).replacingOccurrences(of: " ", with: "")
+    return normalized.isEmpty ? nil : normalized
+}
+
+private func namingCanonicalDocumentType(_ raw: String?) -> String? {
+    guard let value = namingNormalizedKey(raw) else {
+        return nil
+    }
+    if value.contains("resolution") {
+        return "resolution"
+    }
+    if value.contains("entente") || value.contains("contrat") || value.contains("convention") || value.contains("bail") || value.contains("protocole") || value.contains("avenant") {
+        return "entente"
+    }
+    if value.contains("procesverbal") || value == "pv" {
+        return "procesverbal"
+    }
+    if value.contains("facture") || value.contains("invoice") {
+        return "facture"
+    }
+    if value.contains("permis") {
+        return "permis"
+    }
+    if value.contains("avismotion") {
+        return "avismotion"
+    }
+    if value.contains("depot") {
+        return "depot"
+    }
+    return nil
+}
+
+private func namingTokenSimilarity(lhs: String, rhs: String) -> Double {
+    let lhsTokens = Set(namingFeatureTokens(from: lhs))
+    let rhsTokens = Set(namingFeatureTokens(from: rhs))
+    guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else {
+        return 0
+    }
+    let intersection = lhsTokens.intersection(rhsTokens).count
+    let scale = sqrt(Double(lhsTokens.count * rhsTokens.count))
+    guard scale > 0 else {
+        return 0
+    }
+    return Double(intersection) / scale
+}
+
+private func namingFeatureTokens(from text: String) -> [String] {
+    let normalized = text
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr_CA"))
+        .lowercased()
+    let stopWords: Set<String> = [
+        "avec", "dans", "pour", "sans", "par", "sur", "aux", "des", "les",
+        "une", "que", "qui", "est", "sont", "dont", "ceci", "cela", "ville",
+        "amos", "conseil", "municipal", "document", "fichier", "type", "objet", "resume"
+    ]
+    return normalized
+        .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        .map(String.init)
+        .filter { token in
+            token.count >= 3 && !stopWords.contains(token)
+        }
 }
 
 #if canImport(CoreML)

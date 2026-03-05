@@ -145,7 +145,7 @@ enum IngestPipelineProcessor {
 }
 
 final class IngestQueueConsumerLifecycle: LifecycleHandler, @unchecked Sendable {
-    private var consumerTask: Task<Void, Never>?
+    private var consumerTasks: [Task<Void, Never>] = []
 
     func didBoot(_ application: Application) throws {
         guard Environment.get("ORCHIVISTE_ENABLE_API_QUEUE_CONSUMER") != "0" else {
@@ -157,17 +157,26 @@ final class IngestQueueConsumerLifecycle: LifecycleHandler, @unchecked Sendable 
             return
         }
 
-        consumerTask = Task.detached(priority: .background) {
-            await self.consumeLoop(application: application)
+        let workers = queueWorkerCount()
+        application.logger.info("Consommateur ingest Redis actif.", metadata: [
+            "workers": .stringConvertible(workers)
+        ])
+
+        consumerTasks = (0..<workers).map { index in
+            Task.detached(priority: .background) {
+                await self.consumeLoop(application: application, workerIndex: index + 1)
+            }
         }
     }
 
     func shutdown(_ application: Application) {
-        consumerTask?.cancel()
-        consumerTask = nil
+        for task in consumerTasks {
+            task.cancel()
+        }
+        consumerTasks.removeAll()
     }
 
-    private func consumeLoop(application: Application) async {
+    private func consumeLoop(application: Application, workerIndex: Int) async {
         let decoder = JSONDecoder()
         while !Task.isCancelled {
             guard let payload = await RedisQueueService.dequeueIngest(
@@ -180,6 +189,10 @@ final class IngestQueueConsumerLifecycle: LifecycleHandler, @unchecked Sendable 
 
             do {
                 let ingest = try decoder.decode(IngestJob.self, from: payload)
+                application.logger.debug("Ingest dequeued by worker.", metadata: [
+                    "worker_index": .stringConvertible(workerIndex),
+                    "job_id": .string(ingest.taskId.uuidString)
+                ])
                 await EventPublisher.publish(
                     type: "queue.ingest_dequeued",
                     payload: ["job_id": ingest.taskId.uuidString],
@@ -204,5 +217,14 @@ final class IngestQueueConsumerLifecycle: LifecycleHandler, @unchecked Sendable 
                 )
             }
         }
+    }
+
+    private func queueWorkerCount() -> Int {
+        if let raw = Environment.get("ORCHIVISTE_API_QUEUE_CONCURRENCY"),
+           let explicit = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return max(1, min(16, explicit))
+        }
+        let cpu = max(1, ProcessInfo.processInfo.activeProcessorCount)
+        return max(1, min(4, cpu / 2))
     }
 }

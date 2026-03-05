@@ -89,6 +89,15 @@ ORCHIVISTE_ANALYSE_PROVIDER_EMBEDDINGS_MIN_SCORE=0.18
 
 Cette couche reste une aide a la decision. Le rendu final du nom et le routage restent gouvernes par les regles et validations deterministes.
 
+La meme reference peut maintenant aussi alimenter le ranking de regles de nommage (couche `OrchivisteAnalyseCore`) :
+
+```bash
+ORCHIVISTE_NAMING_EMBEDDINGS_ENABLED=1
+ORCHIVISTE_NAMING_EMBEDDINGS_INDEX_PATH=/chemin/vers/embedding_reference.jsonl
+ORCHIVISTE_NAMING_EMBEDDINGS_TOP_K=8
+ORCHIVISTE_NAMING_EMBEDDINGS_MIN_SCORE=0.12
+```
+
 ## Outillage ML
 
 Scripts ajoutes dans `ml/scripts/` :

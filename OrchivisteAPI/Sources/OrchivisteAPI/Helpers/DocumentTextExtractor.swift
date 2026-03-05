@@ -15,8 +15,9 @@ struct ExtractedDocumentText {
 
 enum DocumentTextExtractor {
     private static let supportedExtensionsSet: Set<String> = [
-        "pdf", "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "tif", "tiff"
+        "pdf", "doc", "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "tif", "tiff"
     ]
+    private static let officeConversionSemaphore = DispatchSemaphore(value: officeConversionConcurrency())
 
     static func supportedExtensions() -> [String] {
         supportedExtensionsSet.sorted()
@@ -37,6 +38,17 @@ enum DocumentTextExtractor {
                 previewPDFURL: nil,
                 temporaryArtifacts: [],
                 warnings: pages.isEmpty ? ["pdf_text_extraction_unavailable"] : []
+            )
+        case "doc":
+            let conversion = convertOfficeDocumentToPDFIfPossible(fileURL: fileURL, logger: logger)
+            guard let previewPDFURL = conversion.pdfURL else { return nil }
+            let pages = extractPDFPages(fileURL: previewPDFURL, logger: logger)
+            return ExtractedDocumentText(
+                kind: "doc",
+                pages: pages.isEmpty ? [defaultText(for: fileURL)] : pages,
+                previewPDFURL: previewPDFURL,
+                temporaryArtifacts: conversion.temporaryArtifacts,
+                warnings: conversion.warnings + (pages.isEmpty ? ["doc_text_extraction_unavailable"] : [])
             )
         case "docx":
             let pages = extractDOCXPages(fileURL: fileURL, logger: logger)
@@ -378,6 +390,9 @@ enum DocumentTextExtractor {
             return (nil, [], ["office_preview_conversion_unavailable"])
         }
 
+        officeConversionSemaphore.wait()
+        defer { officeConversionSemaphore.signal() }
+
         let executable = commandExists("soffice") ? "soffice" : "libreoffice"
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("orchiviste-office-preview-\(UUID().uuidString)", isDirectory: true)
@@ -387,15 +402,39 @@ enum DocumentTextExtractor {
             return (nil, [], ["office_preview_conversion_tempdir_failed"])
         }
 
+        let profileDir = tempDir.appendingPathComponent("libreoffice-profile", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: profileDir, withIntermediateDirectories: true)
+        } catch {
+            try? FileManager.default.removeItem(at: tempDir)
+            return (nil, [], ["office_preview_conversion_profile_failed"])
+        }
+
         let convert = ShellCommand.run(
             executable: executable,
             arguments: [
                 "--headless",
+                "--nologo",
+                "--nodefault",
+                "--norestore",
+                "--nolockcheck",
+                "-env:UserInstallation=\(profileDir.absoluteURL.absoluteString)",
                 "--convert-to", "pdf",
                 "--outdir", tempDir.path,
                 fileURL.path
-            ]
+            ],
+            timeoutSeconds: officeConversionTimeoutSeconds(),
+            captureOutput: false
         )
+        if convert.exitCode == 124 {
+            logger.warning("Conversion Office -> PDF interrompue (timeout).", metadata: [
+                "path": .string(fileURL.path),
+                "timeout_seconds": .stringConvertible(officeConversionTimeoutSeconds()),
+                "stderr": .string(convert.stderr)
+            ])
+            try? FileManager.default.removeItem(at: tempDir)
+            return (nil, [], ["office_preview_conversion_timeout"])
+        }
         guard convert.exitCode == 0 else {
             logger.warning("Conversion Office -> PDF en echec.", metadata: [
                 "path": .string(fileURL.path),
@@ -515,7 +554,11 @@ enum DocumentTextExtractor {
     }
 
     private static func zipEntryList(fileURL: URL) -> [String] {
-        let result = ShellCommand.run(executable: "zipinfo", arguments: ["-1", fileURL.path])
+        let result = ShellCommand.run(
+            executable: "zipinfo",
+            arguments: ["-1", fileURL.path],
+            timeoutSeconds: officeArchiveReadTimeoutSeconds()
+        )
         guard result.exitCode == 0 else {
             return []
         }
@@ -526,7 +569,11 @@ enum DocumentTextExtractor {
     }
 
     private static func zipEntryText(fileURL: URL, entry: String) -> String? {
-        let result = ShellCommand.run(executable: "unzip", arguments: ["-p", fileURL.path, entry])
+        let result = ShellCommand.run(
+            executable: "unzip",
+            arguments: ["-p", fileURL.path, entry],
+            timeoutSeconds: officeArchiveReadTimeoutSeconds()
+        )
         guard result.exitCode == 0 else {
             return nil
         }
@@ -674,5 +721,26 @@ enum DocumentTextExtractor {
             .replacingOccurrences(of: "&apos;", with: "'")
             .replacingOccurrences(of: "&#10;", with: "\n")
             .replacingOccurrences(of: "&#13;", with: "\n")
+    }
+
+    private static func officeConversionTimeoutSeconds() -> TimeInterval {
+        let raw = (Environment.get("ORCHIVISTE_OFFICE_CONVERSION_TIMEOUT_SECONDS") ?? "45")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsed = TimeInterval(raw) ?? 45
+        return max(5, min(600, parsed))
+    }
+
+    private static func officeArchiveReadTimeoutSeconds() -> TimeInterval {
+        let raw = (Environment.get("ORCHIVISTE_OFFICE_ARCHIVE_TIMEOUT_SECONDS") ?? "10")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsed = TimeInterval(raw) ?? 10
+        return max(1, min(120, parsed))
+    }
+
+    private static func officeConversionConcurrency() -> Int {
+        let raw = (Environment.get("ORCHIVISTE_OFFICE_CONVERSION_CONCURRENCY") ?? "1")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsed = Int(raw) ?? 1
+        return max(1, min(4, parsed))
     }
 }

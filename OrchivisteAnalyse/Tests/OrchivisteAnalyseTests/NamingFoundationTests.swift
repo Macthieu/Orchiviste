@@ -258,6 +258,59 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertGreaterThan(ranked.first?.score ?? 0, 0.1)
     }
 
+    func testNamingRuleRankerUsesEmbeddingSimilarityWhenIndexIsProvided() throws {
+        let rules = NamingFoundationSeeds.bootstrapFallbackRules()
+        let resolution = LoadedNamingRule(
+            rule_id: rules.first { $0.id == "rule_resolution_conseil_municipal" }!.id,
+            version: "1.0.0",
+            status: .active,
+            source: .configFile,
+            definition: rules.first { $0.id == "rule_resolution_conseil_municipal" }!
+        )
+        let entente = LoadedNamingRule(
+            rule_id: rules.first { $0.id == "rule_entente_uniformisee" }!.id,
+            version: "1.0.0",
+            status: .active,
+            source: .configFile,
+            definition: rules.first { $0.id == "rule_entente_uniformisee" }!
+        )
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orchiviste-naming-embedding-\(UUID().uuidString).jsonl")
+        let jsonl = """
+        {"reference_id":"rule_entente_uniformisee","reference_kind":"naming_rule","text":"partenariat touristique anisipi developpement regional","label":"Entente","class_code":"ADM-ENT","rule_id":"rule_entente_uniformisee","preset_id":"preset_default","path_hint":"","metadata_type_document":"Entente"}
+        {"reference_id":"rule_resolution_conseil_municipal","reference_kind":"naming_rule","text":"extrait proces verbal resolution conseil municipal","label":"Résolution","class_code":"ADM-RES","rule_id":"rule_resolution_conseil_municipal","preset_id":"preset_resolution","path_hint":"","metadata_type_document":"Resolution"}
+        """
+        try jsonl.write(to: tempURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let ranker = NamingRuleRanker(
+            deterministic: DeterministicNamingPredictionProvider(),
+            mlScorer: NamingMLScorer(
+                providers: [
+                    EmbeddingNamingPredictionProvider(
+                        enabled: true,
+                        indexPath: tempURL.path,
+                        topK: 3,
+                        minScore: 0.01
+                    )
+                ]
+            )
+        )
+        let request = NamingPredictionRequest(
+            text: "Partenariat touristique Anisipi pour le développement régional",
+            metadata: NamingSourceMetadata(fileName: "document.pdf"),
+            sample_count: 1,
+            sample_file_names: ["document.pdf"]
+        )
+
+        let ranked = ranker.rank(request: request, candidates: [resolution, entente])
+
+        XCTAssertEqual(ranked.first?.rule.rule_id, "rule_entente_uniformisee")
+        XCTAssertGreaterThan(ranked.first?.semantic_score ?? 0, 0)
+        XCTAssertTrue(ranked.first?.sources.contains("embedding_similarity") == true)
+    }
+
     func testCoreMLDefaultFeatureVectorHasExpectedShape() {
         let request = NamingPredictionRequest(
             text: """

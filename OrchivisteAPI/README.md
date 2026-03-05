@@ -82,7 +82,7 @@ Tests fumée MVP :
 
 Support multi-formats MVP :
 - PDF : preview image + texte natif, OCR fallback si necessaire
-- Word / Excel / PowerPoint (`.docx`, `.xlsx`, `.pptx`) : extraction texte OOXML sans dependance lourde, conversion preview Office -> PDF si `soffice` est disponible
+- Word / Excel / PowerPoint (`.doc`, `.docx`, `.xlsx`, `.pptx`) : extraction texte Office avec conversion preview PDF via `soffice` (OOXML lu nativement pour `docx/xlsx/pptx`)
 - Images (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`) : OCR direct + preview image/placeholder selon la plateforme
 - l'ingestion UI locale et par dossier accepte maintenant ces formats
 
@@ -161,6 +161,7 @@ Redis / ordonnanceur :
 - `ORCHIVISTE_REDIS_URL` (ex. `redis://127.0.0.1:6379`)
 - `ORCHIVISTE_DISPATCHER_ENABLED` = `1` pour activer l'ordonnanceur (MVP : logs uniquement)
 - `ORCHIVISTE_DISPATCHER_INTERVAL` en secondes (defaut `5`)
+- `ORCHIVISTE_API_QUEUE_CONCURRENCY` (optionnel) : nombre de workers ingest en parallele dans l'API (defaut auto, borné 1..16)
 
 Analyse :
 - `ORCHIVISTE_ANALYSE_HOST` (defaut `127.0.0.1`, utiliser `0.0.0.0` en Docker)
@@ -176,6 +177,7 @@ Analyse :
   - `ORCHIVISTE_OCR_ENABLED` (`1` par défaut)
   - `ORCHIVISTE_OCR_LANG` (`fra+eng` par défaut)
   - `ORCHIVISTE_OCR_MAX_PAGES` (`12` par défaut)
+  - `ORCHIVISTE_PREVIEW_MAX_PAGES` (`12` par défaut) : limite de pages rendues pour l'aperçu (accélère les gros lots)
   - `ORCHIVISTE_OCR_DPI` (`220` par défaut)
   - `ORCHIVISTE_OCR_MIN_TEXT_CHARS` (`140` par défaut; sous ce seuil, OCR tenté)
 - OCR PDF sélectionnable au routage local :
@@ -186,7 +188,10 @@ Analyse :
   - `ORCHIVISTE_ROUTE_OCR_MIN_TEXT_CHARS` (hérite de `ORCHIVISTE_OCR_MIN_TEXT_CHARS`)
 - conversion Office optionnelle :
   - `ORCHIVISTE_OFFICE_CONVERSION_ENABLED` (`1` par défaut)
-  - installer `soffice` / LibreOffice si vous voulez un preview PDF reel pour `docx/xlsx/pptx`
+  - `ORCHIVISTE_OFFICE_CONVERSION_TIMEOUT_SECONDS` (`45` par défaut) : timeout dur pour `soffice/libreoffice` (évite qu'un `.docx` bloque le worker)
+  - `ORCHIVISTE_OFFICE_CONVERSION_CONCURRENCY` (`1` par défaut, borné 1..4) : limite locale de conversions Office simultanées
+  - `ORCHIVISTE_OFFICE_ARCHIVE_TIMEOUT_SECONDS` (`10` par défaut) : timeout de lecture archive `docx/xlsx/pptx` (`zipinfo`/`unzip`)
+  - installer `soffice` / LibreOffice si vous voulez un preview PDF reel pour `doc/docx/xlsx/pptx`
 - export PDF/A :
   - `ORCHIVISTE_EXPORT_PDFA_ENABLED` (`0` par défaut, peut etre active par preset)
   - `ORCHIVISTE_EXPORT_PREFERRED_PDF_FORMAT` (`PDF/A-2b`)

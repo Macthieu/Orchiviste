@@ -76,6 +76,26 @@ Et, dans un environnement Python 3.11 local avec `torch` et `coremltools` :
 Ce bootstrap reste un point de depart. Le corpus de production doit ensuite etre enrichi
 avec des feedbacks humains valides et, idealement, du texte OCR ou natif reel.
 
+## Evaluation locale du ranking de nommage
+
+Pour mesurer l'impact des regles + similarite semantique (sans committer de PDF) :
+
+```bash
+python3 ml/scripts/evaluate_naming_quality.py \
+  --dataset ml/datasets/labeled/classification_external_eval.jsonl \
+  --rules-dir OrchivisteAPI/configs/naming/rules \
+  --embedding-index ml/datasets/labeled/embedding_reference.jsonl \
+  --output-report ml/datasets/labeled/naming_quality_report.json \
+  --output-details-csv ml/datasets/labeled/naming_quality_details.csv
+```
+
+Le rapport JSON fournit notamment :
+
+- `top1_accuracy` et `top3_accuracy`
+- `deterministic_top1_accuracy`
+- `semantic_improvements` (cas corriges grace a la couche semantique)
+- `filename_validation_pass_rate`
+
 ## Corpus externes (familles separees)
 
 Pour eviter de melanger des familles qui n'ont pas la meme regle de nommage

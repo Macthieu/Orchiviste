@@ -51,7 +51,8 @@ enum PreviewRenderer {
         var textPages: [Int: String] = [:]
         var imagesByPage: [Int: Data] = [:]
 
-        let pageCount = max(document.pageCount, 1)
+        let maxPages = previewMaxPages()
+        let pageCount = max(1, min(document.pageCount, maxPages))
         for pageIndex in 0..<pageCount {
             let pageNumber = pageIndex + 1
             guard let page = document.page(at: pageIndex) else {
@@ -77,7 +78,11 @@ enum PreviewRenderer {
             }
         }
 
-        logger.info("Aperçu genere.", metadata: ["job_id": .string(jobId.uuidString), "pages": .stringConvertible(pageCount)])
+        logger.info("Aperçu genere.", metadata: [
+            "job_id": .string(jobId.uuidString),
+            "pages": .stringConvertible(pageCount),
+            "preview_max_pages": .stringConvertible(maxPages)
+        ])
         return PreviewRecord(
             jobId: jobId,
             pages: pageCount,

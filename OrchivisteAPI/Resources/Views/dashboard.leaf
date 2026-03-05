@@ -397,7 +397,7 @@
                     <button class="path-btn" type="button" onclick="openSingleLocalFilePicker()">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openServerFilePicker('singleServerFileField', 'singleFileDisplay', 'singleFileHint')">Serveur</button>
                 </div>
-                    <input id="singleFileUpload" class="picker-upload-input" type="file" name="pdf" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" onchange="handleLocalFileSelection('singleFileUpload', 'singleServerFileField', 'singleFileDisplay', 'singleFileHint')">
+                    <input id="singleFileUpload" class="picker-upload-input" type="file" name="pdf" accept=".pdf,.doc,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" onchange="handleLocalFileSelection('singleFileUpload', 'singleServerFileField', 'singleFileDisplay', 'singleFileHint')">
                 <div id="singleFileHint" class="help">Le bouton "Choisir" ouvre le sélecteur de fichier local. Le bouton "Serveur" parcourt les fichiers visibles par l'API.</div>
             </label>
             <label>Étiquettes (optionnel)
@@ -419,7 +419,7 @@
                     <button class="path-btn" type="button" onclick="openInputLocalFolderPicker()">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('inputFolderField', null, 'inputFolderHint', 'inputFolderMode')">Serveur</button>
                 </div>
-                <input id="inputFolderUpload" class="picker-upload-input" type="file" name="folder_files[]" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint','inputFolderMode')">
+                <input id="inputFolderUpload" class="picker-upload-input" type="file" name="folder_files[]" accept=".pdf,.doc,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalFolderSelection('inputFolderUpload','inputFolderField','inputFolderHint','inputFolderMode')">
                 <div id="inputFolderHint" class="help">Le bouton "Choisir" ouvre le sélecteur de dossier local (ton ordinateur).</div>
             </label>
             <label>Dossier de sortie (optionnel)
@@ -428,7 +428,7 @@
                     <button class="path-btn" type="button" onclick="openOutputLocalFolderPicker()">Choisir</button>
                     <button class="path-btn path-btn-server" type="button" onclick="openFolderPicker('outputFolderField', null, 'outputFolderHint', 'outputFolderMode')">Serveur</button>
                 </div>
-                <input id="outputFolderUpload" class="picker-upload-input" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalOutputFolderSelection('outputFolderUpload','outputFolderField','outputFolderHint','outputFolderMode','#(ingest_default_output_folder)')">
+                <input id="outputFolderUpload" class="picker-upload-input" type="file" accept=".pdf,.doc,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/*" webkitdirectory directory multiple onchange="handleLocalOutputFolderSelection('outputFolderUpload','outputFolderField','outputFolderHint','outputFolderMode','#(ingest_default_output_folder)')">
                 <div id="outputFolderHint" class="help">Le bouton "Choisir" ouvre un dossier local et cible un sous-dossier de sortie côté serveur. Le bouton "Serveur" parcourt les dossiers visibles par l'API.</div>
             </label>
             <label>Étiquettes (optionnel)
@@ -596,7 +596,7 @@ let selectedSingleLocalFile = null;
 let selectedInputFolderFiles = [];
 
 function supportedUploadExtensions() {
-    return [".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg", ".tif", ".tiff"];
+    return [".pdf", ".doc", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg", ".tif", ".tiff"];
 }
 
 function isSupportedUploadFileName(name) {

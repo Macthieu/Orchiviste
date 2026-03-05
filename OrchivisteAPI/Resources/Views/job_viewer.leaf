@@ -33,12 +33,12 @@
             font-weight: 700;
         }
         .wrap {
-            max-width: 1280px;
+            max-width: 1920px;
             margin: 16px auto 30px;
             padding: 0 14px;
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 12px;
+            grid-template-columns: minmax(0, 1.25fr) minmax(700px, 1.35fr);
+            gap: 16px;
         }
         .panel {
             background: var(--surface);
@@ -46,7 +46,7 @@
             border-radius: 10px;
             padding: 12px;
         }
-        .meta dl { margin: 0; display: grid; grid-template-columns: 160px 1fr; row-gap: 8px; column-gap: 8px; }
+        .meta dl { margin: 0; display: grid; grid-template-columns: 170px 1fr; row-gap: 8px; column-gap: 10px; }
         .meta dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
         .meta dd { margin: 0; font-weight: 600; word-break: break-word; }
         .btn {
@@ -95,6 +95,42 @@
             font: inherit;
             margin-top: 4px;
             background: #fff;
+        }
+        .viewer-json {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.45;
+            min-height: 300px;
+            resize: vertical;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        .viewer-json-large {
+            min-height: 440px;
+        }
+        .viewer-text {
+            min-height: 360px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+        .viewer-text-large {
+            min-height: 460px;
+        }
+        .meta-block {
+            margin: 10px 0 12px;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fbf8f2;
+        }
+        .meta-block h5 {
+            margin: 0 0 8px;
+            font-size: 13px;
+        }
+        .meta-block dl {
+            grid-template-columns: 220px 1fr;
+            row-gap: 6px;
+            column-gap: 8px;
         }
         input[type="checkbox"] {
             width: auto;
@@ -268,6 +304,16 @@
         }
         .tab-pane { display: none; }
         .tab-pane.active { display: block; }
+        @media (max-width: 1520px) {
+            .wrap {
+                grid-template-columns: minmax(0, 1.15fr) minmax(600px, 1.2fr);
+            }
+        }
+        @media (max-width: 1320px) {
+            .wrap {
+                grid-template-columns: minmax(0, 1.2fr) minmax(520px, 1.1fr);
+            }
+        }
         @media (max-width: 960px) {
             .wrap { grid-template-columns: 1fr; }
         }
@@ -359,17 +405,50 @@
         #else:
         <p style="margin: 0 0 8px; color: var(--muted); font-size: 12px;">Aucune métadonnée suggérée disponible.</p>
         #endif
+
+        #if(extended_metadata_present):
+        <div class="meta-block">
+            <h5>Métadonnées documentaires détaillées</h5>
+            <dl>
+                #for(item in extended_metadata):
+                <dt>#(item.label)</dt><dd>#(item.value)</dd>
+                #endfor
+            </dl>
+        </div>
+        #endif
+
+        #if(accounting_metadata_present):
+        <div class="meta-block">
+            <h5>Métadonnées financières / comptables</h5>
+            <dl>
+                #for(item in accounting_metadata):
+                <dt>#(item.label)</dt><dd>#(item.value)</dd>
+                #endfor
+            </dl>
+        </div>
+        #endif
+
+        #if(metadata_complements_present):
+        <div class="meta-block">
+            <h5>Métadonnées complémentaires détectées</h5>
+            <dl>
+                #for(item in metadata_complements):
+                <dt>#(item.label)</dt><dd>#(item.value)</dd>
+                #endfor
+            </dl>
+        </div>
+        #endif
         <label>Métadonnées suggérées (JSON)
-            <textarea rows="8" readonly>#(suggested_metadata_json)</textarea>
+            <textarea class="viewer-json viewer-json-large" rows="20" readonly>#(suggested_metadata_json)</textarea>
         </label>
 
         <h4>Texte d'aperçu</h4>
         <label>Page <input id="textPage" type="number" min="1" value="1"></label>
         <button class="btn" type="button" onclick="loadText()">Charger le texte</button>
-        <textarea id="textArea" rows="10" readonly></textarea>
+        <textarea id="textArea" class="viewer-text viewer-text-large" rows="20" readonly></textarea>
 
         <h4>Champs extraits (JSON)</h4>
-        <textarea rows="10" readonly>#(analysis_champs_json)</textarea>
+        <textarea class="viewer-json viewer-json-large" rows="16" readonly>#(analysis_champs_json)</textarea>
 
         #if(can_review):
         <p class="notice">Revue requise : correction obligatoire avant routage.</p>

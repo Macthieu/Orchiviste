@@ -189,8 +189,16 @@ func registerNamingUIRoutes(_ app: Application) {
         }
         let rankingProviderStatus: String = {
             guard rankingRequest != nil else { return "Aucun test exécuté" }
-            if rankingResults.contains(where: { $0.ml_score > 0 }) {
+            let hasCoreML = rankingResults.contains(where: { $0.ml_score > 0 || $0.sources.contains("coreml") })
+            let hasSemantic = rankingResults.contains(where: { $0.sources.contains("embedding_similarity") })
+            if hasCoreML && hasSemantic {
+                return "Core ML + similarité sémantique + heuristique déterministe"
+            }
+            if hasCoreML {
                 return "Core ML + heuristique déterministe"
+            }
+            if hasSemantic {
+                return "Similarité sémantique + heuristique déterministe"
             }
             return "Heuristique déterministe seulement"
         }()

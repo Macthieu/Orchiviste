@@ -1200,8 +1200,16 @@ private func routePreviewRankingProviderStatus(rows: [RoutePreviewRankingRow]) -
     guard !rows.isEmpty else {
         return "Aucun ranking disponible"
     }
-    if rows.contains(where: { $0.mlScore > 0 }) {
+    let hasCoreML = rows.contains(where: { $0.mlScore > 0 || $0.sources.contains("coreml") })
+    let hasSemantic = rows.contains(where: { $0.sources.contains("embedding_similarity") })
+    if hasCoreML && hasSemantic {
+        return "Core ML + similarité sémantique + heuristique déterministe"
+    }
+    if hasCoreML {
         return "Core ML + heuristique déterministe"
+    }
+    if hasSemantic {
+        return "Similarité sémantique + heuristique déterministe"
     }
     return "Heuristique déterministe seulement"
 }

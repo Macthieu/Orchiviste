@@ -231,6 +231,12 @@ private struct UIJobViewerContext: Encodable {
     let analysis_summary_points_present: Bool
     let suggested_metadata: [UIKeyValueSummary]
     let suggested_metadata_present: Bool
+    let extended_metadata: [UIKeyValueSummary]
+    let extended_metadata_present: Bool
+    let accounting_metadata: [UIKeyValueSummary]
+    let accounting_metadata_present: Bool
+    let metadata_complements: [UIKeyValueSummary]
+    let metadata_complements_present: Bool
     let suggested_metadata_json: String
     let analysis_champs_json: String
     let analysis_validation_flags: String
@@ -1479,6 +1485,16 @@ func registerUIRoutes(_ app: Application) {
         }
         let summaryPoints = analysisSummaryPoints(for: job)
         let metadataItems = suggestedMetadataItems(for: job)
+        let extendedMetadataItems = extendedMetadataItems(for: job)
+        let accountingMetadataItems = accountingMetadataItems(for: job)
+        let metadataComplements = metadataComplementItems(
+            for: job,
+            excluding: Set(
+                metadataItems.map(\.label)
+                    + extendedMetadataItems.map(\.label)
+                    + accountingMetadataItems.map(\.label)
+            )
+        )
         let reviewReasonItems = explainReviewReasons(job.analysisChamps)
         let validationItems = explainValidationFlags(job.analysisChamps)
         let routePreview = buildRoutePreview(
@@ -1531,6 +1547,12 @@ func registerUIRoutes(_ app: Application) {
             analysis_summary_points_present: !summaryPoints.isEmpty,
             suggested_metadata: metadataItems,
             suggested_metadata_present: !metadataItems.isEmpty,
+            extended_metadata: extendedMetadataItems,
+            extended_metadata_present: !extendedMetadataItems.isEmpty,
+            accounting_metadata: accountingMetadataItems,
+            accounting_metadata_present: !accountingMetadataItems.isEmpty,
+            metadata_complements: metadataComplements,
+            metadata_complements_present: !metadataComplements.isEmpty,
             suggested_metadata_json: suggestedMetadataJSON(for: job),
             analysis_champs_json: prettyPrintedJSON(job.analysisChamps),
             analysis_validation_flags: extractValidationFlags(job.analysisChamps),
@@ -2064,6 +2086,9 @@ private func suggestedMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] {
         ("Objet", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.objet", "document_objet", "resolution_titre"], fallback: "")),
         ("Date document", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_document", "date_document", "date"], fallback: "")),
         ("Organisme émetteur", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.organisme_emetteur", "organisme_emetteur", "comite"], fallback: "")),
+        ("Contrepartie", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.cocontractant", "cocontractant", "agreement_counterparty"], fallback: "")),
+        ("Période", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.periode", "periode", "metadata.duree", "duree"], fallback: "")),
+        ("Montant total", preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.montant_total", "montant_total", "total_amount"], fallback: "")),
         ("Sujets", (job.analysisSujets ?? []).isEmpty ? nil : job.analysisSujets?.joined(separator: ", ")),
         ("Code de classement", nonEmptyString(job.suggestedClassCode)),
         ("Préréglage", nonEmptyString(job.suggestedPreset))
@@ -2074,9 +2099,163 @@ private func suggestedMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] {
     }
 }
 
+private func extendedMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] {
+    let metadata: [(String, String?)] = [
+        ("Parties contractantes", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.parties_contractantes", "parties_contractantes", "agreement_parties"
+        ], fallback: "")),
+        ("Contrepartie", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.cocontractant", "cocontractant", "agreement_counterparty", "contrepartie"
+        ], fallback: "")),
+        ("Période / durée", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.periode", "periode", "metadata.duree", "duree", "agreement_period"
+        ], fallback: "")),
+        ("Date d'échéance", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.date_echeance", "date_echeance", "due_date"
+        ], fallback: "")),
+        ("Mots-clés", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.mots_cles", "summary.highlights"
+        ], fallback: "")),
+        ("Référence dossier", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.reference_dossier", "reference_dossier", "metadata.numero_reference", "numero_reference", "reference"
+        ], fallback: "")),
+        ("Pages pertinentes", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "idp_pages_pertinentes", "capture.pages_pertinentes", "capture.page_count"
+        ], fallback: "")),
+        ("Unités documentaires", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "idp_unit_count", "capture.unit_count"
+        ], fallback: "")),
+        ("Action IDP suggérée", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "idp_action"
+        ], fallback: ""))
+    ]
+    return metadata.compactMap { label, value in
+        guard let resolved = nonEmptyString(value), resolved != "N/D" else { return nil }
+        return UIKeyValueSummary(label: label, value: resolved)
+    }
+}
+
+private func accountingMetadataItems(for job: JobRecord) -> [UIKeyValueSummary] {
+    let metadata: [(String, String?)] = [
+        ("Type pièce comptable", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.type_piece_comptable", "type_piece_comptable", "accounting_document_type"
+        ], fallback: "")),
+        ("Numéro pièce justificative", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_piece_justificative", "numero_piece_justificative", "voucher_number"
+        ], fallback: "")),
+        ("Numéro facture", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_facture", "numero_facture", "facture_numero", "invoice_number"
+        ], fallback: "")),
+        ("Fournisseur / bénéficiaire", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.fournisseur", "fournisseur", "metadata.beneficiaire", "beneficiaire", "vendor_name", "supplier"
+        ], fallback: "")),
+        ("Client / titulaire", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.client", "client", "metadata.titulaire_compte", "titulaire_compte", "account_holder"
+        ], fallback: "")),
+        ("Numéro de compte", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.numero_compte", "numero_compte", "account_number"
+        ], fallback: "")),
+        ("Bon de commande", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.bon_commande", "bon_commande", "purchase_order", "po_number"
+        ], fallback: "")),
+        ("Centre de coût", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.centre_cout", "centre_cout", "cost_center"
+        ], fallback: "")),
+        ("Projet / dossier comptable", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.code_projet", "code_projet", "metadata.dossier_financier", "dossier_financier", "project_code"
+        ], fallback: "")),
+        ("Montant total", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.montant_total", "montant_total", "total_amount"
+        ], fallback: "")),
+        ("Montant HT", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.montant_ht", "montant_ht", "montant_hors_taxes"
+        ], fallback: "")),
+        ("Sous-total", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.sous_total", "sous_total", "subtotal"
+        ], fallback: "")),
+        ("Montant taxes", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.montant_taxes", "montant_taxes", "tax_amount"
+        ], fallback: "")),
+        ("TPS", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.tps", "tps"
+        ], fallback: "")),
+        ("TVQ", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.tvq", "tvq"
+        ], fallback: "")),
+        ("Montant TTC", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.montant_ttc", "montant_ttc", "grand_total"
+        ], fallback: "")),
+        ("Devise", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.devise", "devise", "currency"
+        ], fallback: "")),
+        ("Date facture", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.date_facture", "date_facture"
+        ], fallback: "")),
+        ("Date d'échéance paiement", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.date_echeance", "date_echeance", "due_date"
+        ], fallback: "")),
+        ("Mode de paiement", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.mode_paiement", "mode_paiement", "payment_method"
+        ], fallback: "")),
+        ("Conditions de paiement", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.conditions_paiement", "conditions_paiement", "payment_terms"
+        ], fallback: "")),
+        ("Compte GL", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.compte_gl", "compte_gl", "gl_account"
+        ], fallback: "")),
+        ("Unité administrative", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.unite_administrative", "unite_administrative", "department"
+        ], fallback: "")),
+        ("Statut paiement", preferredDisplayAnalysisValue(job.analysisChamps, keys: [
+            "metadata.statut_paiement", "statut_paiement", "payment_status"
+        ], fallback: ""))
+    ]
+    return metadata.compactMap { label, value in
+        guard let resolved = nonEmptyString(value), resolved != "N/D" else { return nil }
+        return UIKeyValueSummary(label: label, value: resolved)
+    }
+}
+
+private func metadataComplementItems(
+    for job: JobRecord,
+    excluding labelsToExclude: Set<String>
+) -> [UIKeyValueSummary] {
+    guard let champs = job.analysisChamps, !champs.isEmpty else {
+        return []
+    }
+
+    let metadataPairs = champs
+        .filter { key, _ in
+            key.hasPrefix("metadata.")
+        }
+        .sorted { lhs, rhs in
+            lhs.key < rhs.key
+        }
+
+    var seenNormalizedLabels = Set<String>()
+    var results: [UIKeyValueSummary] = []
+    for (key, rawValue) in metadataPairs {
+        guard let value = sanitizedAnalysisDisplayValue(rawValue) else { continue }
+        let rawLabel = key.replacingOccurrences(of: "metadata.", with: "")
+        let label = prettifiedMetadataLabel(rawLabel)
+        guard !labelsToExclude.contains(label) else { continue }
+        let normalized = label
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        guard !seenNormalizedLabels.contains(normalized) else { continue }
+        seenNormalizedLabels.insert(normalized)
+        results.append(UIKeyValueSummary(label: label, value: value))
+    }
+    return results
+}
+
 private func suggestedMetadataJSON(for job: JobRecord) -> String {
     var metadata: [String: String] = [:]
-    for item in suggestedMetadataItems(for: job) {
+    let mergedItems = suggestedMetadataItems(for: job)
+        + extendedMetadataItems(for: job)
+        + accountingMetadataItems(for: job)
+        + metadataComplementItems(for: job, excluding: [])
+    for item in mergedItems {
         let normalizedKey = item.label
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
@@ -2102,6 +2281,13 @@ private func analysisSummaryText(for job: JobRecord) -> String {
     let number = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.numero_document", "resolution_numero", "numero"], fallback: "")
     let date = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_document", "date_document", "date"], fallback: "")
     let issuer = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.organisme_emetteur", "organisme_emetteur", "comite"], fallback: "")
+    var counterparty = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.cocontractant", "cocontractant"], fallback: "")
+    if counterparty.isEmpty {
+        counterparty = inferredCounterparty(from: issuer)
+    }
+    let period = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.periode", "periode", "metadata.duree", "duree"], fallback: "")
+    let totalAmount = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.montant_total", "montant_total"], fallback: "")
+    let dueDate = preferredDisplayAnalysisValue(job.analysisChamps, keys: ["metadata.date_echeance", "date_echeance", "due_date"], fallback: "")
     let subjectText = nonEmptyString((job.analysisSujets ?? []).joined(separator: ", ")) ?? ""
 
     if let summary = nonEmptyString(job.analysisChamps?["summary.generated"]),
@@ -2127,6 +2313,18 @@ private func analysisSummaryText(for job: JobRecord) -> String {
     }
     if !issuer.isEmpty {
         parts.append("Émetteur ou comité suggéré: \(issuer).")
+    }
+    if !counterparty.isEmpty {
+        parts.append("Contrepartie repérée: \(counterparty).")
+    }
+    if !period.isEmpty {
+        parts.append("Période repérée: \(period).")
+    }
+    if !totalAmount.isEmpty {
+        parts.append("Montant total détecté: \(totalAmount).")
+    }
+    if !dueDate.isEmpty {
+        parts.append("Échéance repérée: \(dueDate).")
     }
     if !subjectText.isEmpty {
         parts.append("Sujets détectés: \(subjectText).")
@@ -2226,16 +2424,78 @@ private func significantTokenOverlapCount(summary: String, reference: String) ->
 }
 
 private func analysisSummaryPoints(for job: JobRecord) -> [String] {
+    var points: [String] = []
     if let raw = nonEmptyString(job.analysisChamps?["summary.highlights"]) {
-        return raw
+        points += raw
             .split(whereSeparator: { $0 == "|" || $0 == ";" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
+    let merged = suggestedMetadataItems(for: job)
+        + extendedMetadataItems(for: job)
+        + accountingMetadataItems(for: job)
+    let metadataPoints = merged.map { "\($0.label): \($0.value)" }
+    points += metadataPoints
+    var seen = Set<String>()
+    return points
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .filter { point in
+            let normalized = point
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+            if seen.contains(normalized) {
+                return false
+            }
+            seen.insert(normalized)
+            return true
+        }
+        .prefix(10)
+        .map { $0 }
+}
 
-    return suggestedMetadataItems(for: job)
-        .prefix(4)
-        .map { "\($0.label): \($0.value)" }
+private func inferredCounterparty(from issuer: String) -> String {
+    let value = issuer.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else { return "" }
+    let separatorPattern = #"\s+(?:et|&|avec)\s+"#
+    guard let regex = try? NSRegularExpression(pattern: separatorPattern, options: [.caseInsensitive]) else {
+        return ""
+    }
+    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+    let tokenized = regex.stringByReplacingMatches(in: value, options: [], range: range, withTemplate: "||")
+    let parts = tokenized
+        .components(separatedBy: "||")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    guard parts.count >= 2 else {
+        return ""
+    }
+    for part in parts {
+        let normalizedPart = part
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        if normalizedPart.contains("ville d'amos") || normalizedPart.contains("ville d amos") || normalizedPart.contains("conseil municipal") {
+            continue
+        }
+        return part
+    }
+    return ""
+}
+
+private func prettifiedMetadataLabel(_ rawKey: String) -> String {
+    let normalized = rawKey
+        .replacingOccurrences(of: ".", with: "_")
+        .replacingOccurrences(of: "-", with: "_")
+    let components = normalized
+        .split(separator: "_")
+        .map { token -> String in
+            let lowered = token.lowercased()
+            if ["id", "ocr", "pdf", "api", "idp", "tps", "tvq", "ht", "ttc", "po"].contains(lowered) {
+                return lowered.uppercased()
+            }
+            return lowered.prefix(1).uppercased() + lowered.dropFirst()
+        }
+    return components.joined(separator: " ")
 }
 
 private func extractValidationFlags(_ dictionary: [String: String]?) -> String {
