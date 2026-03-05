@@ -21,12 +21,28 @@ Orchiviste sert à traiter des documents administratifs (résolutions, ententes,
 - permettre une évolution sans recoder (presets, thésaurus, brouillons de règles)
 - opérer en priorité sur macOS (Apple Silicon) avec OCR/analyse locale
 
+## Usage archivistique
+
+Orchiviste est conçu pour assister concrètement le travail d'archiviste:
+
+- préparation et tri de lots documentaires hétérogènes
+- proposition de renommage cohérent selon des règles validées
+- suggestion de métadonnées utiles à la gestion documentaire
+- classement vers une arborescence cible et/ou SharePoint
+- mise en revue des cas ambigus plutôt que décision automatique risquée
+
 ## Principes de nommage
 
 - nom significatif, précis et concis
 - longueur visée courte, limite technique gérée côté moteur
 - aucune mention technique dans le nom final (`signé`, `numérisé`, `OCR`, `PDF/A`, etc.)
 - en cas d'incertitude, passer en `needs_review` plutôt qu'inventer
+
+## Méthodologie de développement
+
+Le projet est piloté par le besoin métier archivistique et développé dans `Visual Studio Code`, avec assistance d'IA (`OpenAI Codex`/`ChatGPT`) sous supervision humaine.
+
+Les décisions fonctionnelles, la validation des règles de nommage, la revue des résultats et la gouvernance documentaire restent sous contrôle humain.
 
 ## Cible d'exécution
 
