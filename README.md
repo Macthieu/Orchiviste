@@ -2,44 +2,28 @@
 
 Orchiviste est une plateforme documentaire municipale orientée `Analyse -> Renommage -> Classement/Routage`, construite en monorepo Swift Package Manager + Vapor.
 
-## But du logiciel
+## Mission
 
-Orchiviste sert à traiter des documents administratifs (résolutions, ententes, factures, permis, procès-verbaux, etc.) avec un flux auditable et reproductible:
+Orchiviste est une plateforme de traitement documentaire municipal conçue pour aider le travail d'archiviste: transformer des lots hétérogènes en documents analysés, nommés, classés et traçables.
 
-- ingestion des fichiers
-- aperçu serveur (sans téléchargement par défaut)
-- extraction de contenu et métadonnées
-- proposition de nom final
-- classement/routage local et SharePoint
-- revue humaine lorsque la confiance est insuffisante
+Flux opérationnel: ingestion -> aperçu serveur -> extraction contenu/métadonnées -> proposition de nom -> classement/routage (local/SharePoint) -> revue humaine si confiance insuffisante.
 
-## Objectifs produit
+## Valeur apportée
 
-- réduire les manipulations manuelles de renommage et de classement
-- normaliser les noms de fichiers selon des règles métier déclaratives
-- conserver une traçabilité complète (événements, raisons de revue, historique de routage)
-- permettre une évolution sans recoder (presets, thésaurus, brouillons de règles)
-- opérer en priorité sur macOS (Apple Silicon) avec OCR/analyse locale
-
-## Usage archivistique
-
-Orchiviste est conçu pour assister concrètement le travail d'archiviste:
-
-- préparation et tri de lots documentaires hétérogènes
-- proposition de renommage cohérent selon des règles validées
-- suggestion de métadonnées utiles à la gestion documentaire
-- classement vers une arborescence cible et/ou SharePoint
-- mise en revue des cas ambigus plutôt que décision automatique risquée
+- réduit les manipulations manuelles de renommage et de classement
+- applique des règles métier déclaratives, modifiables sans recoder
+- conserve une traçabilité complète (événements, raisons de revue, historique)
+- priorise un fonctionnement local macOS (Apple Silicon) pour OCR/analyse
+- sépare la décision automatique de la validation humaine (`needs_review`)
 
 ## Positionnement
 
-Par rapport aux outils génériques d'OCR/IDP/EDMS, Orchiviste se distingue par un focus opérationnel sur l'archivistique municipale:
+Par rapport aux outils OCR/IDP/EDMS génériques, Orchiviste cible l'usage archivistique municipal avec:
 
-- règles de nommage métier déclaratives et modifiables
-- séparation claire entre décision automatique et validation humaine
-- workflow de revue (`needs_review`) traçable
-- extraction de métadonnées orientée gestion documentaire municipale
-- intégration directe au classement/routage (local et SharePoint)
+- règles de nommage métier + préréglages orientés administration publique
+- extraction de métadonnées utiles au classement documentaire
+- routage intégré vers arborescence cible et SharePoint
+- workflow de revue auditable pour les cas ambigus
 
 ## Principes de nommage
 
