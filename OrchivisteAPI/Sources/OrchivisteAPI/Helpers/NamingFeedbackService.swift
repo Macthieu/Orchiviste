@@ -52,6 +52,10 @@ enum NamingFeedbackService {
 
         var extracted = engine.extractFields(from: detectionText, rule: rule, metadata: metadata)
         for (key, value) in overlayNamingFields(job: job, analysis: analysis, sourceURL: sourceURL) {
+            if key == "date" {
+                extracted[key] = value
+                continue
+            }
             if shouldUseOverlayField(key: key, existing: extracted[key], incoming: value) {
                 extracted[key] = value
             }

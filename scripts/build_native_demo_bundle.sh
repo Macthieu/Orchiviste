@@ -46,6 +46,26 @@ write_file() {
   cat > "$target"
 }
 
+install_binary() {
+  local src="$1"
+  local dst="$2"
+  local tmp="${dst}.tmp.$$"
+
+  cp -f "$src" "$tmp"
+  chmod +x "$tmp"
+
+  # Validation immédiate pour éviter un bundle avec binaire corrompu/invalide.
+  if ! codesign --verify --verbose=2 "$tmp" >/dev/null 2>&1; then
+    echo "Signature invalide après copie: $tmp" >&2
+    rm -f "$tmp"
+    exit 1
+  fi
+
+  mv -f "$tmp" "$dst"
+  # Nettoie la provenance pour éviter les refus Gatekeeper sur des binaires CLI de démo.
+  xattr -d com.apple.provenance "$dst" >/dev/null 2>&1 || true
+}
+
 build_product "OrchivisteAnalyse" "OrchivisteAnalyse"
 build_product "OrchivisteAPI" "OrchivisteAPI"
 
@@ -80,13 +100,11 @@ mkdir -p \
 ditto "$ROOT_DIR/OrchivisteAPI/configs" "$CONFIG_DIR"
 ditto "$ROOT_DIR/OrchivisteAPI/Resources/Views" "$VIEWS_DIR"
 
-cp -f "$API_BINARY" "$BIN_DIR/OrchivisteAPI"
-cp -f "$ANALYSE_BINARY" "$BIN_DIR/OrchivisteAnalyse"
-chmod +x "$BIN_DIR/OrchivisteAPI" "$BIN_DIR/OrchivisteAnalyse"
+install_binary "$API_BINARY" "$BIN_DIR/OrchivisteAPI"
+install_binary "$ANALYSE_BINARY" "$BIN_DIR/OrchivisteAnalyse"
 
 if [[ -n "$WORKER_BINARY" && -f "$WORKER_BINARY" ]]; then
-  cp -f "$WORKER_BINARY" "$BIN_DIR/OrchivisteWorker"
-  chmod +x "$BIN_DIR/OrchivisteWorker"
+  install_binary "$WORKER_BINARY" "$BIN_DIR/OrchivisteWorker"
 fi
 
 ANALYSE_COREML_ENABLED=0
@@ -209,6 +227,12 @@ start_service() {
 
   if [[ ! -x "$binary" ]]; then
     echo "Binaire manquant: $binary" >&2
+    return 1
+  fi
+
+  if ! codesign --verify --verbose=2 "$binary" >/dev/null 2>&1; then
+    echo "Binaire invalide (signature): $binary" >&2
+    echo "Regénère le bundle avec: ./scripts/build_native_demo_bundle.sh" >&2
     return 1
   fi
 

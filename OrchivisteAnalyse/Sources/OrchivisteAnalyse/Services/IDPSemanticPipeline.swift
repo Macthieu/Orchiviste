@@ -190,6 +190,12 @@ enum IDPSemanticPipeline {
             }
     }
 
+    private static func normalizeDisplayText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private static func detectCaptureStrategy(
         request: AnalysisRequest,
         rawText: String
@@ -384,7 +390,7 @@ enum IDPSemanticPipeline {
         )
         assignFirstMatch(
             key: "resolution_numero",
-            pattern: #"(?i)\b(?:r[eé]s(?:olution)?)\s*[:#\-]?\s*([0-9]{2,4}(?:[-/][0-9]{1,4})?)\b"#,
+            pattern: #"(?i)\b(?:r[eé]s(?:olution)?)\s*(?:n[°o]|no|num[eé]ro)?\s*[:#\-]?\s*([0-9]{4}(?:[-/][0-9]{1,4})?)\b"#,
             source: "regex_resolution_number",
             rawText: rawText,
             confidence: 0.85,
@@ -414,6 +420,23 @@ enum IDPSemanticPipeline {
             confidence: 0.72,
             into: &extracted
         )
+
+        if typeDoc == "Resolution",
+           let sessionDate = detectResolutionSessionDate(rawText: rawText) {
+            extracted.fields["date_seance"] = sessionDate
+            extracted.fieldSources["date_seance"] = AnalysisFieldSource(
+                source: "regex_session_date",
+                confidence: 0.87,
+                evidence: clippedEvidence(sessionDate)
+            )
+            extracted.fields["date_document"] = sessionDate
+            extracted.fieldSources["date_document"] = AnalysisFieldSource(
+                source: "derived_date_document_from_session_date",
+                confidence: 0.82,
+                evidence: clippedEvidence(sessionDate)
+            )
+        }
+
         extractMunicipalAdministrativeFields(
             rawText: rawText,
             typeDoc: typeDoc,
@@ -436,6 +459,15 @@ enum IDPSemanticPipeline {
                 source: "semantic_type_inference",
                 confidence: 0.65,
                 evidence: typeDoc
+            )
+        }
+
+        if typeDoc == "Autre" && matches(rawText, pattern: #"(?i)\b(entente|convention|contrat|bail|protocole|avenant)\b"#) {
+            extracted.fields["doc_type_hint"] = "Entente"
+            extracted.fieldSources["doc_type_hint"] = AnalysisFieldSource(
+                source: "semantic_agreement_keyword_inference",
+                confidence: 0.69,
+                evidence: "entente"
             )
         }
 
@@ -597,12 +629,32 @@ enum IDPSemanticPipeline {
         if typeDoc == "Entente" || typeDoc == "Autre" {
             assignFirstMatchIfMissing(
                 key: "cocontractant",
-                pattern: #"(?is)\bET\s*:\s*([^\n\r]{3,120})"#,
+                pattern: #"(?is)\bET\s*:?\s*(?:\R+\s*)?([^\n\r]{3,160})"#,
                 source: "regex_counterparty_block",
                 rawText: rawText,
                 confidence: 0.66,
                 into: &extracted
             )
+
+            if let counterparty = extractAgreementCounterparty(rawText: rawText, issuer: extracted.fields["organisme_emetteur"]),
+               shouldPreferSemanticCandidate(existing: extracted.fields["cocontractant"], candidate: counterparty) {
+                extracted.fields["cocontractant"] = counterparty
+                extracted.fieldSources["cocontractant"] = AnalysisFieldSource(
+                    source: "semantic_counterparty_block",
+                    confidence: 0.74,
+                    evidence: clippedEvidence(counterparty)
+                )
+            }
+
+            if let agreementObject = extractAgreementObject(rawText: rawText),
+               shouldPreferSemanticCandidate(existing: extracted.fields["document_objet"], candidate: agreementObject) {
+                extracted.fields["document_objet"] = agreementObject
+                extracted.fieldSources["document_objet"] = AnalysisFieldSource(
+                    source: "semantic_agreement_heading_object",
+                    confidence: 0.73,
+                    evidence: clippedEvidence(agreementObject)
+                )
+            }
         }
 
         if extracted.fields["periode"] == nil {
@@ -625,6 +677,18 @@ enum IDPSemanticPipeline {
                     confidence: 0.63,
                     evidence: clippedEvidence(derivedRange)
                 )
+            } else if let derived = extractAgreementPeriod(
+                rawText: rawText,
+                startDate: extracted.fields["date_de_debut"],
+                endDate: extracted.fields["date_de_fin"],
+                fallbackDate: extracted.fields["date_document"]
+            ) {
+                extracted.fields["periode"] = derived
+                extracted.fieldSources["periode"] = AnalysisFieldSource(
+                    source: "semantic_agreement_period",
+                    confidence: 0.70,
+                    evidence: clippedEvidence(derived)
+                )
             }
         }
     }
@@ -645,9 +709,15 @@ enum IDPSemanticPipeline {
                 ("date", nonEmpty(baseFields["date"]) != nil || nonEmpty(semanticFields["date_document"]) != nil),
                 ("montant_total", nonEmpty(semanticFields["montant_total"]) != nil)
             ]
+        case "Entente":
+            requiredChecks = [
+                ("cocontractant", nonEmpty(semanticFields["cocontractant"]) != nil),
+                ("objet", nonEmpty(semanticFields["document_objet"]) != nil),
+                ("periode", nonEmpty(semanticFields["periode"]) != nil)
+            ]
         case "Resolution":
             requiredChecks = [
-                ("date", nonEmpty(baseFields["date"]) != nil || nonEmpty(semanticFields["date_document"]) != nil),
+                ("date", nonEmpty(semanticFields["date_seance"]) != nil || nonEmpty(baseFields["date"]) != nil || nonEmpty(semanticFields["date_document"]) != nil),
                 ("numero", nonEmpty(baseFields["numero"]) != nil || nonEmpty(semanticFields["resolution_numero"]) != nil),
                 ("clause_resolu", clauseResoluCount > 0)
             ]
@@ -979,13 +1049,17 @@ enum IDPSemanticPipeline {
         semanticFields: [String: String]
     ) -> [String: String] {
         let number = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["resolution_numero"]))
+            ?? sanitizedSemanticDisplayValue(nonEmpty(semanticFields["numero_entente"]))
             ?? sanitizedSemanticDisplayValue(nonEmpty(baseFields["numero"]))
         let object = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["document_objet"]))
             ?? sanitizedSemanticDisplayValue(nonEmpty(semanticFields["resolution_titre"]))
-        let date = nonEmpty(baseFields["date"])
+        let date = nonEmpty(semanticFields["date_seance"])
+            ?? nonEmpty(baseFields["date"])
             ?? nonEmpty(semanticFields["date_document"])
         let issuer = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["organisme_emetteur"]))
             ?? sanitizedSemanticDisplayValue(nonEmpty(baseFields["comite"]))
+        let cocontractant = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["cocontractant"]))
+        let periode = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["periode"]))
         let keywords = orderedUnique(cleanedLines(from: rawText).prefix(12).flatMap { line in
             line
                 .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -1003,6 +1077,8 @@ enum IDPSemanticPipeline {
         if let object { metadata["objet"] = object }
         if let date { metadata["date_document"] = date }
         if let issuer { metadata["organisme_emetteur"] = issuer }
+        if let cocontractant { metadata["cocontractant"] = cocontractant }
+        if let periode { metadata["periode"] = periode }
         if !keywords.isEmpty {
             metadata["mots_cles"] = keywords.joined(separator: ", ")
         }
@@ -1083,6 +1159,258 @@ enum IDPSemanticPipeline {
             return nil
         }
         return firstMatch(in: value, pattern: #"\b((?:19|20)\d{2})\b"#)
+    }
+
+    private static func detectResolutionSessionDate(rawText: String) -> String? {
+        let contextualPatterns = [
+            #"(?is)\b(?:s[eé]ance|tenue|webdiffus[eé]e)\b.{0,180}?\b([0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})\b"#,
+            #"(?is)\b(?:adopt[eé]e?|adopt[ée]\s+le|adoption)\b.{0,80}?\b([0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})\b"#
+        ]
+        for pattern in contextualPatterns {
+            if let raw = firstMatch(in: rawText, pattern: pattern),
+               let normalized = normalizeFrenchDate(raw) {
+                return normalized
+            }
+        }
+
+        if let raw = firstMatch(
+            in: rawText,
+            pattern: #"(?i)\b([0-3]?\d\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20\d{2})\b"#
+        ), let normalized = normalizeFrenchDate(raw) {
+            return normalized
+        }
+        return nil
+    }
+
+    private static func extractAgreementCounterparty(rawText: String, issuer: String?) -> String? {
+        let lines = cleanedLines(from: rawText)
+        guard !lines.isEmpty else {
+            return nil
+        }
+
+        for (index, line) in lines.enumerated() {
+            let normalized = normalize(line)
+            if normalized == "et" || normalized == "et :" || normalized.hasPrefix("et:") {
+                for candidate in lines.dropFirst(index + 1).prefix(4) {
+                    if let sanitized = sanitizeAgreementCounterpartyCandidate(candidate) {
+                        return sanitized
+                    }
+                }
+            }
+        }
+
+        let regexPatterns = [
+            #"(?is)\bET\s*:?\s*(?:\R+\s*)?([^\n\r]{3,180})"#,
+            #"(?is)\bentre\s+les\s+parties\s*:\s*(?:\R+\s*)?.{0,180}?\bet\s+([^\n\r]{3,180})"#,
+            #"(?is)\b(?:entre|avec)\s+(?:la\s+)?ville\s+d['’ ]amos[^.\n]{0,120}?(?:et|avec)\s+([^\n.;:]{3,180})"#
+        ]
+        for pattern in regexPatterns {
+            if let raw = firstMatch(in: rawText, pattern: pattern),
+               let sanitized = sanitizeAgreementCounterpartyCandidate(raw) {
+                return sanitized
+            }
+        }
+
+        if let issuer = issuer {
+            let normalizedIssuer = normalizeDisplayText(issuer)
+            let patterns = [
+                #"(?i)\b(?:la\s+)?ville\s+d['’ ]amos\s*(?:,|\s)+(?:et|avec)\s+(.+)$"#,
+                #"(?i)^(.+?)\s*(?:et|avec)\s+(?:la\s+)?ville\s+d['’ ]amos\b"#
+            ]
+            for pattern in patterns {
+                if let regex = try? NSRegularExpression(pattern: pattern),
+                   let match = regex.firstMatch(
+                    in: normalizedIssuer,
+                    options: [],
+                    range: NSRange(normalizedIssuer.startIndex..<normalizedIssuer.endIndex, in: normalizedIssuer)
+                   ),
+                   match.numberOfRanges > 1,
+                   let capture = Range(match.range(at: 1), in: normalizedIssuer) {
+                    if let sanitized = sanitizeAgreementCounterpartyCandidate(String(normalizedIssuer[capture])) {
+                        return sanitized
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func sanitizeAgreementCounterpartyCandidate(_ raw: String) -> String? {
+        var value = normalizeDisplayText(raw)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else {
+            return nil
+        }
+
+        let hardStops = [
+            "ci-apres", "ci après", "considérant", "considerant", "en consequence", "responsabilites",
+            "responsabilités", "avis", "reglement", "règlement", "signature", "prix"
+        ]
+        let normalized = normalize(value)
+        if hardStops.contains(where: { normalized.hasPrefix($0) }) {
+            return nil
+        }
+        if normalized.hasPrefix("la ville d amos") || normalized == "la ville" {
+            return nil
+        }
+
+        let cleanupPatterns = [
+            #"(?i)\bayant\s+son\s+si[eè]ge.*$"#,
+            #"(?i)\bici\s+repr[eé]sent[ée].*$"#,
+            #"(?i)\bd[uû]ment\s+autoris[ée].*$"#,
+            #"(?i)\bci[- ]apr[eè]s.*$"#,
+            #"(?i)\bci[- ]dessus.*$"#
+        ]
+        for pattern in cleanupPatterns {
+            value = value.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        value = value.trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:()[]{}\"'"))
+
+        guard value.count >= 3 else {
+            return nil
+        }
+        return value
+    }
+
+    private static func extractAgreementObject(rawText: String) -> String? {
+        let patterns = [
+            #"(?im)^\s*ENTENTE\s+(?:RELATIVE\s+[ÀA]\s+|POUR\s+|DE\s+|D['’]\s*|SUR\s+)?([^\n\r]{6,200})$"#,
+            #"(?im)^\s*(?:OBJET|SUBJECT)\s*[:\-]?\s*([^\n\r]{6,220})$"#
+        ]
+        for pattern in patterns {
+            if let raw = firstMatch(in: rawText, pattern: pattern),
+               let sanitized = sanitizeAgreementObjectCandidate(raw) {
+                return sanitized
+            }
+        }
+
+        for line in cleanedLines(from: rawText).prefix(40) {
+            let normalized = normalize(line)
+            if normalized.hasPrefix("entente ") || normalized.hasPrefix("contrat ") || normalized.hasPrefix("convention ") {
+                let stripped = line.replacingOccurrences(
+                    of: #"(?i)^\s*(?:entente|contrat|convention|bail|protocole|avenant)\s+(?:relative\s+[àa]\s+|pour\s+|de\s+|d['’]\s*|sur\s+)?(.*)$"#,
+                    with: "$1",
+                    options: .regularExpression
+                )
+                if let sanitized = sanitizeAgreementObjectCandidate(stripped) {
+                    return sanitized
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func sanitizeAgreementObjectCandidate(_ raw: String) -> String? {
+        var value = normalizeDisplayText(raw)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else {
+            return nil
+        }
+        value = value.replacingOccurrences(
+            of: #"(?i)^\s*(?:pour|de|d['’]|relative\s+[àa]|relatif\s+[àa]|sur)\s+"#,
+            with: "",
+            options: .regularExpression
+        )
+        value = value.trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+        guard value.count >= 6 else {
+            return nil
+        }
+        return value
+    }
+
+    private static func extractAgreementPeriod(
+        rawText: String,
+        startDate: String?,
+        endDate: String?,
+        fallbackDate: String?
+    ) -> String? {
+        if let range = firstMatch(in: rawText, pattern: #"(?i)\b((?:19|20)\d{2}\s*[-/–]\s*(?:19|20)\d{2})\b"#) {
+            return range.replacingOccurrences(of: #"\s*[-/–]\s*"#, with: "-", options: .regularExpression)
+        }
+
+        let contextualPeriodPattern = #"(?is)\b(?:dur[eée]|entre\s+en\s+vigueur|se\s+termine|jusqu[’']?au|valide\s+pour)\b.{0,240}"#
+        if let context = firstMatch(in: rawText, pattern: contextualPeriodPattern) {
+            let years = extractSortedYears(in: context)
+            if years.count >= 2, let minYear = years.first, let maxYear = years.last {
+                return minYear == maxYear ? "\(minYear)" : "\(minYear)-\(maxYear)"
+            }
+            if let single = years.first {
+                return "\(single)"
+            }
+        }
+
+        let startYear = firstYear(in: startDate)
+        let endYear = firstYear(in: endDate)
+        if let startYear, let endYear {
+            return startYear == endYear ? startYear : "\(startYear)-\(endYear)"
+        }
+        if let endYear {
+            return endYear
+        }
+        if let fallbackYear = firstYear(in: fallbackDate) {
+            return fallbackYear
+        }
+        return nil
+    }
+
+    private static func extractSortedYears(in raw: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: #"\b((?:19|20)\d{2})\b"#) else {
+            return []
+        }
+        let range = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+        return regex.matches(in: raw, options: [], range: range).compactMap { match in
+            guard match.numberOfRanges > 1,
+                  let capture = Range(match.range(at: 1), in: raw) else {
+                return nil
+            }
+            return Int(raw[capture])
+        }.sorted()
+    }
+
+    private static func normalizeFrenchDate(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+            return trimmed
+        }
+        let normalized = normalize(trimmed)
+        let tokens = normalized.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard tokens.count >= 3,
+              let day = Int(tokens[0]),
+              let year = Int(tokens[2]) else {
+            return nil
+        }
+        let monthMap: [String: Int] = [
+            "janvier": 1, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6,
+            "juillet": 7, "aout": 8, "septembre": 9, "octobre": 10, "novembre": 11, "decembre": 12
+        ]
+        guard let month = monthMap[tokens[1]] else {
+            return nil
+        }
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
+
+    private static func shouldPreferSemanticCandidate(existing: String?, candidate: String) -> Bool {
+        guard !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        guard let existing = existing?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !existing.isEmpty else {
+            return true
+        }
+        let normalizedExisting = normalize(existing)
+        let normalizedCandidate = normalize(candidate)
+        if normalizedExisting == normalizedCandidate {
+            return false
+        }
+        if normalizedExisting == "n d" || normalizedExisting == "nd" {
+            return true
+        }
+        if normalizedExisting.count < 6 && normalizedCandidate.count > normalizedExisting.count {
+            return true
+        }
+        return false
     }
 
     private static func sanitizedSemanticDisplayValue(_ raw: String?) -> String? {

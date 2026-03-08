@@ -1471,8 +1471,13 @@ func buildNamingDetectionText(
             "metadata.objet",
             "metadata.type_document",
             "metadata.numero_document",
+            "date_seance",
+            "metadata.date_seance",
+            "adoption_date",
+            "metadata.adoption_date",
             "metadata.date_document",
             "cocontractant",
+            "metadata.cocontractant",
             "periode"
         ]
         for key in usefulKeys {
@@ -1497,6 +1502,7 @@ func overlayNamingFields(
     let date = preferredNamingDate(from: champs)
     let numero = nonEmpty(champs["numero"])
         ?? nonEmpty(champs["numero_document"])
+        ?? nonEmpty(champs["numero_entente"])
         ?? nonEmpty(champs["metadata.numero_document"])
     var title = preferredNamingTitle(from: champs)
         ?? nonEmpty(champs["objet"])
@@ -1514,12 +1520,28 @@ func overlayNamingFields(
         ?? nonEmpty(champs["metadata.organisme_tiers"])
         ?? extractCounterpartyFromIssuer(champs["organisme_emetteur"])
         ?? extractCounterpartyFromIssuer(champs["metadata.organisme_emetteur"])
-    let period = nonEmpty(champs["periode"])
-        ?? nonEmpty(champs["metadata.periode"])
-        ?? nonEmpty(champs["duree"])
-        ?? nonEmpty(champs["metadata.duree"])
-        ?? inferredFromName.period
-        ?? date.flatMap { String($0.prefix(4)) }
+    let dateDebutPeriod: String? = {
+        guard let rawStart = nonEmpty(champs["date_debut"]),
+              let normalizedStart = normalizeRoutingDate(rawStart) else {
+            return nil
+        }
+        let startYear = String(normalizedStart.prefix(4))
+        if let rawEnd = nonEmpty(champs["date_fin"]),
+           let normalizedEnd = normalizeRoutingDate(rawEnd) {
+            let endYear = String(normalizedEnd.prefix(4))
+            return startYear == endYear ? startYear : "\(startYear)-\(endYear)"
+        }
+        return startYear
+    }()
+    var period = nonEmpty(champs["periode"])
+    if period == nil { period = nonEmpty(champs["metadata.periode"]) }
+    if period == nil { period = dateDebutPeriod }
+    if period == nil { period = nonEmpty(champs["duree"]) }
+    if period == nil { period = nonEmpty(champs["metadata.duree"]) }
+    if period == nil { period = inferredFromName.period }
+    if period == nil, let date {
+        period = String(date.prefix(4))
+    }
 
     if counterparty == nil {
         counterparty = inferredFromName.counterparty
@@ -1629,18 +1651,33 @@ private func inferAgreementFieldsFromFileName(sourceURL: URL) -> (counterparty: 
 }
 
 private func preferredNamingDate(from champs: [String: String]) -> String? {
-    let candidate = nonEmpty(champs["metadata.date_document"])
-        ?? nonEmpty(champs["date_document"])
-        ?? nonEmpty(champs["adoption_date"])
-        ?? nonEmpty(champs["metadata.adoption_date"])
-        ?? nonEmpty(champs["date"])
-    guard let candidate else {
-        return nil
-    }
-    if let normalized = normalizeRoutingDate(candidate) {
+    let orderedKeys = [
+        "metadata.date_seance",
+        "date_seance",
+        "metadata.adoption_date",
+        "adoption_date",
+        "metadata.date_document",
+        "date_document",
+        "metadata.date",
+        "date"
+    ]
+    let documentYear = preferredNamingDocumentYear(from: champs)
+
+    for key in orderedKeys {
+        guard let candidate = nonEmpty(champs[key]),
+              let normalized = normalizeRoutingDate(candidate) else {
+            continue
+        }
+        if shouldRejectFallbackDate(
+            key: key,
+            normalizedDate: normalized,
+            documentYear: documentYear
+        ) {
+            continue
+        }
         return normalized
     }
-    return candidate
+    return nil
 }
 
 private func preferredNamingTitle(from champs: [String: String]) -> String? {
@@ -1698,6 +1735,41 @@ private func normalizeRoutingDate(_ raw: String) -> String? {
         return nil
     }
     return String(format: "%04d-%02d-%02d", year, month, day)
+}
+
+private func preferredNamingDocumentYear(from champs: [String: String]) -> Int? {
+    let candidates = [
+        nonEmpty(champs["numero"]),
+        nonEmpty(champs["numero_document"]),
+        nonEmpty(champs["metadata.numero_document"]),
+        nonEmpty(champs["numero_entente"])
+    ].compactMap { $0 }
+
+    for candidate in candidates {
+        if let range = candidate.range(of: #"\b(19|20)\d{2}\b"#, options: .regularExpression),
+           let year = Int(candidate[range]) {
+            return year
+        }
+    }
+    return nil
+}
+
+private func shouldRejectFallbackDate(
+    key: String,
+    normalizedDate: String,
+    documentYear: Int?
+) -> Bool {
+    guard let documentYear else {
+        return false
+    }
+    guard let parsedYear = Int(normalizedDate.prefix(4)) else {
+        return false
+    }
+    let lowPriorityKeys = Set(["date", "metadata.date"])
+    if !lowPriorityKeys.contains(key) {
+        return false
+    }
+    return abs(parsedYear - documentYear) >= 2
 }
 
 private func routingFrenchMonthNumber(_ raw: String) -> Int? {

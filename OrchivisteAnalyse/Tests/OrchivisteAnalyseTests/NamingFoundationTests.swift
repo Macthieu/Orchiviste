@@ -199,6 +199,55 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertTrue((result.normalized_fields["objet"] ?? "").contains("piste cyclable"))
     }
 
+    func testEntenteRuleExtractsCounterpartyFromEtSection() {
+        let engine = DeclarativeNamingRuleEngine()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!
+        let text = """
+        ENTENTE SURVEILLANCE PISTE CYCLABLE
+        ENTRE :
+        LA VILLE D’AMOS
+        ET :
+        VÉLO MRC ABITIBI, ayant son siège social au 182, 1re Rue Est à Amos
+        La présente entente entre en vigueur le 15 mai 2022 et se termine le 4 septembre 2022.
+        """
+
+        let result = engine.validate(
+            NamingRuleValidationRequest(
+                rule: rule,
+                text: text,
+                metadata: NamingSourceMetadata(fileName: "entente.pdf"),
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
+            )
+        )
+
+        XCTAssertEqual(result.normalized_fields["cocontractant"], "VÉLO MRC ABITIBI")
+        XCTAssertEqual(result.normalized_fields["periode"], "2022")
+        XCTAssertTrue((result.normalized_fields["objet"] ?? "").localizedCaseInsensitiveContains("surveillance piste cyclable"))
+    }
+
+    func testResolutionRulePrefersSessionDateOverIsolatedIsoDate() {
+        let engine = DeclarativeNamingRuleEngine()
+        let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
+        let text = """
+        2026-03-03
+        EXTRAIT DU PROCÈS-VERBAL D'UNE SÉANCE ORDINAIRE DU CONSEIL MUNICIPAL
+        tenue le lundi 16 octobre 2023
+        Résolution n° 2023-398
+        ADJUDICATION DU CONTRAT POUR L’ENTRETIEN D’HIVER DU RÉSEAU ROUTIER
+        """
+
+        let result = engine.validate(
+            NamingRuleValidationRequest(
+                rule: rule,
+                text: text,
+                metadata: NamingSourceMetadata(fileName: "resolution.pdf"),
+                thesaurus: NamingFoundationSeeds.bootstrapFallbackThesaurus()
+            )
+        )
+
+        XCTAssertEqual(result.normalized_fields["date"], "2023-10-16")
+    }
+
     func testPermisRuleExtractsMatriculeAndPermitNumberFromFilename() {
         let engine = DeclarativeNamingRuleEngine()
         let rule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_permis_construction" }!

@@ -113,7 +113,6 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mordil/RediStack.git",
       "state" : {
-        "branch" : "main",
         "revision" : "a05d4bcf578430e8c5dbdae56cb6ac395cd806a0"
       }
     },

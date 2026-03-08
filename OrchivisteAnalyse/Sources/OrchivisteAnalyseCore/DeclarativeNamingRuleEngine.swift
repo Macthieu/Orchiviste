@@ -309,18 +309,25 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
     }
 
     private func extractAdoptionDate(from text: String) -> String? {
-        if let iso = firstMatch(pattern: #"\b(20[0-9]{2}-[01][0-9]-[0-3][0-9])\b"#, in: text),
-           let normalized = normalizeDateString(iso) {
-            return normalized
-        }
-
-        let patterns = [
-            #"(?i)\b([0-3]?[0-9]\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20[0-9]{2})\b"#,
-            #"(?i)\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+([0-3]?[0-9]\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20[0-9]{2})\b"#
+        let textualPatterns = [
+            #"(?is)(?:séance|conseil|résolution|adopt[ée]e?|tenue|webdiffusée)[^\n]{0,120}?([0-3]?[0-9]\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20[0-9]{2})"#,
+            #"(?i)\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+([0-3]?[0-9]\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20[0-9]{2})\b"#,
+            #"(?i)\b([0-3]?[0-9]\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+20[0-9]{2})\b"#
         ]
-        for pattern in patterns {
+        for pattern in textualPatterns {
             if let raw = firstMatch(pattern: pattern, in: text),
                let normalized = normalizeDateString(raw) {
+                return normalized
+            }
+        }
+
+        let contextualIsoPatterns = [
+            #"(?is)(?:séance|conseil|résolution|adopt[ée]e?|tenue|webdiffusée)[^\n]{0,120}?(20[0-9]{2}-[01][0-9]-[0-3][0-9])"#,
+            #"\b(20[0-9]{2}-[01][0-9]-[0-3][0-9])\b"#
+        ]
+        for pattern in contextualIsoPatterns {
+            if let iso = firstMatch(pattern: pattern, in: text),
+               let normalized = normalizeDateString(iso) {
                 return normalized
             }
         }
@@ -337,17 +344,22 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         let patterns = [
             #"(?i)(?:entre|avec)\s+(?:la\s+)?ville\s+d['’ ]amos(?:,|\s)+(?:et|avec)\s+([^\n.;:]+)"#,
             #"(?i)(?:entre|avec)\s+([^\n.;:]+?)\s+(?:et|avec)\s+(?:la\s+)?ville\s+d['’ ]amos"#,
-            #"(?is)\bentre\s+les\s+soussign[ée]s?\s*[:\-]?\s*(?:la\s+)?ville\s+d['’ ]amos[^\\n]{0,140}?(?:et|avec)\s+([^\n.;:]+)"#
+            #"(?is)\bentre\s+les\s+soussign[ée]s?\s*[:\-]?\s*(?:la\s+)?ville\s+d['’ ]amos[^\\n]{0,160}?(?:et|avec)\s+([^\n.;:]+)"#,
+            #"(?is)\bET\b\s*:?\s*(?:\r?\n|\s{2,})([A-ZÀ-ÿ0-9&'’.,()\- ]{3,180}?)(?:,|\r?\n)"#,
+            #"(?is)ci[- ]apr[èe]s\s+appel[ée]e?\s+[«\"]?([A-ZÀ-ÿ0-9&'’.,()\- ]{3,140})[»\"]?"#
         ]
         for pattern in patterns {
             if let match = firstMatch(pattern: pattern, in: text) {
-                return cleanupCounterparties(match)
+                let cleaned = sanitizeAgreementCounterpartyCandidate(match)
+                if !cleaned.isEmpty {
+                    return cleanupCounterparties(cleaned)
+                }
             }
         }
 
         let organizationHints = significantLines(from: text)
             .filter { $0.range(of: #"(?i)\b(?:inc\.?|lt[ée]e?|s\.?e\.?n\.?c\.?|compagnie|corporation)\b"#, options: .regularExpression) != nil }
-        return organizationHints.first
+        return organizationHints.first.map(cleanupCounterparties)
     }
 
     private func extractAgreementCounterpartyFromHints(metadata: NamingSourceMetadata?) -> String? {
@@ -379,11 +391,12 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
     private func extractAgreementObject(from text: String, metadata: NamingSourceMetadata?) -> String? {
         let textPatterns = [
             #"(?i)\b(?:entente|contrat|convention|bail|protocole|avenant)\s+(?:pour|de|d['’]|relative\s+a|relatif\s+a|d['’]utilisation|utilisation)\s+([^\n.;:]{8,220})"#,
-            #"(?is)\bobjet\s*[:\-]\s*([^\n]{8,220})"#
+            #"(?is)\bobjet\s*[:\-]\s*([^\n]{8,220})"#,
+            #"(?im)^\s*entente\s+([A-ZÀ-ÿ0-9'’()\- ,]{8,220})\s*$"#
         ]
         for pattern in textPatterns {
             if let match = firstMatch(pattern: pattern, in: text) {
-                let cleaned = stripAgreementObjectLeadIn(match)
+                let cleaned = sanitizeAgreementObjectCandidate(stripAgreementObjectLeadIn(match))
                 if cleaned.count >= 8 {
                     return cleaned
                 }
@@ -394,7 +407,7 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         for line in lines {
             let normalized = normalizedSearchText(line)
             if normalized.contains("entente") || normalized.contains("contrat") || normalized.contains("convention") || normalized.contains("bail") {
-                let cleaned = stripAgreementObjectLeadIn(stripAgreementFamilyLeadIn(line))
+                let cleaned = sanitizeAgreementObjectCandidate(stripAgreementObjectLeadIn(stripAgreementFamilyLeadIn(line)))
                 if cleaned.count >= 8 {
                     return cleaned
                 }
@@ -404,10 +417,10 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
         if let fileName = metadata?.fileName ?? metadata?.originalName,
            let inferred = extractAgreementPartsFromFileName(fileName),
            let object = inferred.object {
-            return stripAgreementObjectLeadIn(object)
+            return sanitizeAgreementObjectCandidate(stripAgreementObjectLeadIn(object))
         }
 
-        return significantUppercaseLine(in: text)
+        return significantUppercaseLine(in: text).map(sanitizeAgreementObjectCandidate)
     }
 
     private func extractAgreementObjectFromHints(metadata: NamingSourceMetadata?) -> String? {
@@ -450,6 +463,24 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             return normalizePeriod(period)
         }
 
+        let contextualPattern = #"(?is)(?:dur[ée]e|entre\s+en\s+vigueur|se\s+termine|jusqu['’]au|valide\s+jusqu['’]au|pour\s+les\s+ann[ée]es)[^\n]{0,240}"#
+        if let regex = try? NSRegularExpression(pattern: contextualPattern) {
+            let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+            let snippets = regex.matches(in: normalized, range: range).compactMap { match -> String? in
+                guard let snippetRange = Range(match.range, in: normalized) else { return nil }
+                return String(normalized[snippetRange])
+            }
+            for snippet in snippets {
+                let years = extractYears(from: snippet)
+                if snippet.contains("indeterminee"), let start = years.min() {
+                    return "\(start)-Indéterminée"
+                }
+                if let minYear = years.min(), let maxYear = years.max() {
+                    return minYear == maxYear ? "\(minYear)" : "\(minYear)-\(maxYear)"
+                }
+            }
+        }
+
         let years = extractYears(from: normalized)
         if normalized.contains("indeterminee") || normalized.contains("indéterminée") {
             if let start = years.min() {
@@ -458,6 +489,13 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
             return "Indéterminée"
         }
         guard !years.isEmpty else { return nil }
+        if years.count > 6 {
+            let headYears = extractYears(from: significantLines(from: text).prefix(30).joined(separator: " "))
+            if let minYear = headYears.min(), let maxYear = headYears.max() {
+                return minYear == maxYear ? "\(minYear)" : "\(minYear)-\(maxYear)"
+            }
+            return nil
+        }
         if let minYear = years.min(), let maxYear = years.max() {
             return minYear == maxYear ? "\(minYear)" : "\(minYear)-\(maxYear)"
         }
@@ -581,6 +619,22 @@ public struct DeclarativeNamingRuleEngine: NamingRuleDetecting, NamingFieldExtra
                 options: .regularExpression
             )
             .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+    }
+
+    private func sanitizeAgreementCounterpartyCandidate(_ raw: String) -> String {
+        FilenameGuardrails.normalizeFrenchTypography(raw)
+            .replacingOccurrences(of: #"(?i)^et\s*[:\-]?\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)^ci[- ]apr[èe]s\s+appel[ée]e?\s+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:«»\"'"))
+    }
+
+    private func sanitizeAgreementObjectCandidate(_ raw: String) -> String {
+        FilenameGuardrails.normalizeFrenchTypography(raw)
+            .replacingOccurrences(of: #"(?i)^entente\s+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)^objet\s*[:\-]\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:«»\"'"))
     }
 
     private func extractCounterpartyFromIssuerValue(_ raw: String) -> String? {
@@ -904,29 +958,79 @@ private func shouldApplyFeedbackExample(
         return true
     }
 
-    let candidateKeys = ["titre", "objet", "cocontractant"]
-    for key in candidateKeys {
-        guard let current = currentFields[key], !current.isEmpty else {
-            continue
-        }
-        if let source = sourceFields[key],
-           namingSimilarityScore(current, source) >= 0.82 {
-            return true
-        }
-        if let corrected = correctedFields[key],
-           namingSimilarityScore(current, corrected) >= 0.94 {
-            return true
+    var weightedScore: Double = 0
+    var matchedSignals = 0
+
+    if let currentCounterparty = currentFields["cocontractant"] {
+        let sourceScore = sourceFields["cocontractant"].map { namingSimilarityScore(currentCounterparty, $0) } ?? 0
+        let correctedScore = correctedFields["cocontractant"].map { namingSimilarityScore(currentCounterparty, $0) } ?? 0
+        let best = max(sourceScore, correctedScore)
+        if best >= 0.78 {
+            weightedScore += 1.2
+            matchedSignals += 1
+        } else if best >= 0.58 {
+            weightedScore += 0.7
+            matchedSignals += 1
         }
     }
 
-    return false
+    if let currentPeriod = currentFields["periode"] {
+        let sourceYears = extractYears(from: normalizedSearchText(sourceFields["periode"] ?? ""))
+        let correctedYears = extractYears(from: normalizedSearchText(correctedFields["periode"] ?? ""))
+        let currentYears = extractYears(from: normalizedSearchText(currentPeriod))
+        if !currentYears.isEmpty {
+            let sourceOverlap = !Set(currentYears).intersection(Set(sourceYears)).isEmpty
+            let correctedOverlap = !Set(currentYears).intersection(Set(correctedYears)).isEmpty
+            if sourceOverlap || correctedOverlap {
+                weightedScore += 0.9
+                matchedSignals += 1
+            }
+        }
+    }
+
+    for key in ["titre", "objet"] {
+        guard let current = currentFields[key], !current.isEmpty else {
+            continue
+        }
+        let sourceScore = sourceFields[key].map { namingSimilarityScore(current, $0) } ?? 0
+        let correctedScore = correctedFields[key].map { namingSimilarityScore(current, $0) } ?? 0
+        let best = max(sourceScore, correctedScore)
+        if best >= 0.72 {
+            weightedScore += 0.8
+            matchedSignals += 1
+        } else if best >= 0.55 {
+            weightedScore += 0.4
+            matchedSignals += 1
+        }
+    }
+
+    if let currentDate = currentFields["date"] {
+        let currentYears = extractYears(from: normalizedSearchText(currentDate))
+        let sourceYears = extractYears(from: normalizedSearchText(sourceFields["date"] ?? sourceFields["date_document"] ?? ""))
+        let correctedYears = extractYears(from: normalizedSearchText(correctedFields["date"] ?? correctedFields["date_document"] ?? ""))
+        if !currentYears.isEmpty,
+           (!Set(currentYears).intersection(Set(sourceYears)).isEmpty || !Set(currentYears).intersection(Set(correctedYears)).isEmpty) {
+            weightedScore += 0.5
+            matchedSignals += 1
+        }
+    }
+
+    if matchedSignals >= 2 && weightedScore >= 1.5 {
+        return true
+    }
+    return weightedScore >= 2.0
 }
 
 private func cleanupCounterparties(_ value: String) -> String {
-    FilenameGuardrails.normalizeFrenchTypography(value)
+    let cleaned = FilenameGuardrails.normalizeFrenchTypography(value)
         .replacingOccurrences(of: #"(?i)^(la\s+)?ville\s+d[' ]amos\s+(?:et|avec)\s+"#, with: "", options: .regularExpression)
         .replacingOccurrences(of: #"(?i)\s+(?:et|avec)\s+(la\s+)?ville\s+d[' ]amos$"#, with: "", options: .regularExpression)
         .trimmingCharacters(in: CharacterSet(charactersIn: " -–,.;:"))
+    let normalized = normalizedSearchText(cleaned)
+    if normalized == "ville d amos" || normalized == "la ville d amos" {
+        return ""
+    }
+    return cleaned
 }
 
 private func normalizePeriod(_ value: String) -> String {
@@ -1023,8 +1127,22 @@ private func smartTrimPhrase(_ value: String, maxLength: Int) -> String {
 }
 
 private func parseTemplateFields(from fileName: String, template: String) -> [String: String] {
+    if let strict = parseTemplateFields(from: fileName, template: template, flexibleLiterals: false), !strict.isEmpty {
+        return strict
+    }
+    if let flexible = parseTemplateFields(from: fileName, template: template, flexibleLiterals: true), !flexible.isEmpty {
+        return flexible
+    }
+    return [:]
+}
+
+private func parseTemplateFields(
+    from fileName: String,
+    template: String,
+    flexibleLiterals: Bool
+) -> [String: String]? {
     guard let placeholderRegex = try? NSRegularExpression(pattern: #"\{([^}]+)\}"#) else {
-        return [:]
+        return nil
     }
     let range = NSRange(template.startIndex..<template.endIndex, in: template)
     let matches = placeholderRegex.matches(in: template, range: range)
@@ -1040,17 +1158,21 @@ private func parseTemplateFields(from fileName: String, template: String) -> [St
               let keyRange = Range(match.range(at: 1), in: template) else {
             continue
         }
-        pattern += NSRegularExpression.escapedPattern(for: String(template[cursor..<fullRange.lowerBound]))
+        pattern += templateLiteralPattern(
+            String(template[cursor..<fullRange.lowerBound]),
+            flexible: flexibleLiterals
+        )
         pattern += "(.+?)"
         fieldKeys.append(String(template[keyRange]))
         cursor = fullRange.upperBound
     }
-    pattern += NSRegularExpression.escapedPattern(for: String(template[cursor...]))
+    pattern += templateLiteralPattern(String(template[cursor...]), flexible: flexibleLiterals)
     pattern += "$"
 
-    guard let regex = try? NSRegularExpression(pattern: pattern),
+    let options: NSRegularExpression.Options = flexibleLiterals ? [.caseInsensitive] : []
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: options),
           let match = regex.firstMatch(in: fileName, range: NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)) else {
-        return [:]
+        return nil
     }
 
     var fields: [String: String] = [:]
@@ -1063,6 +1185,31 @@ private func parseTemplateFields(from fileName: String, template: String) -> [St
         fields[key] = String(fileName[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     return fields
+}
+
+private func templateLiteralPattern(_ literal: String, flexible: Bool) -> String {
+    guard flexible else {
+        return NSRegularExpression.escapedPattern(for: literal)
+    }
+
+    var pattern = ""
+    var previousWasWhitespace = false
+    for character in literal {
+        if character.isWhitespace {
+            if !previousWasWhitespace {
+                pattern += #"\s+"#
+                previousWasWhitespace = true
+            }
+            continue
+        }
+        previousWasWhitespace = false
+        if character == "–" || character == "-" {
+            pattern += #"\s*[–-]\s*"#
+            continue
+        }
+        pattern += NSRegularExpression.escapedPattern(for: String(character))
+    }
+    return pattern
 }
 
 private func normalizedNamingFeedbackValue(_ raw: String) -> String {
