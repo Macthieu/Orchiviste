@@ -572,7 +572,7 @@ enum IDPSemanticPipeline {
                 0.72
             ),
             (
-                "date_de_debut",
+                "date_debut",
                 #"(?i)\b(?:date\s+de\s+d[ée]but|d[ée]but(?:\s+du)?|entr[eé]e?\s+en\s+vigueur\s+le)\s*[:\-]?\s*(\d{1,2}\s+(?:janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\s+(?:19|20)\d{2}|(?:19|20)\d{2}[-/]\d{2}[-/]\d{2})"#,
                 "regex_start_date",
                 0.75
@@ -606,6 +606,13 @@ enum IDPSemanticPipeline {
                 confidence: item.confidence,
                 into: &extracted
             )
+        }
+
+        if let startDate = extracted.fields["date_debut"], extracted.fields["date_de_debut"] == nil {
+            extracted.fields["date_de_debut"] = startDate
+            if let source = extracted.fieldSources["date_debut"] {
+                extracted.fieldSources["date_de_debut"] = source
+            }
         }
 
         if extracted.fields["annee_financiere"] == nil {
@@ -643,6 +650,16 @@ enum IDPSemanticPipeline {
                     source: "semantic_counterparty_block",
                     confidence: 0.74,
                     evidence: clippedEvidence(counterparty)
+                )
+            }
+
+            if extracted.fields["cocontractant"] == nil,
+               let counterpartyFromIssuer = extractCounterpartyFromIssuer(extracted.fields["organisme_emetteur"]) {
+                extracted.fields["cocontractant"] = counterpartyFromIssuer
+                extracted.fieldSources["cocontractant"] = AnalysisFieldSource(
+                    source: "derived_counterparty_from_issuer",
+                    confidence: 0.68,
+                    evidence: clippedEvidence(counterpartyFromIssuer)
                 )
             }
 
@@ -690,6 +707,31 @@ enum IDPSemanticPipeline {
                     evidence: clippedEvidence(derived)
                 )
             }
+        }
+
+        if let cocontractant = extracted.fields["cocontractant"] {
+            extracted.fields["agreement_counterparty"] = cocontractant
+            extracted.fieldSources["agreement_counterparty"] = extracted.fieldSources["cocontractant"]
+        }
+        if let agreementObject = extracted.fields["document_objet"] {
+            extracted.fields["agreement_object"] = agreementObject
+            extracted.fieldSources["agreement_object"] = extracted.fieldSources["document_objet"]
+        }
+        if let period = extracted.fields["periode"] {
+            extracted.fields["agreement_period"] = period
+            extracted.fieldSources["agreement_period"] = extracted.fieldSources["periode"]
+        }
+        if (typeDoc == "Entente" || typeDoc == "Autre"),
+           let parties = buildAgreementParties(
+                issuer: extracted.fields["organisme_emetteur"],
+                cocontractant: extracted.fields["cocontractant"]
+           ) {
+            extracted.fields["parties_contractantes"] = parties
+            extracted.fieldSources["parties_contractantes"] = AnalysisFieldSource(
+                source: "derived_contracting_parties",
+                confidence: 0.66,
+                evidence: clippedEvidence(parties)
+            )
         }
     }
 
@@ -1060,6 +1102,8 @@ enum IDPSemanticPipeline {
             ?? sanitizedSemanticDisplayValue(nonEmpty(baseFields["comite"]))
         let cocontractant = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["cocontractant"]))
         let periode = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["periode"]))
+        let partiesContractantes = sanitizedSemanticDisplayValue(nonEmpty(semanticFields["parties_contractantes"]))
+            ?? buildAgreementParties(issuer: issuer, cocontractant: cocontractant)
         let keywords = orderedUnique(cleanedLines(from: rawText).prefix(12).flatMap { line in
             line
                 .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -1079,6 +1123,7 @@ enum IDPSemanticPipeline {
         if let issuer { metadata["organisme_emetteur"] = issuer }
         if let cocontractant { metadata["cocontractant"] = cocontractant }
         if let periode { metadata["periode"] = periode }
+        if let partiesContractantes { metadata["parties_contractantes"] = partiesContractantes }
         if !keywords.isEmpty {
             metadata["mots_cles"] = keywords.joined(separator: ", ")
         }
@@ -1233,6 +1278,50 @@ enum IDPSemanticPipeline {
             }
         }
         return nil
+    }
+
+    private static func extractCounterpartyFromIssuer(_ raw: String?) -> String? {
+        guard let issuer = nonEmpty(raw) else {
+            return nil
+        }
+
+        let normalizedIssuer = normalizeDisplayText(issuer)
+        let patterns = [
+            #"(?i)\b(?:la\s+)?ville\s+d['’ ]amos\s*(?:,|\s)+(?:et|avec)\s+(.+)$"#,
+            #"(?i)^(.+?)\s*(?:et|avec)\s+(?:la\s+)?ville\s+d['’ ]amos\b"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(
+                    in: normalizedIssuer,
+                    options: [],
+                    range: NSRange(normalizedIssuer.startIndex..<normalizedIssuer.endIndex, in: normalizedIssuer)
+                  ),
+                  match.numberOfRanges > 1,
+                  let captureRange = Range(match.range(at: 1), in: normalizedIssuer),
+                  let sanitized = sanitizeAgreementCounterpartyCandidate(String(normalizedIssuer[captureRange])) else {
+                continue
+            }
+            return sanitized
+        }
+        return nil
+    }
+
+    private static func buildAgreementParties(
+        issuer: String?,
+        cocontractant: String?
+    ) -> String? {
+        let issuerValue = sanitizedSemanticDisplayValue(issuer)
+        let cocontractantValue = sanitizedSemanticDisplayValue(cocontractant)
+        guard let issuerValue, let cocontractantValue else {
+            return nil
+        }
+        let normalizedIssuer = normalize(issuerValue)
+        let normalizedCounterparty = normalize(cocontractantValue)
+        guard normalizedIssuer != normalizedCounterparty else {
+            return nil
+        }
+        return "\(issuerValue) & \(cocontractantValue)"
     }
 
     private static func sanitizeAgreementCounterpartyCandidate(_ raw: String) -> String? {

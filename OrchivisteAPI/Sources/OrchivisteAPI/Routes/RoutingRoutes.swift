@@ -110,6 +110,13 @@ private func executeRouting(
     if analysis == nil, let resolvedJob {
         analysis = makeAnalysisSnapshot(from: resolvedJob, classCodeFallback: resolvedJob.suggestedClassCode)
     }
+    analysis = mergeAnalysisWithJobSnapshot(
+        analysis: analysis,
+        job: resolvedJob,
+        classCodeFallback: suggestedCode
+    )
+    let routingSignal = routingDecisionSignal(job: resolvedJob, analysis: analysis)
+    analysis = applyRoutingDecisionSignal(analysis: analysis, signal: routingSignal)
 
     let effectiveLocalSettings = mergedLocalRoutingSettings(
         base: localSettings,
@@ -118,7 +125,7 @@ private func executeRouting(
 
     let provisionalRule = selectRoutingRule(
         rules: routingRules?.rules ?? [],
-        classCode: nonEmpty(routeRequest?.class_code) ?? suggestedCode,
+        classCode: nonEmpty(routeRequest?.class_code) ?? nonEmpty(routingSignal.classCode) ?? suggestedCode,
         analysis: analysis
     )
 
@@ -133,7 +140,9 @@ private func executeRouting(
     let suggestedClassCode = nonEmpty(suggestedCode)
     let presetClassCode = nonEmpty(provisionalPreset?.class_code)
     let fallbackClassCode = routing.mappings.keys.first
+    let forcedClassCode = nonEmpty(routingSignal.classCode)
     let classCode = requestedClassCode
+        ?? forcedClassCode
         ?? ruleClassCode
         ?? ruleWhenClassCode
         ?? suggestedClassCode
@@ -165,6 +174,7 @@ private func executeRouting(
     let selectedRuleClassCode = nonEmpty(selectedRule?.class_code)
     let selectedRuleWhenClassCode = nonEmpty(selectedRule?.when_class_code)
     let effectiveClassCode = requestedClassCode
+        ?? forcedClassCode
         ?? selectedRuleClassCode
         ?? selectedRuleWhenClassCode
         ?? classCode
@@ -1034,7 +1044,13 @@ func buildRoutePreview(
     let presets = ConfigLoader.loadPresets()
     let namingRules = ConfigLoader.loadNamingRules()
     let namingThesaurus = ConfigLoader.loadNamingThesauri().first
-    let effectiveAnalysis = analysis ?? makeAnalysisSnapshot(from: job, classCodeFallback: job.suggestedClassCode)
+    let initialAnalysis = mergeAnalysisWithJobSnapshot(
+        analysis: analysis,
+        job: job,
+        classCodeFallback: job.suggestedClassCode
+    )
+    let routingSignal = routingDecisionSignal(job: job, analysis: initialAnalysis)
+    let effectiveAnalysis = applyRoutingDecisionSignal(analysis: initialAnalysis, signal: routingSignal)
     let effectiveLocalSettings = mergedLocalRoutingSettings(
         base: localSettings,
         requestedRoot: nonEmpty(job.analysisChamps?["route.requested_output_root"])
@@ -1042,7 +1058,9 @@ func buildRoutePreview(
 
     let provisionalRule = selectRoutingRule(
         rules: routingRules?.rules ?? [],
-        classCode: nonEmpty(requestedClassCode) ?? nonEmpty(job.suggestedClassCode),
+        classCode: nonEmpty(requestedClassCode)
+            ?? nonEmpty(routingSignal.classCode)
+            ?? nonEmpty(job.suggestedClassCode),
         analysis: effectiveAnalysis
     )
     let provisionalPreset = presets.first { $0.id == nonEmpty(requestedPresetID) }
@@ -1050,12 +1068,20 @@ func buildRoutePreview(
         ?? presets.first { $0.id == job.suggestedPreset }
         ?? presets.first
 
-    let classCode = nonEmpty(requestedClassCode)
-        ?? nonEmpty(provisionalRule?.class_code)
-        ?? nonEmpty(provisionalRule?.when_class_code)
-        ?? nonEmpty(job.suggestedClassCode)
-        ?? nonEmpty(provisionalPreset?.class_code)
-        ?? routing.mappings.keys.first
+    let requestedClassCodeValue = nonEmpty(requestedClassCode)
+    let provisionalRuleClassCode = nonEmpty(provisionalRule?.class_code)
+    let provisionalRuleWhenClassCode = nonEmpty(provisionalRule?.when_class_code)
+    let routingSignalClassCode = nonEmpty(routingSignal.classCode)
+    let suggestedClassCode = nonEmpty(job.suggestedClassCode)
+    let presetClassCode = nonEmpty(provisionalPreset?.class_code)
+    let fallbackClassCode = routing.mappings.keys.first
+    let classCode = requestedClassCodeValue
+        ?? routingSignalClassCode
+        ?? provisionalRuleClassCode
+        ?? provisionalRuleWhenClassCode
+        ?? suggestedClassCode
+        ?? presetClassCode
+        ?? fallbackClassCode
         ?? "UNCLASSIFIED"
 
     let selectedRule = selectRoutingRule(
@@ -1068,6 +1094,7 @@ func buildRoutePreview(
         ?? provisionalPreset
 
     let effectiveClassCode = nonEmpty(requestedClassCode)
+        ?? routingSignalClassCode
         ?? nonEmpty(selectedRule?.class_code)
         ?? nonEmpty(selectedRule?.when_class_code)
         ?? classCode
@@ -1180,7 +1207,7 @@ private func routePreviewRankingRows(
         )
     }
 
-    return NamingRuleRanker()
+    let rows = NamingRuleRanker()
         .rank(request: request, candidates: candidates)
         .prefix(5)
         .map {
@@ -1194,6 +1221,7 @@ private func routePreviewRankingRows(
                 reasons: Array($0.reasons.prefix(4))
             )
         }
+    return applyRoutePreviewRankingGuardrails(rows: rows, job: job, analysis: analysis)
 }
 
 private func routePreviewRankingProviderStatus(rows: [RoutePreviewRankingRow]) -> String {
@@ -1212,6 +1240,52 @@ private func routePreviewRankingProviderStatus(rows: [RoutePreviewRankingRow]) -
         return "Similarité sémantique + heuristique déterministe"
     }
     return "Heuristique déterministe seulement"
+}
+
+private func applyRoutePreviewRankingGuardrails(
+    rows: [RoutePreviewRankingRow],
+    job: JobRecord,
+    analysis: AnalysisResponse?
+) -> [RoutePreviewRankingRow] {
+    guard !rows.isEmpty else { return rows }
+    let signal = routingDecisionSignal(job: job, analysis: analysis)
+    guard signal.typeDoc == "Resolution" else {
+        return rows
+    }
+
+    let adjusted = rows.map { row -> RoutePreviewRankingRow in
+        if row.ruleID == "rule_resolution_conseil_municipal" {
+            let boosted = min(1.0, max(row.finalScore, row.deterministicScore) + 0.45)
+            return RoutePreviewRankingRow(
+                ruleID: row.ruleID,
+                label: row.label,
+                finalScore: boosted,
+                deterministicScore: max(row.deterministicScore, 0.50),
+                mlScore: row.mlScore,
+                sources: row.sources,
+                reasons: row.reasons + ["priorite_resolution"]
+            )
+        }
+        if row.ruleID == "rule_entente_uniformisee" {
+            let penalized = row.finalScore * 0.35
+            return RoutePreviewRankingRow(
+                ruleID: row.ruleID,
+                label: row.label,
+                finalScore: penalized,
+                deterministicScore: row.deterministicScore * 0.35,
+                mlScore: row.mlScore,
+                sources: row.sources,
+                reasons: row.reasons + ["penalite_resolution_prioritaire"]
+            )
+        }
+        return row
+    }
+    return adjusted.sorted {
+        if $0.finalScore == $1.finalScore {
+            return $0.ruleID < $1.ruleID
+        }
+        return $0.finalScore > $1.finalScore
+    }
 }
 
 private func routePreviewNamingPredictionRequest(
@@ -1236,12 +1310,17 @@ private func routePreviewNamingPredictionRequest(
         "capture.section_titles",
         "capture.boundary_markers"
     ]
-    let champs = analysis?.champs ?? job.analysisChamps ?? [:]
+    let champs = mergedRoutingChamps(job: job, analysis: analysis)
+    let authoritativeType = nonEmpty(champs["metadata.type_document"])
+        ?? nonEmpty(champs["type_document"])
+        ?? nonEmpty(champs["doc_type_hint"])
     let collectedText = preferredKeys.compactMap { key in
         nonEmpty(champs[key])
     }
+    let includeFallbackType = authoritativeType == nil
+    let fallbackType = includeFallbackType ? (nonEmpty(analysis?.type_doc) ?? nonEmpty(job.analysisTypeDoc)) : nil
     let fallbackText = [
-        nonEmpty(job.analysisTypeDoc),
+        fallbackType,
         (job.analysisSujets ?? []).isEmpty ? nil : job.analysisSujets?.joined(separator: ", "),
         nonEmpty(fileName)
     ].compactMap { $0 }
@@ -1255,7 +1334,11 @@ private func routePreviewNamingPredictionRequest(
 
     return NamingPredictionRequest(
         text: merged,
-        metadata: NamingSourceMetadata(fileName: fileName, originalName: fileName),
+        metadata: NamingSourceMetadata(
+            fileName: fileName,
+            originalName: fileName,
+            hints: champs
+        ),
         sample_count: 1,
         sample_file_names: [fileName]
     )
@@ -1342,14 +1425,59 @@ func selectNamingRuleForRouting(
     }
 
     let haystack = buildNamingDetectionText(job: job, analysis: analysis, preset: preset)
+    let champs = mergedRoutingChamps(job: job, analysis: analysis)
+    let typeTokens = (
+        [
+            nonEmpty(champs["metadata.type_document"]),
+            nonEmpty(champs["type_document"]),
+            nonEmpty(champs["doc_type_hint"]),
+            nonEmpty(analysis?.type_doc),
+            nonEmpty(job.analysisTypeDoc),
+        ].compactMap { $0 }
+    ).compactMap { normalizeRoutingToken($0) }
     let engine = DeclarativeNamingRuleEngine()
+    let hasResolutionMarker = haystack.range(
+        of: #"(?i)\br[ée]solution\s*(?:n[°o]|no|num[eé]ro)?\s*[-:#]?\s*\d{4}[-/]\d{1,4}\b"#,
+        options: .regularExpression
+    ) != nil
+    let hasResolutionNumber = [
+        nonEmpty(champs["numero"]),
+        nonEmpty(champs["resolution_numero"]),
+        nonEmpty(champs["metadata.numero_document"]),
+    ]
+        .compactMap { $0 }
+        .contains { value in
+            value.range(of: #"(?i)\b\d{4}[-/]\d{1,4}\b"#, options: .regularExpression) != nil
+        }
+    let hasResolutionHint = hasResolutionMarker
+        || typeTokens.contains(where: { $0.contains("resolution") || $0.contains("resolut") })
+        || hasResolutionNumber
+    let hasAgreementHint = typeTokens.contains(where: { containsAgreementHint($0) })
+    let hasAgreementMarker = haystack.range(
+        of: #"(?i)\b(entente|convention|contrat|bail|protocole|avenant)\b"#,
+        options: .regularExpression
+    ) != nil
+    let hasAgreementFileHint = URL(fileURLWithPath: job.fileURL).lastPathComponent.range(
+        of: #"(?i)\b(entente|convention|contrat|bail|protocole|avenant)\b"#,
+        options: .regularExpression
+    ) != nil
+
+    if hasResolutionHint,
+       let resolutionRule = rules.first(where: { $0.id == "rule_resolution_conseil_municipal" }) {
+        return resolutionRule
+    }
+    if !hasResolutionHint && (hasAgreementHint || hasAgreementMarker || hasAgreementFileHint),
+       let agreementRule = rules.first(where: { $0.id == "rule_entente_uniformisee" }) {
+        return agreementRule
+    }
 
     let prioritizedIDs = [
-        preset?.id,
-        analysis?.suggested_preset,
+        champs["metadata.type_document"],
+        champs["doc_type_hint"],
         analysis?.type_doc,
         job.analysisTypeDoc,
-        job.analysisChamps?["metadata.type_document"]
+        preset?.id,
+        analysis?.suggested_preset
     ]
         .compactMap { nonEmpty($0) }
         .map { normalizeRoutingToken($0) }
@@ -1359,13 +1487,14 @@ func selectNamingRuleForRouting(
            let rule = rules.first(where: { $0.id == "rule_resolution_conseil_municipal" }) {
             return rule
         }
-        if token?.contains("contrat") == true || token?.contains("entente") == true || token?.contains("bail") == true,
+        if !hasResolutionHint,
+           (token?.contains("contrat") == true || token?.contains("entente") == true || token?.contains("bail") == true),
            let rule = rules.first(where: { $0.id == "rule_entente_uniformisee" }) {
             return rule
         }
     }
 
-    return engine.detectRule(
+    let detected = engine.detectRule(
         in: haystack,
         metadata: NamingSourceMetadata(
             fileName: URL(fileURLWithPath: job.fileURL).lastPathComponent,
@@ -1375,6 +1504,199 @@ func selectNamingRuleForRouting(
         ),
         rules: rules
     )
+    if hasResolutionMarker,
+       detected?.id == "rule_entente_uniformisee",
+       let resolutionRule = rules.first(where: { $0.id == "rule_resolution_conseil_municipal" }) {
+        return resolutionRule
+    }
+    return detected
+}
+
+private struct RoutingDecisionSignal {
+    let typeDoc: String?
+    let classCode: String?
+}
+
+private func mergedRoutingChamps(job: JobRecord?, analysis: AnalysisResponse?) -> [String: String] {
+    let jobChamps = job?.analysisChamps ?? [:]
+    guard let analysisChamps = analysis?.champs else {
+        return jobChamps
+    }
+    return jobChamps.merging(analysisChamps) { jobValue, analysisValue in
+        let trimmed = analysisValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? jobValue : analysisValue
+    }
+}
+
+private func routingValues(
+    keys: [String],
+    job: JobRecord?,
+    analysis: AnalysisResponse?
+) -> [String] {
+    let champs = mergedRoutingChamps(job: job, analysis: analysis)
+    return keys.compactMap { key in
+        nonEmpty(champs[key])
+    }
+}
+
+private func mergeAnalysisWithJobSnapshot(
+    analysis: AnalysisResponse?,
+    job: JobRecord?,
+    classCodeFallback: String?
+) -> AnalysisResponse? {
+    let snapshot: AnalysisResponse?
+    if let job {
+        snapshot = makeAnalysisSnapshot(
+            from: job,
+            classCodeFallback: nonEmpty(classCodeFallback) ?? job.suggestedClassCode
+        )
+    } else {
+        snapshot = nil
+    }
+    guard let analysis else {
+        return snapshot
+    }
+    guard let snapshot else {
+        return analysis
+    }
+
+    let mergedSujets = analysis.sujets.isEmpty ? snapshot.sujets : analysis.sujets
+    let mergedTypeDoc = nonEmpty(analysis.type_doc) ?? snapshot.type_doc
+    let mergedChamps = snapshot.champs.merging(analysis.champs) { snapshotValue, analysisValue in
+        let trimmed = analysisValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? snapshotValue : analysisValue
+    }
+
+    return AnalysisResponse(
+        type_doc: mergedTypeDoc,
+        sujets: mergedSujets,
+        structure: analysis.structure,
+        champs: mergedChamps,
+        confidence: max(analysis.confidence, snapshot.confidence),
+        suggested_preset: nonEmpty(analysis.suggested_preset) ?? snapshot.suggested_preset,
+        suggested_class_code: nonEmpty(analysis.suggested_class_code) ?? snapshot.suggested_class_code,
+        explanations: analysis.explanations,
+        capture: analysis.capture ?? snapshot.capture,
+        review: analysis.review ?? snapshot.review
+    )
+}
+
+private func routingDecisionSignal(job: JobRecord?, analysis: AnalysisResponse?) -> RoutingDecisionSignal {
+    let typeTokens = (
+        routingValues(
+            keys: ["metadata.type_document", "type_document", "doc_type_hint"],
+            job: job,
+            analysis: analysis
+        )
+        + [nonEmpty(analysis?.type_doc), nonEmpty(job?.analysisTypeDoc)].compactMap { $0 }
+    ).compactMap { normalizeRoutingToken($0) }
+
+    let hasResolutionTypeHint = typeTokens.contains { token in
+        token.contains("resolution") || token.contains("resolut")
+    }
+    let hasAgreementTypeHint = typeTokens.contains { token in
+        containsAgreementHint(token)
+    }
+
+    let numberCandidates = routingValues(
+        keys: ["numero", "resolution_numero", "metadata.numero_document", "numero_document"],
+        job: job,
+        analysis: analysis
+    )
+    let hasResolutionNumber = numberCandidates.contains { value in
+        value.range(of: #"(?i)\b\d{4}[-/]\d{1,4}\b"#, options: .regularExpression) != nil
+    }
+
+    let combinedTextParts = [
+        nonEmpty(job?.analysisTypeDoc),
+        nonEmpty(analysis?.type_doc),
+        nonEmpty(job?.fileURL),
+    ]
+        .compactMap { $0 }
+        + routingValues(
+            keys: [
+                "metadata.type_document",
+                "doc_type_hint",
+                "summary.generated",
+                "summary.title",
+                "capture.boundary_markers",
+                "resolution_titre",
+                "document_objet",
+                "metadata.objet",
+            ],
+            job: job,
+            analysis: analysis
+        )
+    let combinedText = combinedTextParts.joined(separator: "\n")
+    let hasResolutionMarker = combinedText.range(
+        of: #"(?i)\br[ée]solution\s*(?:n[°o]|no|num[eé]ro)?\s*[-:#]?\s*\d{4}[-/]\d{1,4}\b"#,
+        options: .regularExpression
+    ) != nil
+    let hasAgreementMarker = combinedText.range(
+        of: #"(?i)\b(entente|convention|contrat|bail|protocole|avenant)\b"#,
+        options: .regularExpression
+    ) != nil
+    let sourceFileName = nonEmpty(job?.fileURL).map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
+    let hasResolutionFileHint = sourceFileName.range(
+        of: #"(?i)\br[ée]solution\b"#,
+        options: .regularExpression
+    ) != nil
+    let hasAgreementFileHint = sourceFileName.range(
+        of: #"(?i)\b(entente|convention|contrat|bail|protocole|avenant)\b"#,
+        options: .regularExpression
+    ) != nil
+
+    if hasResolutionMarker || hasResolutionNumber || hasResolutionTypeHint || (hasResolutionFileHint && hasResolutionNumber) {
+        return RoutingDecisionSignal(typeDoc: "Resolution", classCode: "ADM-RES")
+    }
+    if !hasResolutionMarker && !hasResolutionNumber && (hasAgreementTypeHint || hasAgreementMarker || hasAgreementFileHint) {
+        return RoutingDecisionSignal(typeDoc: "Entente", classCode: "ADM-ENT")
+    }
+    return RoutingDecisionSignal(typeDoc: nil, classCode: nil)
+}
+
+private func applyRoutingDecisionSignal(
+    analysis: AnalysisResponse?,
+    signal: RoutingDecisionSignal
+) -> AnalysisResponse? {
+    guard let analysis else {
+        return nil
+    }
+    guard nonEmpty(signal.typeDoc) != nil || nonEmpty(signal.classCode) != nil else {
+        return analysis
+    }
+    var adjustedChamps = analysis.champs
+    if let typeDoc = nonEmpty(signal.typeDoc) {
+        adjustedChamps["doc_type_hint"] = typeDoc
+        adjustedChamps["type_document"] = typeDoc
+        adjustedChamps["metadata.type_document"] = typeDoc
+    }
+    if let classCode = nonEmpty(signal.classCode) {
+        adjustedChamps["code_de_classement"] = classCode
+        adjustedChamps["metadata.code_de_classement"] = classCode
+    }
+    return AnalysisResponse(
+        type_doc: signal.typeDoc ?? analysis.type_doc,
+        sujets: analysis.sujets,
+        structure: analysis.structure,
+        champs: adjustedChamps,
+        confidence: analysis.confidence,
+        suggested_preset: analysis.suggested_preset,
+        suggested_class_code: signal.classCode ?? analysis.suggested_class_code,
+        explanations: analysis.explanations,
+        capture: analysis.capture,
+        review: analysis.review
+    )
+}
+
+private func containsAgreementHint(_ normalizedToken: String?) -> Bool {
+    guard let normalizedToken else { return false }
+    return normalizedToken.contains("entente")
+        || normalizedToken.contains("contrat")
+        || normalizedToken.contains("convention")
+        || normalizedToken.contains("bail")
+        || normalizedToken.contains("protocole")
+        || normalizedToken.contains("avenant")
 }
 
 private func renderFileNameUsingNamingRule(
@@ -1462,7 +1784,8 @@ func buildNamingDetectionText(
     if let presetDescription = nonEmpty(preset?.description) {
         parts.append(presetDescription)
     }
-    if let champs = analysis?.champs ?? job.analysisChamps {
+    let champs = mergedRoutingChamps(job: job, analysis: analysis)
+    if !champs.isEmpty {
         let usefulKeys = [
             "summary.title",
             "summary.generated",
@@ -1485,9 +1808,6 @@ func buildNamingDetectionText(
                 parts.append(value)
             }
         }
-        for value in champs.values where !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append(value)
-        }
     }
     return parts.joined(separator: "\n")
 }
@@ -1497,7 +1817,7 @@ func overlayNamingFields(
     analysis: AnalysisResponse?,
     sourceURL: URL
 ) -> [String: String] {
-    let champs = analysis?.champs ?? job.analysisChamps ?? [:]
+    let champs = mergedRoutingChamps(job: job, analysis: analysis)
     let inferredFromName = inferAgreementFieldsFromFileName(sourceURL: sourceURL)
     let date = preferredNamingDate(from: champs)
     let numero = nonEmpty(champs["numero"])
@@ -1509,17 +1829,29 @@ func overlayNamingFields(
         ?? nonEmpty(champs["metadata.objet"])
         ?? nonEmpty(champs["document_objet"])
         ?? nonEmpty(champs["summary.title"])
-    var object = nonEmpty(champs["document_objet"])
-        ?? nonEmpty(champs["objet"])
-        ?? nonEmpty(champs["metadata.objet"])
-        ?? nonEmpty(champs["summary.title"])
-        ?? title
-    var counterparty = nonEmpty(champs["cocontractant"])
-        ?? nonEmpty(champs["metadata.cocontractant"])
-        ?? nonEmpty(champs["organisme_tiers"])
-        ?? nonEmpty(champs["metadata.organisme_tiers"])
-        ?? extractCounterpartyFromIssuer(champs["organisme_emetteur"])
-        ?? extractCounterpartyFromIssuer(champs["metadata.organisme_emetteur"])
+    let objectCandidates: [String?] = [
+        nonEmpty(champs["document_objet"]),
+        nonEmpty(champs["objet"]),
+        nonEmpty(champs["metadata.objet"]),
+        nonEmpty(champs["agreement_object"]),
+        nonEmpty(champs["summary.title"]),
+        title
+    ]
+    var object = objectCandidates.compactMap { $0 }.first
+
+    let counterpartyCandidates: [String?] = [
+        nonEmpty(champs["cocontractant"]),
+        nonEmpty(champs["metadata.cocontractant"]),
+        nonEmpty(champs["agreement_counterparty"]),
+        nonEmpty(champs["organisme_tiers"]),
+        nonEmpty(champs["metadata.organisme_tiers"]),
+        nonEmpty(champs["parties_contractantes"]),
+        nonEmpty(champs["metadata.parties_contractantes"]),
+        nonEmpty(champs["agreement_parties"]),
+        extractCounterpartyFromIssuer(champs["organisme_emetteur"]),
+        extractCounterpartyFromIssuer(champs["metadata.organisme_emetteur"])
+    ]
+    var counterparty = counterpartyCandidates.compactMap { $0 }.first
     let dateDebutPeriod: String? = {
         guard let rawStart = nonEmpty(champs["date_debut"]),
               let normalizedStart = normalizeRoutingDate(rawStart) else {
@@ -1535,6 +1867,7 @@ func overlayNamingFields(
     }()
     var period = nonEmpty(champs["periode"])
     if period == nil { period = nonEmpty(champs["metadata.periode"]) }
+    if period == nil { period = nonEmpty(champs["agreement_period"]) }
     if period == nil { period = dateDebutPeriod }
     if period == nil { period = nonEmpty(champs["duree"]) }
     if period == nil { period = nonEmpty(champs["metadata.duree"]) }

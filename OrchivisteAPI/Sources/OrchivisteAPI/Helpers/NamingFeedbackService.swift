@@ -43,11 +43,15 @@ enum NamingFeedbackService {
         let engine = DeclarativeNamingRuleEngine()
         let sourceURL = URL(fileURLWithPath: job.fileURL)
         let detectionText = buildNamingDetectionText(job: job, analysis: analysis, preset: preset)
+        let mergedHints = (job.analysisChamps ?? [:]).merging(analysis?.champs ?? [:]) { jobValue, analysisValue in
+            let trimmed = analysisValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? jobValue : analysisValue
+        }
         let metadata = NamingSourceMetadata(
             fileName: sourceURL.lastPathComponent,
             fileExtension: sourceURL.pathExtension,
             originalName: sourceURL.lastPathComponent,
-            hints: job.analysisChamps
+            hints: mergedHints
         )
 
         var extracted = engine.extractFields(from: detectionText, rule: rule, metadata: metadata)

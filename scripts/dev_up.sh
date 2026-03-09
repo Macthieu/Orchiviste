@@ -8,6 +8,7 @@ START_TIMEOUT="${ORCHIVISTE_DEV_START_TIMEOUT:-120}"
 BUILD_ON_START="${ORCHIVISTE_DEV_BUILD_ON_START:-0}"
 USE_CLASSIC_BUILDER="${ORCHIVISTE_DEV_CLASSIC_BUILDER:-0}"
 FALLBACK_CLASSIC_BUILDER="${ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER:-1}"
+ALLOW_LOCAL_PORT_CONFLICT="${ORCHIVISTE_DEV_ALLOW_LOCAL_PORT_CONFLICT:-0}"
 ANON_AUTH="${ORCHIVISTE_DOCKER_ANON_AUTH:-0}"
 DOCKER_CONFIG_ORIGINAL="${DOCKER_CONFIG:-}"
 DOCKER_CONFIG_OVERRIDE=""
@@ -28,6 +29,7 @@ Variables d'environnement:
   ORCHIVISTE_DEV_BUILD_ON_START=1
   ORCHIVISTE_DEV_CLASSIC_BUILDER=1
   ORCHIVISTE_DEV_FALLBACK_CLASSIC_BUILDER=0|1
+  ORCHIVISTE_DEV_ALLOW_LOCAL_PORT_CONFLICT=0|1
   ORCHIVISTE_DEV_START_TIMEOUT=120
   ORCHIVISTE_DOCKER_INFO_TIMEOUT=8
   ORCHIVISTE_DOCKER_ANON_AUTH=1
@@ -67,6 +69,43 @@ need_cmd() {
     echo "Commande requise manquante : $cmd" >&2
     exit 1
   fi
+}
+
+port_from_url() {
+  local url="$1"
+  local without_scheme="${url#*://}"
+  local host_port="${without_scheme%%/*}"
+  if [[ "$host_port" == *:* ]]; then
+    printf '%s\n' "${host_port##*:}"
+  else
+    printf '%s\n' ""
+  fi
+}
+
+check_local_listener_conflicts() {
+  if [[ "$ALLOW_LOCAL_PORT_CONFLICT" == "1" ]]; then
+    return 0
+  fi
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local api_port analyse_port
+  api_port="$(port_from_url "$API_BASE")"
+  analyse_port="$(port_from_url "$ANALYSE_BASE")"
+
+  for port in "$api_port" "$analyse_port"; do
+    [[ -n "$port" ]] || continue
+    local lines
+    lines="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR>1 && index($1, "com.docke") != 1 {print $1" "$2" "$9}')"
+    if [[ -n "$lines" ]]; then
+      echo "ÉCHEC : conflit de port local détecté sur $port." >&2
+      echo "Processus non-Docker en écoute :" >&2
+      echo "$lines" >&2
+      echo "Arrête ce processus local (ou exporte ORCHIVISTE_DEV_ALLOW_LOCAL_PORT_CONFLICT=1 si c'est volontaire)." >&2
+      exit 1
+    fi
+  done
 }
 
 docker_info_ok() {
@@ -220,6 +259,7 @@ echo "== Orchiviste démarrage local =="
 wait_for_docker_daemon
 
 cd "$ROOT_DIR"
+check_local_listener_conflicts
 start_stack
 
 wait_http_ok "$API_BASE/v1/health" "API"

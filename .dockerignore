@@ -11,3 +11,37 @@
 **/DerivedData
 **/*.sqlite-shm
 **/*.sqlite-wal
+
+# Local runtime/demo data (heavy, not needed for image builds)
+runtime/
+PDF Permis/
+fixtures/
+deploy/
+
+# Local virtual environments
+.venv*/
+
+# Local training/model artifacts (runtime mounted separately when needed)
+ml/data/
+ml/tmp/
+ml/runs/
+ml/checkpoints/
+ml/**/*.ckpt
+ml/**/*.pt
+ml/**/*.pth
+ml/**/*.safetensors
+
+# Local office/media blobs
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xls
+*.xlsx
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff

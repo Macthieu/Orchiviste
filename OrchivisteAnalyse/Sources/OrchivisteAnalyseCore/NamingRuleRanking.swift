@@ -89,6 +89,22 @@ public struct DeterministicNamingPredictionProvider: NamingPredictionProvider {
                 + request.sample_file_names)
                 .joined(separator: "\n")
         )
+        let metadataType = normalizedSearchText(
+            request.metadata?.hints?["metadata.type_document"]
+                ?? request.metadata?.hints?["type_document"]
+                ?? ""
+        )
+        let hasResolutionMarker = haystack.contains("resolution")
+            || request.text.range(
+                of: #"(?i)\br[ée]solution\s*(?:n[°o]|no|num[eé]ro)?\s*[-:#]?\s*\d{4}[-/]\d{1,4}\b"#,
+                options: .regularExpression
+            ) != nil
+        let hasAgreementMarker = haystack.contains("entente")
+            || haystack.contains("contrat")
+            || haystack.contains("convention")
+            || haystack.contains("bail")
+            || haystack.contains("protocole")
+            || haystack.contains("avenant")
 
         return candidates.compactMap { record in
             let rule = record.definition
@@ -117,6 +133,29 @@ public struct DeterministicNamingPredictionProvider: NamingPredictionProvider {
             if !familyHits.isEmpty {
                 score += min(0.15, Double(familyHits.count) * 0.08)
                 reasons.append("familles: \(familyHits.joined(separator: ", "))")
+            }
+
+            if rule.document_family == "resolution_conseil" {
+                if hasResolutionMarker {
+                    score += 0.28
+                    reasons.append("indice_resolution")
+                }
+                if metadataType.contains("resolution") {
+                    score += 0.22
+                    reasons.append("metadata_type=resolution")
+                }
+                if hasAgreementMarker && !hasResolutionMarker {
+                    score *= 0.72
+                    reasons.append("penalite_contrat_sans_resolution")
+                }
+            } else if rule.document_family == "entente_uniformisee" {
+                if hasAgreementMarker {
+                    score += 0.10
+                }
+                if hasResolutionMarker && !hasAgreementMarker {
+                    score *= 0.70
+                    reasons.append("penalite_resolution")
+                }
             }
 
             let sampleBonus = min(0.10, Double(max(0, request.sample_count - 1)) * 0.02)

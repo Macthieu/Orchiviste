@@ -307,6 +307,46 @@ final class NamingFoundationTests: XCTestCase {
         XCTAssertGreaterThan(ranked.first?.score ?? 0, 0.1)
     }
 
+    func testNamingRuleRankerKeepsResolutionAheadOfEntenteWhenResolutionNumberPresent() {
+        let ranker = NamingRuleRanker()
+        let resolutionRule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_resolution_conseil_municipal" }!
+        let ententeRule = NamingFoundationSeeds.bootstrapFallbackRules().first { $0.id == "rule_entente_uniformisee" }!
+        let resolution = LoadedNamingRule(
+            rule_id: resolutionRule.id,
+            version: "1.0.0",
+            status: .active,
+            source: .configFile,
+            definition: resolutionRule
+        )
+        let entente = LoadedNamingRule(
+            rule_id: ententeRule.id,
+            version: "1.0.0",
+            status: .active,
+            source: .configFile,
+            definition: ententeRule
+        )
+
+        let request = NamingPredictionRequest(
+            text: """
+            Resolution_2023-388_contrat_gestion_et_entretien
+            Résolution n° 2023-388
+            ADJUDICATION DU CONTRAT
+            """,
+            metadata: NamingSourceMetadata(
+                fileName: "Resolution_2023-388_contrat_gestion_et_entretien.pdf",
+                originalName: "Resolution_2023-388_contrat_gestion_et_entretien.pdf",
+                hints: ["metadata.type_document": "Resolution"]
+            ),
+            sample_count: 1,
+            sample_file_names: ["Resolution_2023-388_contrat_gestion_et_entretien.pdf"]
+        )
+
+        let ranked = ranker.rank(request: request, candidates: [resolution, entente])
+
+        XCTAssertEqual(ranked.first?.rule.rule_id, "rule_resolution_conseil_municipal")
+        XCTAssertGreaterThan((ranked.first?.score ?? 0), (ranked.last?.score ?? 0))
+    }
+
     func testNamingRuleRankerUsesEmbeddingSimilarityWhenIndexIsProvided() throws {
         let rules = NamingFoundationSeeds.bootstrapFallbackRules()
         let resolution = LoadedNamingRule(

@@ -4,6 +4,7 @@ WORKDIR /app
 
 # 1) Copy only manifests first to maximize dependency-cache reuse.
 COPY OrchivisteSharedKit/Package.swift ./OrchivisteSharedKit/Package.swift
+COPY OrchivisteAnalyse/Package.swift OrchivisteAnalyse/Package.resolved ./OrchivisteAnalyse/
 COPY OrchivisteAPI/Package.swift OrchivisteAPI/Package.resolved ./OrchivisteAPI/
 
 WORKDIR /app/OrchivisteAPI
@@ -13,6 +14,7 @@ RUN cp Package.resolved /tmp/OrchivisteAPI.Package.resolved
 # 2) Copy full sources after dependency resolution.
 WORKDIR /app
 COPY OrchivisteSharedKit ./OrchivisteSharedKit
+COPY OrchivisteAnalyse ./OrchivisteAnalyse
 COPY OrchivisteAPI ./OrchivisteAPI
 
 WORKDIR /app/OrchivisteAPI

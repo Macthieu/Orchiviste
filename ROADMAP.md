@@ -1,6 +1,6 @@
 # Roadmap Orchiviste (PR1 -> PR8)
 
-Mise à jour: 2026-03-07
+Mise à jour: 2026-03-08
 
 ## Objectif global
 
@@ -45,13 +45,14 @@ Critères d'acceptation:
 
 Objectif: améliorer la qualité de nommage sur les champs critiques.
 
-Statut: en cours (implémentation backend déjà appliquée le 2026-03-07, validation UI lot réel en cours)
+Statut: en cours (priorisation Résolution vs Entente renforcée côté routage/naming le 2026-03-08; extraction entente consolidée `cocontractant/objet/période` et signaux agreement renforcés)
 
 Livrables:
 
 - extraction renforcée de `cocontractant`, `objet`, `période` (ententes)
 - extraction renforcée de `numero`, `titre`, `date de séance` (résolutions)
 - règles JSON ajustées pour ces familles documentaires
+- fusion des indices `job + analyse` pour éviter les inversions de type en preview/routage
 
 Critères d'acceptation:
 
@@ -67,7 +68,7 @@ Validation:
 
 Objectif: transformer les corrections utilisateur en apprentissage réutilisable.
 
-Statut: en cours (replay feedback et persistance renforcés côté moteur, validation sur lot réel à compléter)
+Statut: en cours (replay feedback et persistance renforcés côté moteur; mémorisation auto activée au routage même sans règle explicitement sélectionnée)
 
 Livrables:
 
@@ -154,6 +155,7 @@ Livrables:
 - parallélisme contrôlé (queues, limites de concurrence)
 - meilleure gestion des retries/timeout
 - mise à jour des compteurs dashboard plus fluide
+- garde-fou de démarrage (`dev_up.sh`) pour détecter les conflits de ports entre API locale et stack Docker
 
 Critères d'acceptation:
 

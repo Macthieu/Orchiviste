@@ -1250,12 +1250,11 @@ function currentPreferredFileName() {
 }
 
 function shouldLearnFilenameCorrection() {
-    const ruleId = feedbackNamingRuleId();
     const current = currentPreferredFileName();
     const initial = (document.getElementById("routePreferredFileName")?.dataset.initial || "").trim();
     const checkbox = document.getElementById("routeLearnCorrection");
     const autoLearnEnabled = checkbox ? checkbox.checked : true;
-    return Boolean(autoLearnEnabled && ruleId.trim() && current && current !== initial);
+    return Boolean(autoLearnEnabled && current && current !== initial);
 }
 
 async function submitNamingFeedback(silent = false) {
@@ -1263,7 +1262,7 @@ async function submitNamingFeedback(silent = false) {
     const correctedFileName = currentPreferredFileName();
     const namingRuleId = feedbackNamingRuleId();
 
-    if (!correctedFileName || !namingRuleId) {
+    if (!correctedFileName) {
         if (!silent) {
             alert("Aucune correction de nommage exploitable à mémoriser.");
         }
@@ -1278,7 +1277,7 @@ async function submitNamingFeedback(silent = false) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             job_id: jobId,
-            naming_rule_id: namingRuleId,
+            naming_rule_id: namingRuleId || null,
             corrected_file_name: correctedFileName,
             notes: document.getElementById("reviewComment")?.value || null
         })
