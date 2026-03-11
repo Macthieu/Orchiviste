@@ -89,6 +89,30 @@ docker compose up -d --build redis analyse api
 
 Pour utiliser `FoundationModels` et `CoreML`, lance `OrchivisteAnalyse` nativement sur macOS au lieu du conteneur `analyse`.
 
+## Démo macOS (dossier externe recommandé)
+
+Dossier de démo recommandé:
+
+`/Volumes/MAC_HDD/Logiciel test/Orchiviste-demo-macOS`
+
+Construire/mettre à jour la démo:
+
+```bash
+./scripts/build_native_demo_bundle.sh "/Volumes/MAC_HDD/Logiciel test/Orchiviste-demo-macOS"
+```
+
+Démarrer la démo:
+
+```bash
+"/Volumes/MAC_HDD/Logiciel test/Orchiviste-demo-macOS/start-orchiviste.sh"
+```
+
+Arrêter la démo:
+
+```bash
+"/Volumes/MAC_HDD/Logiciel test/Orchiviste-demo-macOS/stop-orchiviste.sh"
+```
+
 UI:
 
 - `http://127.0.0.1:28780/ui`
@@ -101,6 +125,24 @@ UI:
 - Déploiement Mac mini: [deploy/mac-mini/README.md](deploy/mac-mini/README.md)
 - Roadmap produit et technique: [ROADMAP.md](ROADMAP.md)
 - Feuille de route ML: [ml/IMPLEMENTATION_PLAN.md](ml/IMPLEMENTATION_PLAN.md)
+
+## Captures d'écran
+
+### Tableau de bord (import)
+
+![Tableau de bord - import](docs/screenshots/dashboard-import.png)
+
+### Tableau de bord (tâches récentes)
+
+![Tableau de bord - tâches récentes](docs/screenshots/dashboard-tasks.png)
+
+### Préréglages (plan de classification)
+
+![Préréglages - plan de classification](docs/screenshots/presets-classification.png)
+
+### Nommage (règles déclaratives)
+
+![Nommage - règles déclaratives](docs/screenshots/naming-rules.png)
 
 ## Validation recommandée
 

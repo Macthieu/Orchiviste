@@ -66,3 +66,8 @@ PDF Permis/
 *.jpg
 *.jpeg
 *.png
+
+# Allow versioned UI screenshots for GitHub documentation
+!docs/
+!docs/screenshots/
+!docs/screenshots/*.png
