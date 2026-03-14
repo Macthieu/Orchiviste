@@ -20,6 +20,8 @@ Flux opérationnel: ingestion -> aperçu serveur -> extraction contenu/métadonn
 
 Par rapport aux outils OCR/IDP/EDMS génériques, Orchiviste cible l'usage archivistique municipal avec:
 
+- rôle de cockpit/hub de l'écosystème
+- orchestration des outils spécialisés sans fusion des dépôts (`MuniRenommage`, `MuniConversion`, `MuniMiseEnForme`, `MuniAnalyse`, `MuniMetadonnees`, `MuniPreclassement`, `MuniControle`)
 - règles de nommage métier + préréglages orientés administration publique
 - extraction de métadonnées utiles au classement documentaire
 - routage intégré vers arborescence cible et SharePoint
@@ -159,5 +161,10 @@ UI:
 
 Ce projet est distribué sous licence `GNU GPL v3.0`.
 Voir [LICENSE](LICENSE).
+
+## Versionnage
+
+Ce dépôt suit `Semantic Versioning`.
+Référence de normalisation documentaire: `0.1.0` (2026-03-14).
 
 La branche `main` est la branche livrée. Les PR empilées existantes servent de support de review et ne reflètent pas nécessairement l'état intégral courant.

@@ -71,3 +71,5 @@ PDF Permis/
 !docs/
 !docs/screenshots/
 !docs/screenshots/*.png
+
+.fake
