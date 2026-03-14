@@ -6,7 +6,7 @@ func registerOpenAPIRoutes(_ app: Application) {
             "openapi": "3.1.0",
             "info": [
                 "title": "Orchiviste API",
-                "version": "0.3.0",
+                "version": "0.2.0",
                 "description": "MVP ingestion -> aperçu -> analyse -> revue -> routage -> événements"
             ],
             "servers": [

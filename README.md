@@ -165,6 +165,7 @@ Voir [LICENSE](LICENSE).
 ## Versionnage
 
 Ce dépôt suit `Semantic Versioning`.
-Référence de normalisation documentaire: `0.1.0` (2026-03-14).
+Release actuelle: `0.2.0` (2026-03-14).
+Points majeurs de `0.2.0`: cockpit V1 Orchiviste, contrat canonique OrchivisteKit pour les outils Muni, historique local `history.jsonl`.
 
 La branche `main` est la branche livrée. Les PR empilées existantes servent de support de review et ne reflètent pas nécessairement l'état intégral courant.
