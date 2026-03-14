@@ -13,7 +13,7 @@ let package = Package(
         // Local shared kit (mono-repo)
         .package(path: "../OrchivisteSharedKit"),
         .package(path: "../OrchivisteAnalyse"),
-        .package(path: "../../OrchivisteKit"),
+        .package(url: "https://github.com/Macthieu/OrchivisteKit.git", exact: "0.2.0"),
 
         // Vapor stack
         .package(url: "https://github.com/vapor/vapor.git", from: "4.86.0"),
