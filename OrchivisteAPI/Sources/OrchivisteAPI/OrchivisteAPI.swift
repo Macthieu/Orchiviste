@@ -39,8 +39,10 @@ func configure(_ app: Application) throws {
     registerWorkerRoutes(app)
     registerEventRoutes(app)
     registerOpenAPIRoutes(app)
+    registerCockpitRoutes(app)
     registerNamingUIRoutes(app)
     registerUIRoutes(app)
+    registerCockpitUIRoutes(app)
 }
 
 @main

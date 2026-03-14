@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Cockpit</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --danger: #9b3a16;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1240px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .grid {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+        .tool-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fff;
+        }
+        .tool-card h3 {
+            margin: 0 0 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .badge-ready { background: #ebf8f4; color: var(--accent); }
+        .badge-alpha { background: #fff6e7; color: var(--warning); }
+        .badge-scaffold { background: #f3f3f3; color: #555; }
+        .kv {
+            margin: 6px 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .ok { color: var(--accent); font-weight: 700; }
+        .ko { color: var(--danger); font-weight: 700; }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+        }
+        input, select, textarea {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+            background: #fff;
+            color: var(--ink);
+        }
+        textarea {
+            min-height: 150px;
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            color: var(--warning);
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .checkbox-row input {
+            width: auto;
+            margin: 0;
+        }
+        .btn {
+            margin-top: 10px;
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .warning-box {
+            margin-top: 8px;
+            border: 1px solid #e0c9b0;
+            background: #fff7ee;
+            color: #7c4c0f;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 12px;
+            vertical-align: top;
+        }
+        th {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .status-succeeded { color: var(--accent); font-weight: 700; }
+        .status-failed { color: var(--danger); font-weight: 700; }
+        .status-needs_review { color: var(--warning); font-weight: 700; }
+        .status-not_implemented { color: #555; font-weight: 700; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Cockpit</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/cockpit">Cockpit</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/naming">Nommage</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h2 style="margin:0 0 10px;">Catalogue des outils Muni</h2>
+        #if(tools_present):
+        <div class="grid">
+            #for(tool in tools):
+            <article class="tool-card">
+                <h3>
+                    <span>#(tool.display_name)</span>
+                    <span class="badge badge-#(tool.integration_status)">v#(tool.version)</span>
+                </h3>
+                <p class="kv" style="margin-top:0;">#(tool.mission)</p>
+                <p class="kv"><strong>Capacités:</strong> #(tool.capabilities)</p>
+                <p class="kv"><strong>Disponibilité:</strong> <span class="#(tool.availability_class)">#(tool.availability_label)</span></p>
+                <p class="kv"><strong>Cause:</strong> #(tool.availability_reason)</p>
+                <p class="kv"><strong>Action par défaut:</strong> <span class="mono">#(tool.default_action)</span></p>
+                <p class="kv"><strong>Dépôt:</strong> <span class="mono">#(tool.repository_path)</span></p>
+            </article>
+            #endfor
+        </div>
+        #else:
+        <p>Aucun outil catalogué.</p>
+        #endif
+    </section>
+
+    <section class="card">
+        <h2 style="margin:0 0 10px;">Lancement canonique (`run --request --result`)</h2>
+        <form action="/ui/cockpit/run" method="post">
+            <div class="form-grid">
+                <label>Tool
+                    <select name="tool_id">
+                        #for(tool in tools):
+                        <option value="#(tool.id)" #(tool.selected_attribute)>#(tool.display_name)</option>
+                        #endfor
+                    </select>
+                </label>
+                <label>Action
+                    <input type="text" name="action" value="#(selected_action)" placeholder="run">
+                </label>
+                <label>Workspace path (optionnel)
+                    <input type="text" name="workspace_path" value="#(selected_workspace_path)">
+                </label>
+            </div>
+
+            <label style="margin-top:10px;">Parameters JSON
+                <textarea name="parameters_json">#(selected_parameters_json)</textarea>
+            </label>
+
+            <label style="margin-top:10px;">Input artifacts JSON (optionnel)
+                <textarea name="input_artifacts_json">#(selected_input_artifacts_json)</textarea>
+            </label>
+
+            <label class="checkbox-row">
+                <input type="checkbox" name="allow_destructive" value="1" #(selected_allow_destructive_attr)>
+                Autoriser explicitement une exécution potentiellement destructive
+            </label>
+
+            <div class="warning-box">
+                Le cockpit V1 privilégie les exécutions non destructives. Pour les outils sensibles, un garde-fou explicite est requis
+                et les paramètres de confirmation (`confirm_*`) doivent aussi être présents dans le JSON.
+            </div>
+
+            <button class="btn" type="submit">Exécuter</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2 style="margin:0 0 8px;">Historique local (`history.jsonl`)</h2>
+        <p class="mono" style="margin:0 0 8px;">#(history_file)</p>
+
+        #if(history_present):
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                <tr>
+                    <th>Exécution</th>
+                    <th>Tool</th>
+                    <th>Action</th>
+                    <th>Statut</th>
+                    <th>Résumé</th>
+                    <th>Horodatage</th>
+                    <th>Code sortie</th>
+                    <th>Fichiers</th>
+                </tr>
+                </thead>
+                <tbody>
+                #for(row in history_rows):
+                <tr>
+                    <td class="mono">#(row.execution_id)</td>
+                    <td>#(row.tool_id)</td>
+                    <td class="mono">#(row.action)</td>
+                    <td class="status-#(row.status)">#(row.status_label)</td>
+                    <td>#(row.summary)</td>
+                    <td class="mono">Début: #(row.started_at)<br>Fin: #(row.finished_at)</td>
+                    <td class="mono">#(row.exit_code)</td>
+                    <td class="mono">req: #(row.request_file)<br>res: #(row.result_file)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </div>
+        #else:
+        <p>Aucune exécution enregistrée pour le moment.</p>
+        #endif
+    </section>
+</main>
+</body>
+</html>

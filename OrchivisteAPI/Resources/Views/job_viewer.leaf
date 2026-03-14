@@ -324,6 +324,7 @@
     <strong>Visionneuse tâche <span style="font-family:SF Mono, Menlo, monospace">#(id)</span></strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
+        <a href="/ui/cockpit">Cockpit</a>
         <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>

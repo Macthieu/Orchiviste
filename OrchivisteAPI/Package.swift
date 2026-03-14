@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "OrchivisteAPI",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "OrchivisteAPI", targets: ["OrchivisteAPI"])
@@ -13,6 +13,7 @@ let package = Package(
         // Local shared kit (mono-repo)
         .package(path: "../OrchivisteSharedKit"),
         .package(path: "../OrchivisteAnalyse"),
+        .package(path: "../../OrchivisteKit"),
 
         // Vapor stack
         .package(url: "https://github.com/vapor/vapor.git", from: "4.86.0"),
@@ -41,7 +42,9 @@ let package = Package(
                 .product(name: "RediStack", package: "RediStack"),
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "OrchivisteSharedKit", package: "OrchivisteSharedKit"),
-                .product(name: "OrchivisteAnalyseCore", package: "OrchivisteAnalyse")
+                .product(name: "OrchivisteAnalyseCore", package: "OrchivisteAnalyse"),
+                .product(name: "OrchivisteKitContracts", package: "OrchivisteKit"),
+                .product(name: "OrchivisteKitInterop", package: "OrchivisteKit")
             ]
         ),
         .testTarget(

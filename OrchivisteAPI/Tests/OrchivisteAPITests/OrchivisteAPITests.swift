@@ -1,6 +1,7 @@
 import Foundation
 @testable import OrchivisteAPI
 
+@MainActor
 enum OrchivisteAPITestsPlaceholder {
     // XCTest est indisponible dans cet environnement; la validation fonctionnelle
     // est portée par scripts/smoke_mvp.sh et scripts/smoke_webhook_hmac.sh.
