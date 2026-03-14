@@ -17,7 +17,7 @@ Le produit vise d'abord une execution native sur macOS.
 ## Demarrage rapide
 
 Prerequis :
-- Swift 5.9+
+- Swift 6+
 - Redis (optionnel pour le MVP, requis pour la file worker)
 
 Compilation :
