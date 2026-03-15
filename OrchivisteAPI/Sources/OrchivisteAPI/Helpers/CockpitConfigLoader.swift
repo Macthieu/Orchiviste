@@ -367,15 +367,17 @@ enum CockpitConfigLoader {
             CockpitToolDescriptor(
                 id: "MuniAnalyse",
                 displayName: "MuniAnalyse",
-                mission: "OCR, extraction et analyse documentaire (squelette V1).",
+                mission: "Analyse textuelle documentaire deterministe (V1 texte-only, sans OCR).",
                 repositoryPath: repo("MuniAnalyse"),
                 executable: "muni-analyse-cli",
                 executablePath: nil,
-                version: "0.1.0",
-                integrationStatus: "scaffold",
-                capabilities: ["run", "canonical-run"],
-                defaultAction: "run",
-                defaultParameters: [:],
+                version: "0.2.0",
+                integrationStatus: "active",
+                capabilities: ["run", "analyze", "canonical-run", "text-analysis-v1"],
+                defaultAction: "analyze",
+                defaultParameters: [
+                    "text": .string("Compte rendu municipal a analyser pour un controle documentaire initial.")
+                ],
                 supportsDryRun: false,
                 destructiveRequiresConfirmation: false,
                 confirmationParameter: nil,

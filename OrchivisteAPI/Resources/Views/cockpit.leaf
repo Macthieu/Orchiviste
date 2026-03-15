@@ -76,6 +76,7 @@
             font-weight: 700;
             white-space: nowrap;
         }
+        .badge-active { background: #e7f4ff; color: #145a97; }
         .badge-ready { background: #ebf8f4; color: var(--accent); }
         .badge-alpha { background: #fff6e7; color: var(--warning); }
         .badge-scaffold { background: #f3f3f3; color: #555; }
