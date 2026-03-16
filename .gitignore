@@ -48,6 +48,9 @@ ml/datasets/labeled/*.jsonl
 ml/models-src/*.labels.json
 ml/models-src/*.metrics.json
 
+# Local demo runtime outputs
+runtime/demo-local/
+
 # Private corpora / local document sets (never commit)
 PDF Permis/
 **/PDF Permis/
