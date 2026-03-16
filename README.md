@@ -27,6 +27,18 @@ Par rapport aux outils OCR/IDP/EDMS génériques, Orchiviste cible l'usage archi
 - routage intégré vers arborescence cible et SharePoint
 - workflow de revue auditable pour les cas ambigus
 
+## Capacites cockpit V1 (release 0.3.0)
+
+- catalogue outillage unifie avec mission, version, statut d'integration et capacites par outil
+- lancement canonique OrchivisteKit (`run --request <file> --result <file>`) depuis API/UI
+- historique local `history.jsonl` des executions cockpit
+- garde-fous explicites pour actions potentiellement destructives
+- outils `active` dans le cockpit:
+  - `MuniAnalyse` (`0.2.0`)
+  - `MuniMetadonnees` (`0.2.0`)
+  - `MuniPreclassement` (`0.2.0`)
+  - `MuniControle` (`0.2.0`)
+
 ## Principes de nommage
 
 - nom significatif, précis et concis
@@ -165,7 +177,7 @@ Voir [LICENSE](LICENSE).
 ## Versionnage
 
 Ce dépôt suit `Semantic Versioning`.
-Release actuelle: `0.2.0` (2026-03-14).
-Points majeurs de `0.2.0`: cockpit V1 Orchiviste, contrat canonique OrchivisteKit pour les outils Muni, historique local `history.jsonl`.
+Release actuelle: `0.3.0` (2026-03-16).
+Points majeurs de `0.3.0`: cockpit V1 officialise avec activation de `MuniAnalyse`, `MuniMetadonnees`, `MuniPreclassement` et `MuniControle` en statut `active`.
 
 La branche `main` est la branche livrée. Les PR empilées existantes servent de support de review et ne reflètent pas nécessairement l'état intégral courant.

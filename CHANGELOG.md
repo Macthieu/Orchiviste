@@ -4,6 +4,19 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format s'inspire de Keep a Changelog et le projet suit Semantic Versioning.
 
+## [0.3.0] - 2026-03-16
+
+### Added
+- Officialisation du cockpit V1 comme point d'entree de la suite Orchiviste/Muni.
+- Activation de `MuniAnalyse` en statut `active` (version affichee `0.2.0`).
+- Activation de `MuniMetadonnees` en statut `active` (version affichee `0.2.0`).
+- Activation de `MuniPreclassement` en statut `active` (version affichee `0.2.0`).
+- Activation de `MuniControle` en statut `active` (version affichee `0.2.0`).
+
+### Changed
+- Alignement du catalogue cockpit (missions, capacites et actions par defaut) pour reflet operationnel des outils actifs.
+- Alignement de la documentation Orchiviste sur le statut fonctionnel reel du cockpit V1.
+
 ## [0.2.0] - 2026-03-14
 
 ### Added
