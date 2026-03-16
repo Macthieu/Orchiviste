@@ -1,0 +1,83 @@
+name: Smoke Muni Chain E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Strict mode (0 or 1)"
+        required: false
+        default: "0"
+      muni_analyse_ref:
+        description: "Git ref for MuniAnalyse"
+        required: false
+        default: "v0.2.0"
+      muni_metadonnees_ref:
+        description: "Git ref for MuniMetadonnees"
+        required: false
+        default: "v0.2.0"
+      muni_preclassement_ref:
+        description: "Git ref for MuniPreclassement"
+        required: false
+        default: "v0.2.0"
+      muni_controle_ref:
+        description: "Git ref for MuniControle"
+        required: false
+        default: "v0.2.0"
+
+jobs:
+  smoke-muni-chain-e2e:
+    name: Smoke chain (macOS 14 / Swift 6)
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Orchiviste
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(ls -1d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${XCODE_PATH:-}" ]]; then
+            echo "No Xcode installation found on runner." >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Verify Swift 6 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift --version
+          if ! swift --version | grep -E "Swift version 6\\." >/dev/null; then
+            echo "Swift 6.x is required for this smoke." >&2
+            exit 1
+          fi
+
+      - name: Clone tool repositories
+        shell: bash
+        env:
+          MUNI_ANALYSE_REF: ${{ github.event.inputs.muni_analyse_ref || 'v0.2.0' }}
+          MUNI_METADONNEES_REF: ${{ github.event.inputs.muni_metadonnees_ref || 'v0.2.0' }}
+          MUNI_PRECLASSEMENT_REF: ${{ github.event.inputs.muni_preclassement_ref || 'v0.2.0' }}
+          MUNI_CONTROLE_REF: ${{ github.event.inputs.muni_controle_ref || 'v0.2.0' }}
+        run: |
+          set -euo pipefail
+          SUITE_ROOT="$RUNNER_TEMP/municipal-suite"
+          rm -rf "$SUITE_ROOT"
+          mkdir -p "$SUITE_ROOT"
+
+          git clone --depth 1 --branch "$MUNI_ANALYSE_REF" https://github.com/Macthieu/MuniAnalyse.git "$SUITE_ROOT/MuniAnalyse"
+          git clone --depth 1 --branch "$MUNI_METADONNEES_REF" https://github.com/Macthieu/MuniMetadonnees.git "$SUITE_ROOT/MuniMetadonnees"
+          git clone --depth 1 --branch "$MUNI_PRECLASSEMENT_REF" https://github.com/Macthieu/MuniPreclassement.git "$SUITE_ROOT/MuniPreclassement"
+          git clone --depth 1 --branch "$MUNI_CONTROLE_REF" https://github.com/Macthieu/MuniControle.git "$SUITE_ROOT/MuniControle"
+
+      - name: Run smoke chain
+        shell: bash
+        env:
+          STRICT: ${{ github.event.inputs.strict || '0' }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke_muni_chain_e2e.sh
+          MUNI_SUITE_ROOT="$RUNNER_TEMP/municipal-suite" STRICT="$STRICT" ./scripts/smoke_muni_chain_e2e.sh
