@@ -537,7 +537,7 @@ private struct ScoredNamingEmbeddingReference: Sendable {
     let score: Double
 }
 
-private final class NamingEmbeddingReferenceRuntime {
+private final class NamingEmbeddingReferenceRuntime: @unchecked Sendable {
     static let shared = NamingEmbeddingReferenceRuntime()
 
     private let lock = NSLock()
@@ -713,10 +713,26 @@ private func namingFeatureTokens(from text: String) -> [String] {
 }
 
 #if canImport(CoreML)
+private final class NamingCoreMLModelCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var models: [String: MLModel] = [:]
+
+    func model(for key: String) -> MLModel? {
+        lock.lock()
+        defer { lock.unlock() }
+        return models[key]
+    }
+
+    func store(_ model: MLModel, for key: String) {
+        lock.lock()
+        models[key] = model
+        lock.unlock()
+    }
+}
+
 public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
     public let provider_id = "coreml"
-    private static let cacheLock = NSLock()
-    private static var modelCache: [String: MLModel] = [:]
+    private static let modelCache = NamingCoreMLModelCache()
     private let modelURL: URL?
     private let ruleLabelMap: [String: String]
     private let configuredInputName: String?
@@ -897,12 +913,9 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
     private func loadModel() -> MLModel? {
         guard let modelURL else { return nil }
         let cacheKey = modelURL.path
-        Self.cacheLock.lock()
-        if let cached = Self.modelCache[cacheKey] {
-            Self.cacheLock.unlock()
+        if let cached = Self.modelCache.model(for: cacheKey) {
             return cached
         }
-        Self.cacheLock.unlock()
 
         let loadedModel: MLModel?
         if modelURL.pathExtension == "mlmodelc" {
@@ -913,9 +926,7 @@ public final class CoreMLNamingPredictionProvider: NamingPredictionProvider {
             loadedModel = try? MLModel(contentsOf: modelURL)
         }
         if let loadedModel {
-            Self.cacheLock.lock()
-            Self.modelCache[cacheKey] = loadedModel
-            Self.cacheLock.unlock()
+            Self.modelCache.store(loadedModel, for: cacheKey)
         }
         return loadedModel
     }
