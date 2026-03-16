@@ -55,26 +55,41 @@ enum ShellCommand {
             stderrPipe.fileHandleForWriting.closeFile()
         }
 
-        var outData = Data()
-        var errData = Data()
-        let readGroup = DispatchGroup()
+        let outBuffer = ThreadSafeDataBuffer()
+        let errBuffer = ThreadSafeDataBuffer()
         if captureOutput {
-            readGroup.enter()
-            DispatchQueue.global(qos: .utility).async {
-                outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                readGroup.leave()
+            let stdoutReader = stdoutPipe.fileHandleForReading
+            stdoutReader.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                outBuffer.append(chunk)
             }
-            readGroup.enter()
-            DispatchQueue.global(qos: .utility).async {
-                errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                readGroup.leave()
+
+            let stderrReader = stderrPipe.fileHandleForReading
+            stderrReader.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                errBuffer.append(chunk)
             }
         }
 
         let didTimeout = waitForProcess(process, timeoutSeconds: timeoutSeconds)
         if captureOutput {
-            readGroup.wait()
+            let stdoutReader = stdoutPipe.fileHandleForReading
+            let stderrReader = stderrPipe.fileHandleForReading
+            stdoutReader.readabilityHandler = nil
+            stderrReader.readabilityHandler = nil
+            outBuffer.append(stdoutReader.readDataToEndOfFile())
+            errBuffer.append(stderrReader.readDataToEndOfFile())
         }
+        let outData = outBuffer.snapshot()
+        let errData = errBuffer.snapshot()
         let out = String(data: outData, encoding: .utf8) ?? ""
         let err = String(data: errData, encoding: .utf8) ?? ""
         if didTimeout {
@@ -131,5 +146,23 @@ enum ShellCommand {
         }
         process.waitUntilExit()
         return true
+    }
+}
+
+private final class ThreadSafeDataBuffer: @unchecked Sendable {
+    private var data = Data()
+    private let lock = NSLock()
+
+    func append(_ chunk: Data) {
+        guard !chunk.isEmpty else { return }
+        lock.lock()
+        data.append(chunk)
+        lock.unlock()
+    }
+
+    func snapshot() -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
     }
 }
