@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orchiviste Cockpit</title>
+    <title>Orchiviste Pilotage Muni</title>
     <style>
         :root {
             --bg: #f4f1eb;
@@ -191,10 +191,10 @@
 </head>
 <body>
 <header>
-    <strong>Orchiviste Cockpit</strong>
+    <strong>Orchiviste Pilotage Muni</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/cockpit">Cockpit</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
         <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
@@ -238,7 +238,7 @@
 
     <section class="card">
         <h2 style="margin:0 0 10px;">Lancement canonique (`run --request --result`)</h2>
-        <form action="/ui/cockpit/run" method="post">
+        <form action="/ui/pilotage/run" method="post">
             <div class="form-grid">
                 <label>Tool
                     <select name="tool_id">
@@ -269,7 +269,7 @@
             </label>
 
             <div class="warning-box">
-                Le cockpit V1 privilégie les exécutions non destructives. Pour les outils sensibles, un garde-fou explicite est requis
+                Le pilotage V1 privilégie les exécutions non destructives. Pour les outils sensibles, un garde-fou explicite est requis
                 et les paramètres de confirmation (`confirm_*`) doivent aussi être présents dans le JSON.
             </div>
 

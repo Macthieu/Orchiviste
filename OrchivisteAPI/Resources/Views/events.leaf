@@ -79,7 +79,7 @@
     <strong>Orchiviste Événements</strong>
     <nav>
         <a href="/ui">Tableau de bord</a>
-        <a href="/ui/cockpit">Cockpit</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
         <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>

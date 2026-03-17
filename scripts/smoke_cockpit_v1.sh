@@ -245,9 +245,18 @@ PY
 UI_HTML="$TMP_DIR/ui-cockpit.html"
 UI_CODE="$(curl -sS -o "$UI_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/cockpit")"
 assert_code "$UI_CODE" "200" "ui.cockpit" "$UI_HTML"
-if ! grep -q "Orchiviste Cockpit" "$UI_HTML"; then
+if ! grep -Eq "Orchiviste (Cockpit|Pilotage Muni)" "$UI_HTML"; then
   echo "ECHEC [ui.cockpit] titre absent" >&2
   cat "$UI_HTML" >&2
+  exit 1
+fi
+
+UI_PILOTAGE_HTML="$TMP_DIR/ui-pilotage.html"
+UI_PILOTAGE_CODE="$(curl -sS -o "$UI_PILOTAGE_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/pilotage")"
+assert_code "$UI_PILOTAGE_CODE" "200" "ui.pilotage" "$UI_PILOTAGE_HTML"
+if ! grep -q "Orchiviste Pilotage Muni" "$UI_PILOTAGE_HTML"; then
+  echo "ECHEC [ui.pilotage] titre absent" >&2
+  cat "$UI_PILOTAGE_HTML" >&2
   exit 1
 fi
 

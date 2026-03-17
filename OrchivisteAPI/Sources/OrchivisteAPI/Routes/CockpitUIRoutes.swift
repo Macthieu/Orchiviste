@@ -60,14 +60,7 @@ private struct UICockpitRunForm: Content {
 }
 
 func registerCockpitUIRoutes(_ app: Application) {
-    app.get("ui", "tools") { req async throws -> Response in
-        req.redirect(to: "/ui/cockpit")
-    }
-    app.get("u", "cockpit") { req async throws -> Response in
-        req.redirect(to: "/ui/cockpit")
-    }
-
-    app.get("ui", "cockpit") { req async throws -> View in
+    let renderPilotageView: @Sendable (Request) async throws -> View = { req in
         let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
         let selectedToolID = nonEmpty(req.query[String.self, at: "tool"]) ?? runtime.tools.first?.descriptor.id ?? ""
         let selectedTool = runtime.tools.first(where: { $0.descriptor.id == selectedToolID }) ?? runtime.tools.first
@@ -135,7 +128,7 @@ func registerCockpitUIRoutes(_ app: Application) {
         return try await req.view.render("cockpit", context)
     }
 
-    app.on(.POST, "ui", "cockpit", "run", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+    let runPilotage: @Sendable (Request) async throws -> Response = { req in
         do {
             let form = try req.content.decode(UICockpitRunForm.self)
             let toolID = form.tool_id.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,17 +150,32 @@ func registerCockpitUIRoutes(_ app: Application) {
 
             let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, logger: req.logger)
             let notice = "Exécution \(outcome.executionID) terminée avec statut \(outcome.result.status.rawValue)."
-            return req.redirect(to: "/ui/cockpit?notice=\(urlQueryEncoded(notice))&tool=\(urlQueryEncoded(toolID))")
+            return req.redirect(to: "/ui/pilotage?notice=\(urlQueryEncoded(notice))&tool=\(urlQueryEncoded(toolID))")
         } catch let abort as AbortError {
-            let reason = abort.reason.isEmpty ? "Échec exécution cockpit." : abort.reason
-            return req.redirect(to: "/ui/cockpit?error=\(urlQueryEncoded(reason))")
+            let reason = abort.reason.isEmpty ? "Échec exécution pilotage." : abort.reason
+            return req.redirect(to: "/ui/pilotage?error=\(urlQueryEncoded(reason))")
         } catch {
-            req.logger.error("Échec exécution cockpit UI.", metadata: [
+            req.logger.error("Échec exécution pilotage UI.", metadata: [
                 "error": .string(error.localizedDescription)
             ])
-            return req.redirect(to: "/ui/cockpit?error=\(urlQueryEncoded("Erreur interne pendant l'exécution cockpit."))")
+            return req.redirect(to: "/ui/pilotage?error=\(urlQueryEncoded("Erreur interne pendant l'exécution du pilotage."))")
         }
     }
+
+    app.get("ui", "tools") { req async throws -> Response in
+        req.redirect(to: "/ui/pilotage")
+    }
+    app.get("u", "pilotage") { req async throws -> Response in
+        req.redirect(to: "/ui/pilotage")
+    }
+    app.get("u", "cockpit") { req async throws -> Response in
+        req.redirect(to: "/ui/cockpit")
+    }
+
+    app.get("ui", "cockpit", use: renderPilotageView)
+    app.get("ui", "pilotage", use: renderPilotageView)
+    app.on(.POST, "ui", "cockpit", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
+    app.on(.POST, "ui", "pilotage", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
 }
 
 private func parseParametersJSON(_ raw: String?) throws -> [String: JSONValue] {
