@@ -365,6 +365,29 @@ enum CockpitConfigLoader {
                 enabled: true
             ),
             CockpitToolDescriptor(
+                id: "MuniRegles",
+                displayName: "MuniRegles",
+                mission: "Gouvernance documentaire (classification, règles, guide): validation, bundle et inspection.",
+                repositoryPath: repo("MuniRegles"),
+                executable: "muni-regles-cli",
+                executablePath: nil,
+                version: "0.1.0",
+                integrationStatus: "alpha",
+                capabilities: ["validate", "bundle", "inspect", "canonical-run", "read-only"],
+                defaultAction: "validate",
+                defaultParameters: [
+                    "operation": .string("validate"),
+                    "classification_path": .string("\(repo("MuniRegles"))/fixtures/smoke/regles_v1/inputs/classification_plan.json"),
+                    "rules_path": .string("\(repo("MuniRegles"))/fixtures/smoke/regles_v1/inputs/naming_and_routing_rules.json"),
+                    "guide_path": .string("\(repo("MuniRegles"))/fixtures/smoke/regles_v1/inputs/renaming_guide.json"),
+                    "report_path": .string("\(repo("MuniRegles"))/.build/runtime/validation_report.json")
+                ],
+                supportsDryRun: false,
+                destructiveRequiresConfirmation: false,
+                confirmationParameter: nil,
+                enabled: true
+            ),
+            CockpitToolDescriptor(
                 id: "MuniAnalyse",
                 displayName: "MuniAnalyse",
                 mission: "Analyse textuelle documentaire deterministe (V1 texte-only, sans OCR).",
