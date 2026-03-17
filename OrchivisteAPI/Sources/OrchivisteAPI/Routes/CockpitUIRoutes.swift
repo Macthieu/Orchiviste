@@ -60,7 +60,7 @@ private struct UICockpitRunForm: Content {
 }
 
 func registerCockpitUIRoutes(_ app: Application) {
-    let renderPilotageView: @Sendable (Request) async throws -> View = { req in
+    let buildPilotageContext: @Sendable (Request) async -> UICockpitContext = { req in
         let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
         let selectedToolID = nonEmpty(req.query[String.self, at: "tool"]) ?? runtime.tools.first?.descriptor.id ?? ""
         let selectedTool = runtime.tools.first(where: { $0.descriptor.id == selectedToolID }) ?? runtime.tools.first
@@ -109,7 +109,7 @@ func registerCockpitUIRoutes(_ app: Application) {
             )
         }
 
-        let context = UICockpitContext(
+        return UICockpitContext(
             tools: toolCards,
             tools_present: !toolCards.isEmpty,
             selected_tool_id: selectedToolID,
@@ -124,8 +124,6 @@ func registerCockpitUIRoutes(_ app: Application) {
             notice: nonEmpty(req.query[String.self, at: "notice"]),
             error: nonEmpty(req.query[String.self, at: "error"])
         )
-
-        return try await req.view.render("cockpit", context)
     }
 
     let runPilotage: @Sendable (Request) async throws -> Response = { req in
@@ -150,30 +148,47 @@ func registerCockpitUIRoutes(_ app: Application) {
 
             let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, logger: req.logger)
             let notice = "Exécution \(outcome.executionID) terminée avec statut \(outcome.result.status.rawValue)."
-            return req.redirect(to: "/ui/pilotage?notice=\(urlQueryEncoded(notice))&tool=\(urlQueryEncoded(toolID))")
+            return req.redirect(to: "/ui/pilotage/lancer?notice=\(urlQueryEncoded(notice))&tool=\(urlQueryEncoded(toolID))")
         } catch let abort as AbortError {
             let reason = abort.reason.isEmpty ? "Échec exécution pilotage." : abort.reason
-            return req.redirect(to: "/ui/pilotage?error=\(urlQueryEncoded(reason))")
+            return req.redirect(to: "/ui/pilotage/lancer?error=\(urlQueryEncoded(reason))")
         } catch {
             req.logger.error("Échec exécution pilotage UI.", metadata: [
                 "error": .string(error.localizedDescription)
             ])
-            return req.redirect(to: "/ui/pilotage?error=\(urlQueryEncoded("Erreur interne pendant l'exécution du pilotage."))")
+            return req.redirect(to: "/ui/pilotage/lancer?error=\(urlQueryEncoded("Erreur interne pendant l'exécution du pilotage."))")
         }
     }
 
     app.get("ui", "tools") { req async throws -> Response in
-        req.redirect(to: "/ui/pilotage")
+        req.redirect(to: "/ui/pilotage/catalogue")
     }
     app.get("u", "pilotage") { req async throws -> Response in
-        req.redirect(to: "/ui/pilotage")
+        req.redirect(to: "/ui/pilotage/catalogue")
     }
     app.get("u", "cockpit") { req async throws -> Response in
-        req.redirect(to: "/ui/cockpit")
+        req.redirect(to: "/ui/pilotage/catalogue")
+    }
+    app.get("ui", "pilotage") { req async throws -> Response in
+        req.redirect(to: "/ui/pilotage/catalogue")
+    }
+    app.get("ui", "cockpit") { req async throws -> Response in
+        req.redirect(to: "/ui/pilotage/catalogue")
     }
 
-    app.get("ui", "cockpit", use: renderPilotageView)
-    app.get("ui", "pilotage", use: renderPilotageView)
+    app.get("ui", "pilotage", "catalogue") { req async throws -> View in
+        let context = await buildPilotageContext(req)
+        return try await req.view.render("pilotage_catalogue", context)
+    }
+    app.get("ui", "pilotage", "lancer") { req async throws -> View in
+        let context = await buildPilotageContext(req)
+        return try await req.view.render("pilotage_lancer", context)
+    }
+    app.get("ui", "pilotage", "historique") { req async throws -> View in
+        let context = await buildPilotageContext(req)
+        return try await req.view.render("pilotage_historique", context)
+    }
+
     app.on(.POST, "ui", "cockpit", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
     app.on(.POST, "ui", "pilotage", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
 }

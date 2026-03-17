@@ -242,21 +242,50 @@ if entries[0].get("status") not in {"succeeded", "needs_review", "not_implemente
 print("OK  historique JSONL cockpit")
 PY
 
-UI_HTML="$TMP_DIR/ui-cockpit.html"
-UI_CODE="$(curl -sS -o "$UI_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/cockpit")"
-assert_code "$UI_CODE" "200" "ui.cockpit" "$UI_HTML"
-if ! grep -Eq "Orchiviste (Cockpit|Pilotage Muni)" "$UI_HTML"; then
-  echo "ECHEC [ui.cockpit] titre absent" >&2
-  cat "$UI_HTML" >&2
+UI_COCKPIT_HEADERS="$TMP_DIR/ui-cockpit.headers"
+UI_COCKPIT_BODY="$TMP_DIR/ui-cockpit.body"
+UI_COCKPIT_CODE="$(curl -sS -D "$UI_COCKPIT_HEADERS" -o "$UI_COCKPIT_BODY" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/cockpit")"
+assert_code "$UI_COCKPIT_CODE" "303" "ui.cockpit.redirect" "$UI_COCKPIT_BODY"
+if ! grep -Ei '^location: /ui/pilotage/catalogue' "$UI_COCKPIT_HEADERS" >/dev/null; then
+  echo "ECHEC [ui.cockpit.redirect] location inattendue" >&2
+  cat "$UI_COCKPIT_HEADERS" >&2
   exit 1
 fi
 
-UI_PILOTAGE_HTML="$TMP_DIR/ui-pilotage.html"
-UI_PILOTAGE_CODE="$(curl -sS -o "$UI_PILOTAGE_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/pilotage")"
-assert_code "$UI_PILOTAGE_CODE" "200" "ui.pilotage" "$UI_PILOTAGE_HTML"
-if ! grep -q "Orchiviste Pilotage Muni" "$UI_PILOTAGE_HTML"; then
-  echo "ECHEC [ui.pilotage] titre absent" >&2
-  cat "$UI_PILOTAGE_HTML" >&2
+UI_PILOTAGE_HEADERS="$TMP_DIR/ui-pilotage.headers"
+UI_PILOTAGE_BODY="$TMP_DIR/ui-pilotage.body"
+UI_PILOTAGE_CODE="$(curl -sS -D "$UI_PILOTAGE_HEADERS" -o "$UI_PILOTAGE_BODY" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/pilotage")"
+assert_code "$UI_PILOTAGE_CODE" "303" "ui.pilotage.redirect" "$UI_PILOTAGE_BODY"
+if ! grep -Ei '^location: /ui/pilotage/catalogue' "$UI_PILOTAGE_HEADERS" >/dev/null; then
+  echo "ECHEC [ui.pilotage.redirect] location inattendue" >&2
+  cat "$UI_PILOTAGE_HEADERS" >&2
+  exit 1
+fi
+
+UI_CATALOGUE_HTML="$TMP_DIR/ui-pilotage-catalogue.html"
+UI_CATALOGUE_CODE="$(curl -sS -o "$UI_CATALOGUE_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/pilotage/catalogue")"
+assert_code "$UI_CATALOGUE_CODE" "200" "ui.pilotage.catalogue" "$UI_CATALOGUE_HTML"
+if ! grep -q "Catalogue des outils Muni" "$UI_CATALOGUE_HTML"; then
+  echo "ECHEC [ui.pilotage.catalogue] contenu absent" >&2
+  cat "$UI_CATALOGUE_HTML" >&2
+  exit 1
+fi
+
+UI_LANCER_HTML="$TMP_DIR/ui-pilotage-lancer.html"
+UI_LANCER_CODE="$(curl -sS -o "$UI_LANCER_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/pilotage/lancer")"
+assert_code "$UI_LANCER_CODE" "200" "ui.pilotage.lancer" "$UI_LANCER_HTML"
+if ! grep -q "Lancement canonique" "$UI_LANCER_HTML"; then
+  echo "ECHEC [ui.pilotage.lancer] contenu absent" >&2
+  cat "$UI_LANCER_HTML" >&2
+  exit 1
+fi
+
+UI_HISTORIQUE_HTML="$TMP_DIR/ui-pilotage-historique.html"
+UI_HISTORIQUE_CODE="$(curl -sS -o "$UI_HISTORIQUE_HTML" -w "%{http_code}" "http://127.0.0.1:$API_PORT/ui/pilotage/historique")"
+assert_code "$UI_HISTORIQUE_CODE" "200" "ui.pilotage.historique" "$UI_HISTORIQUE_HTML"
+if ! grep -q "Historique local" "$UI_HISTORIQUE_HTML"; then
+  echo "ECHEC [ui.pilotage.historique] contenu absent" >&2
+  cat "$UI_HISTORIQUE_HTML" >&2
   exit 1
 fi
 

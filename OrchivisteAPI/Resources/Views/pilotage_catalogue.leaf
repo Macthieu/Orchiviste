@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Pilotage Muni - Catalogue</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --danger: #9b3a16;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1240px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .subnav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .subnav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .grid {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+        .tool-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fff;
+        }
+        .tool-card h3 {
+            margin: 0 0 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .badge-active { background: #e7f4ff; color: #145a97; }
+        .badge-ready { background: #ebf8f4; color: var(--accent); }
+        .badge-alpha { background: #fff6e7; color: var(--warning); }
+        .badge-scaffold { background: #f3f3f3; color: #555; }
+        .kv {
+            margin: 6px 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .ok { color: var(--accent); font-weight: 700; }
+        .ko { color: var(--danger); font-weight: 700; }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Pilotage Muni</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/naming">Nommage</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <nav class="subnav">
+        <a class="active" href="/ui/pilotage/catalogue">Catalogue</a>
+        <a href="/ui/pilotage/lancer">Lancer</a>
+        <a href="/ui/pilotage/historique">Historique</a>
+    </nav>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h2 style="margin:0 0 10px;">Catalogue des outils Muni</h2>
+        #if(tools_present):
+        <div class="grid">
+            #for(tool in tools):
+            <article class="tool-card">
+                <h3>
+                    <span>#(tool.display_name)</span>
+                    <span class="badge badge-#(tool.integration_status)">v#(tool.version)</span>
+                </h3>
+                <p class="kv" style="margin-top:0;">#(tool.mission)</p>
+                <p class="kv"><strong>Capacités:</strong> #(tool.capabilities)</p>
+                <p class="kv"><strong>Disponibilité:</strong> <span class="#(tool.availability_class)">#(tool.availability_label)</span></p>
+                <p class="kv"><strong>Cause:</strong> #(tool.availability_reason)</p>
+                <p class="kv"><strong>Action par défaut:</strong> <span class="mono">#(tool.default_action)</span></p>
+                <p class="kv"><strong>Dépôt:</strong> <span class="mono">#(tool.repository_path)</span></p>
+            </article>
+            #endfor
+        </div>
+        #else:
+        <p>Aucun outil catalogué.</p>
+        #endif
+    </section>
+</main>
+</body>
+</html>

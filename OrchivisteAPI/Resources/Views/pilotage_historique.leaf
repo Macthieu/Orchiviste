@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Pilotage Muni - Historique</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --danger: #9b3a16;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1240px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .subnav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .subnav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 12px;
+            vertical-align: top;
+        }
+        th {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .status-succeeded { color: var(--accent); font-weight: 700; }
+        .status-failed { color: var(--danger); font-weight: 700; }
+        .status-needs_review { color: var(--warning); font-weight: 700; }
+        .status-not_implemented { color: #555; font-weight: 700; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Pilotage Muni</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/presets">Préréglages</a>
+        <a href="/ui/naming">Nommage</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <nav class="subnav">
+        <a href="/ui/pilotage/catalogue">Catalogue</a>
+        <a href="/ui/pilotage/lancer">Lancer</a>
+        <a class="active" href="/ui/pilotage/historique">Historique</a>
+    </nav>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h2 style="margin:0 0 8px;">Historique local (`history.jsonl`)</h2>
+        <p class="mono" style="margin:0 0 8px;">#(history_file)</p>
+
+        #if(history_present):
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                <tr>
+                    <th>Exécution</th>
+                    <th>Tool</th>
+                    <th>Action</th>
+                    <th>Statut</th>
+                    <th>Résumé</th>
+                    <th>Horodatage</th>
+                    <th>Code sortie</th>
+                    <th>Fichiers</th>
+                </tr>
+                </thead>
+                <tbody>
+                #for(row in history_rows):
+                <tr>
+                    <td class="mono">#(row.execution_id)</td>
+                    <td>#(row.tool_id)</td>
+                    <td class="mono">#(row.action)</td>
+                    <td class="status-#(row.status)">#(row.status_label)</td>
+                    <td>#(row.summary)</td>
+                    <td class="mono">Début: #(row.started_at)<br>Fin: #(row.finished_at)</td>
+                    <td class="mono">#(row.exit_code)</td>
+                    <td class="mono">req: #(row.request_file)<br>res: #(row.result_file)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </div>
+        #else:
+        <p>Aucune exécution enregistrée pour le moment.</p>
+        #endif
+    </section>
+</main>
+</body>
+</html>
