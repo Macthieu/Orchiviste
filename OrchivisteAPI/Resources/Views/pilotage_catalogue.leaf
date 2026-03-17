@@ -135,8 +135,7 @@
         <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Préréglages</a>
-        <a href="/ui/naming">Nommage</a>
+        <a href="/ui/regles">Règles documentaires</a>
         <a href="/ui/events">Événements</a>
     </nav>
 </header>

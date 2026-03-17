@@ -106,6 +106,11 @@ private struct UIEventsContext: Encodable {
     let initial_cursor: Int
 }
 
+private struct UIReglesContext: Encodable {
+    let notice: String?
+    let error: String?
+}
+
 private struct UIEventSummary: Encodable {
     let id: Int
     let type: String
@@ -462,6 +467,24 @@ func registerUIRoutes(_ app: Application) {
     }
     app.get("u", "presets") { req async throws -> Response in
         req.redirect(to: "/ui/presets")
+    }
+    app.get("u", "regles") { req async throws -> Response in
+        req.redirect(to: "/ui/regles")
+    }
+    app.get("u", "regles", "classification") { req async throws -> Response in
+        req.redirect(to: "/ui/regles/classification")
+    }
+    app.get("u", "regles", "rules") { req async throws -> Response in
+        req.redirect(to: "/ui/regles/rules")
+    }
+    app.get("u", "regles", "guide") { req async throws -> Response in
+        req.redirect(to: "/ui/regles/guide")
+    }
+    app.get("u", "regles", "versions") { req async throws -> Response in
+        req.redirect(to: "/ui/regles/versions")
+    }
+    app.get("u", "regles", "validation") { req async throws -> Response in
+        req.redirect(to: "/ui/regles/validation")
     }
     app.get("u", "events") { req async throws -> Response in
         req.redirect(to: "/ui/events")
@@ -1359,6 +1382,67 @@ func registerUIRoutes(_ app: Application) {
             error: req.query[String.self, at: "error"]
         )
         return try await req.view.render("workers", context)
+    }
+
+    app.get("ui", "regles") { req async throws -> View in
+        return try await req.view.render(
+            "regles",
+            UIReglesContext(
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+    app.get("ui", "regles", "classification") { req async throws -> View in
+        return try await req.view.render(
+            "regles_classification",
+            UIReglesContext(
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+    app.get("ui", "regles", "rules") { req async throws -> View in
+        return try await req.view.render(
+            "regles_rules",
+            UIReglesContext(
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+    app.get("ui", "regles", "guide") { req async throws -> View in
+        return try await req.view.render(
+            "regles_guide",
+            UIReglesContext(
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+    app.get("ui", "regles", "versions") { req async throws -> View in
+        return try await req.view.render(
+            "regles_versions",
+            UIReglesContext(
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+    app.get("ui", "regles", "validation") { req async throws -> View in
+        return try await req.view.render(
+            "regles_validation",
+            UIReglesContext(
+                notice: req.query[String.self, at: "notice"],
+                error: req.query[String.self, at: "error"]
+            )
+        )
+    }
+    app.get("ui", "regles", "naming") { req async throws -> Response in
+        req.redirect(to: "/ui/naming")
+    }
+    app.get("ui", "regles", "presets") { req async throws -> Response in
+        req.redirect(to: "/ui/presets")
     }
 
     app.get("ui", "presets") { req async throws -> View in

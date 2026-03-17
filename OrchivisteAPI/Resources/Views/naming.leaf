@@ -32,6 +32,27 @@
             text-decoration: none;
             font-weight: 700;
         }
+        .rules-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .rules-nav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .rules-nav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
         .wrap { max-width: 1300px; margin: 20px auto 40px; padding: 0 16px; }
         .grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
         .card {
@@ -161,12 +182,17 @@
         <a href="/ui/setup">Configuration</a>
         <a href="/ui/jobs">Tâches</a>
         <a href="/ui/workers">Agents</a>
-        <a href="/ui/presets">Préréglages</a>
-        <a href="/ui/naming">Nommage</a>
+        <a href="/ui/regles">Règles documentaires</a>
         <a href="/ui/events">Événements</a>
     </nav>
 </header>
 <main class="wrap">
+    <nav class="rules-nav">
+        <a href="/ui/regles">Vue d’ensemble</a>
+        <a href="/ui/regles/presets">Préréglages</a>
+        <a class="active" href="/ui/regles/naming">Nommage</a>
+    </nav>
+
     #if(notice):
     <p class="notice">#(notice)</p>
     #endif

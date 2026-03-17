@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Règles documentaires · Classification</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Avenir Next", "Helvetica Neue", sans-serif; color: var(--ink); background: var(--bg); }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a { margin-left: 14px; color: var(--accent); text-decoration: none; font-weight: 700; }
+        .wrap { max-width: 1160px; margin: 20px auto 40px; padding: 0 16px; }
+        .rules-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .rules-nav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .rules-nav a.active { background: #ebf8f4; color: var(--accent); border-color: #bde2d7; }
+        .notice { margin: 0 0 10px; font-weight: 700; color: var(--accent); }
+        .error { margin: 0 0 10px; font-weight: 700; color: var(--warning); }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        .lead { margin: 0 0 10px; color: var(--muted); line-height: 1.45; }
+        .btn {
+            display: inline-block;
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 8px 11px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .meta {
+            margin-top: 10px;
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            color: var(--muted);
+            background: #f8f4ec;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Règles documentaires</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/regles">Règles documentaires</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <nav class="rules-nav">
+        <a href="/ui/regles">Vue d'ensemble</a>
+        <a class="active" href="/ui/regles/classification">Classification</a>
+        <a href="/ui/regles/rules">Règles</a>
+        <a href="/ui/regles/guide">Guide</a>
+        <a href="/ui/regles/versions">Versions</a>
+        <a href="/ui/regles/validation">Validation</a>
+    </nav>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="card">
+        <h1>Classification</h1>
+        <p class="lead">
+            Cette vue prépare la consolidation du plan de classification dans MuniRegles.
+            Dans cette première sous-phase UI, les données sont encore opérées via la page legacy Préréglages.
+        </p>
+        <a class="btn" href="/ui/presets">Ouvrir la gestion actuelle du plan (legacy)</a>
+        <p class="meta">Compatibilité conservée: /ui/presets et /ui/regles/presets.</p>
+    </section>
+</main>
+</body>
+</html>

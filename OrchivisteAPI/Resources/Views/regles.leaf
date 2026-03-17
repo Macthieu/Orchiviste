@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Règles documentaires</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --border: #d9d2c4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1160px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .rules-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .rules-nav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .rules-nav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .lead {
+            margin: 0 0 14px;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+        .card h2 {
+            margin: 0 0 8px;
+            font-size: 20px;
+        }
+        .card p {
+            margin: 0 0 10px;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .btn {
+            display: inline-block;
+            border: 1px solid var(--accent);
+            color: #fff;
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 8px 11px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .meta {
+            margin-top: 10px;
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            color: var(--muted);
+            background: #f8f4ec;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Règles documentaires</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/regles">Règles documentaires</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <nav class="rules-nav">
+        <a class="active" href="/ui/regles">Vue d'ensemble</a>
+        <a href="/ui/regles/classification">Classification</a>
+        <a href="/ui/regles/rules">Règles</a>
+        <a href="/ui/regles/guide">Guide</a>
+        <a href="/ui/regles/versions">Versions</a>
+        <a href="/ui/regles/validation">Validation</a>
+    </nav>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <p class="lead">
+        <strong>MuniRegles</strong> centralise la gouvernance documentaire: plan de classification,
+        règles de renommage/classement, guide interne, versions et validation.
+    </p>
+
+    <section class="grid">
+        <article class="card">
+            <h2>Classification</h2>
+            <p>Consulter la structure de classement, les codes et les règles de rattachement.</p>
+            <a class="btn" href="/ui/regles/classification">Ouvrir Classification</a>
+        </article>
+
+        <article class="card">
+            <h2>Règles</h2>
+            <p>Point d’entrée pour les règles de nommage et de classement. Les pages legacy restent disponibles.</p>
+            <a class="btn" href="/ui/regles/rules">Ouvrir Règles</a>
+            <p class="meta">Compatibilité : /ui/naming et /ui/presets conservées.</p>
+        </article>
+
+        <article class="card">
+            <h2>Guide</h2>
+            <p>Référentiel opérationnel de renommage à usage interne pour homogénéiser les pratiques.</p>
+            <a class="btn" href="/ui/regles/guide">Ouvrir Guide</a>
+        </article>
+
+        <article class="card">
+            <h2>Versions</h2>
+            <p>Traçabilité des versions de règles, base utile pour audit et reproductibilité.</p>
+            <a class="btn" href="/ui/regles/versions">Ouvrir Versions</a>
+        </article>
+
+        <article class="card">
+            <h2>Validation</h2>
+            <p>Contrôles de cohérence du module avant utilisation par les outils Muni.</p>
+            <a class="btn" href="/ui/regles/validation">Ouvrir Validation</a>
+        </article>
+    </section>
+</main>
+</body>
+</html>
