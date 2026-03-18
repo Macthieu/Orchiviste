@@ -111,6 +111,54 @@ private struct UIReglesContext: Encodable {
     let error: String?
 }
 
+private struct UIReglesValidationIssueSummary: Encodable {
+    let severity: String
+    let code: String
+    let message: String
+    let field: String
+}
+
+private struct UIReglesValidationContext: Encodable {
+    let notice: String?
+    let error: String?
+    let source_key: String
+    let source_label: String
+    let summary: String
+    let report_present: Bool
+    let report_path: String
+    let generated_at: String
+    let taxonomy_id: String
+    let error_count: String
+    let warning_count: String
+    let issues: [UIReglesValidationIssueSummary]
+    let issues_present: Bool
+    let fallback_active: Bool
+    let fallback_reason: String
+}
+
+private struct UIReglesVersionsContext: Encodable {
+    let notice: String?
+    let error: String?
+    let source_key: String
+    let source_label: String
+    let has_artifacts: Bool
+    let module_version: String
+    let bundle_version: String
+    let bundle_generated_at: String
+    let inspect_generated_at: String
+    let taxonomy_id: String
+    let error_count: String
+    let warning_count: String
+    let classification_entry_count: String
+    let naming_rule_count: String
+    let routing_rule_count: String
+    let guide_convention_count: String
+    let bundle_path: String
+    let inspect_report_path: String
+    let fallback_active: Bool
+    let fallback_reason: String
+}
+
 private struct UIEventSummary: Encodable {
     let id: Int
     let type: String
@@ -1421,21 +1469,66 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "versions") { req async throws -> View in
+        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let versions = snapshot.versions
+        let context = UIReglesVersionsContext(
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"],
+            source_key: versions.sourceKey,
+            source_label: versions.sourceLabel,
+            has_artifacts: versions.sourceKey == "muniregles_artifact" || versions.sourceKey == "muniregles_artifact_partial",
+            module_version: versions.moduleVersion ?? "-",
+            bundle_version: versions.bundleVersion ?? "-",
+            bundle_generated_at: versions.bundleGeneratedAt ?? "-",
+            inspect_generated_at: versions.inspectGeneratedAt ?? "-",
+            taxonomy_id: versions.taxonomyID ?? "-",
+            error_count: versions.errorCount.map(String.init) ?? "-",
+            warning_count: versions.warningCount.map(String.init) ?? "-",
+            classification_entry_count: versions.classificationEntryCount.map(String.init) ?? "-",
+            naming_rule_count: versions.namingRuleCount.map(String.init) ?? "-",
+            routing_rule_count: versions.routingRuleCount.map(String.init) ?? "-",
+            guide_convention_count: versions.guideConventionCount.map(String.init) ?? "-",
+            bundle_path: versions.bundlePath ?? "-",
+            inspect_report_path: versions.inspectReportPath ?? "-",
+            fallback_active: versions.sourceKey == "legacy_fallback" || versions.sourceKey == "unavailable",
+            fallback_reason: versions.fallbackReason ?? "-"
+        )
         return try await req.view.render(
             "regles_versions",
-            UIReglesContext(
-                notice: req.query[String.self, at: "notice"],
-                error: req.query[String.self, at: "error"]
-            )
+            context
         )
     }
     app.get("ui", "regles", "validation") { req async throws -> View in
+        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let validation = snapshot.validation
+        let issues = validation.issues.map {
+            UIReglesValidationIssueSummary(
+                severity: $0.severity,
+                code: $0.code,
+                message: $0.message,
+                field: $0.field
+            )
+        }
+        let context = UIReglesValidationContext(
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"],
+            source_key: validation.sourceKey,
+            source_label: validation.sourceLabel,
+            summary: validation.summary,
+            report_present: validation.reportPath != nil,
+            report_path: validation.reportPath ?? "-",
+            generated_at: validation.generatedAt ?? "-",
+            taxonomy_id: validation.taxonomyID ?? "-",
+            error_count: validation.errorCount.map(String.init) ?? "-",
+            warning_count: validation.warningCount.map(String.init) ?? "-",
+            issues: issues,
+            issues_present: !issues.isEmpty,
+            fallback_active: validation.sourceKey == "legacy_fallback" || validation.sourceKey == "unavailable",
+            fallback_reason: validation.fallbackReason ?? "-"
+        )
         return try await req.view.render(
             "regles_validation",
-            UIReglesContext(
-                notice: req.query[String.self, at: "notice"],
-                error: req.query[String.self, at: "error"]
-            )
+            context
         )
     }
     app.get("ui", "regles", "naming") { req async throws -> Response in

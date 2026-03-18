@@ -60,6 +60,21 @@
             border-radius: 8px;
             padding: 8px;
         }
+        .badge {
+            display: inline-block;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #f8f4ec;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .kpi {
+            margin: 0;
+            padding-left: 18px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -95,10 +110,30 @@
 
     <section class="card">
         <h1>Versions</h1>
+        <span class="badge">Source: #(source_label)</span>
+
+        #if(has_artifacts):
+        <p class="lead">Lecture des artefacts MuniRegles réussie (best effort).</p>
+        <ul class="kpi">
+            <li>Module version: <strong>#(module_version)</strong></li>
+            <li>Bundle version: <strong>#(bundle_version)</strong></li>
+            <li>Bundle généré: <span class="mono">#(bundle_generated_at)</span></li>
+            <li>Inspect généré: <span class="mono">#(inspect_generated_at)</span></li>
+            <li>Taxonomie: <strong>#(taxonomy_id)</strong></li>
+            <li>Erreurs / avertissements: <strong>#(error_count)</strong> / <strong>#(warning_count)</strong></li>
+            <li>Entrées classification: <strong>#(classification_entry_count)</strong></li>
+            <li>Règles nommage: <strong>#(naming_rule_count)</strong></li>
+            <li>Règles routage: <strong>#(routing_rule_count)</strong></li>
+            <li>Conventions guide: <strong>#(guide_convention_count)</strong></li>
+        </ul>
+        <p class="mono">Bundle: #(bundle_path)</p>
+        <p class="mono">Inspect report: #(inspect_report_path)</p>
+        #else:
         <p class="lead">
-            Suivi des versions du module MuniRegles. Cette première sous-phase introduit l'architecture UI sans migration de contenu métier.
+            Aucun artefact exploitable n'a été trouvé. La vue reste en fallback legacy.
         </p>
-        <p class="mono">MuniRegles UI scaffold: v0 (phase architecture)</p>
+        <p class="mono">Raison: #(fallback_reason)</p>
+        #endif
     </section>
 </main>
 </body>

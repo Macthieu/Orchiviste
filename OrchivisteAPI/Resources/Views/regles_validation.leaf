@@ -56,6 +56,43 @@
             color: var(--ink);
             line-height: 1.5;
         }
+        .badge {
+            display: inline-block;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #f8f4ec;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 12px;
+            vertical-align: top;
+        }
+        th {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
     </style>
 </head>
 <body>
@@ -91,16 +128,50 @@
 
     <section class="card">
         <h1>Validation</h1>
-        <p class="lead">
-            Vue de préparation pour les futurs contrôles de cohérence des règles documentaires.
-            Aucun contrôle automatique supplémentaire n'est introduit dans cette sous-phase.
-        </p>
+        <span class="badge">Source: #(source_label)</span>
+        <p class="lead">#(summary)</p>
+
+        #if(report_present):
+        <p class="mono">Rapport: #(report_path)</p>
+        <ul class="checklist">
+            <li>Généré: <span class="mono">#(generated_at)</span></li>
+            <li>Taxonomie: <strong>#(taxonomy_id)</strong></li>
+            <li>Erreurs: <strong>#(error_count)</strong></li>
+            <li>Avertissements: <strong>#(warning_count)</strong></li>
+        </ul>
+
+        #if(issues_present):
+        <table>
+            <thead>
+                <tr>
+                    <th>Sévérité</th>
+                    <th>Code</th>
+                    <th>Message</th>
+                    <th>Champ</th>
+                </tr>
+            </thead>
+            <tbody>
+            #for(issue in issues):
+                <tr>
+                    <td>#(issue.severity)</td>
+                    <td class="mono">#(issue.code)</td>
+                    <td>#(issue.message)</td>
+                    <td class="mono">#(issue.field)</td>
+                </tr>
+            #endfor
+            </tbody>
+        </table>
+        #endif
+        #else:
+        <p class="lead">Aucun rapport MuniRegles lisible. Fallback legacy actif.</p>
+        <p class="mono">Raison: #(fallback_reason)</p>
         <ul class="checklist">
             <li>Structure des routes MuniRegles disponible</li>
             <li>Sous-navigation locale cohérente</li>
             <li>Pages legacy toujours accessibles</li>
             <li>Compatibilité cockpit et smokes conservée</li>
         </ul>
+        #endif
     </section>
 </main>
 </body>
