@@ -60,6 +60,49 @@
             font-weight: 700;
             text-decoration: none;
         }
+        .badge {
+            display: inline-block;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #f8f4ec;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        .checklist {
+            margin: 10px 0 0;
+            padding-left: 18px;
+            color: var(--ink);
+            line-height: 1.5;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 12px;
+            vertical-align: top;
+        }
+        th {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
     </style>
 </head>
 <body>
@@ -95,11 +138,51 @@
 
     <section class="card">
         <h1>Guide</h1>
-        <p class="lead">
-            Cette vue accueillera le guide interne de renommage et les conventions rédactionnelles.
-            Dans cette sous-phase, la source opérationnelle reste la configuration actuelle.
-        </p>
+        <span class="badge">Source: #(source_label)</span>
+        <p class="lead">#(summary)</p>
+
+        #if(has_data):
+        <ul class="checklist">
+            <li>Titre: <strong>#(title)</strong></li>
+            <li>Conventions: <strong>#(convention_count)</strong></li>
+        </ul>
+        <p class="mono">Source fichier: #(bundle_path)</p>
+
+        #if(conventions_present):
+        <h2 style="margin-top:14px;">Conventions</h2>
+        <ul class="checklist">
+        #for(item in conventions):
+            <li>#(item)</li>
+        #endfor
+        </ul>
+        #endif
+
+        #if(examples_present):
+        <h2 style="margin-top:14px;">Exemples</h2>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                <tr>
+                    <th>Input</th>
+                    <th>Output</th>
+                </tr>
+                </thead>
+                <tbody>
+                #for(row in examples):
+                <tr>
+                    <td class="mono">#(row.input)</td>
+                    <td class="mono">#(row.output)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </div>
+        #endif
+        #else:
+        <p class="lead">Fallback legacy actif pour cette page.</p>
+        <p class="mono">Raison: #(fallback_reason)</p>
         <a class="btn" href="/ui/setup">Ouvrir la configuration actuelle du guide</a>
+        #endif
     </section>
 </main>
 </body>

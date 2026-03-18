@@ -70,6 +70,48 @@
             border-radius: 8px;
             padding: 8px;
         }
+        .badge {
+            display: inline-block;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #f8f4ec;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 12px;
+            vertical-align: top;
+        }
+        th {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .kpi {
+            margin: 8px 0 0;
+            padding-left: 18px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -105,12 +147,45 @@
 
     <section class="card">
         <h1>Classification</h1>
-        <p class="lead">
-            Cette vue prépare la consolidation du plan de classification dans MuniRegles.
-            Dans cette première sous-phase UI, les données sont encore opérées via la page legacy Préréglages.
-        </p>
+        <span class="badge">Source: #(source_label)</span>
+        <p class="lead">#(summary)</p>
+
+        #if(has_data):
+        <ul class="kpi">
+            <li>Taxonomie: <strong>#(taxonomy_id)</strong></li>
+            <li>Version: <strong>#(version)</strong></li>
+            <li>Entrées: <strong>#(entry_count)</strong></li>
+        </ul>
+        <p class="mono">Source fichier: #(bundle_path)</p>
+
+        #if(entries_present):
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Libellé</th>
+                    <th>Chemin</th>
+                </tr>
+                </thead>
+                <tbody>
+                #for(row in entries):
+                <tr>
+                    <td class="mono">#(row.code)</td>
+                    <td>#(row.label)</td>
+                    <td class="mono">#(row.path)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </div>
+        #endif
+        #else:
+        <p class="lead">Fallback legacy actif pour cette page.</p>
+        <p class="meta">Raison: #(fallback_reason)</p>
         <a class="btn" href="/ui/presets">Ouvrir la gestion actuelle du plan (legacy)</a>
         <p class="meta">Compatibilité conservée: /ui/presets et /ui/regles/presets.</p>
+        #endif
     </section>
 </main>
 </body>

@@ -159,6 +159,83 @@ private struct UIReglesVersionsContext: Encodable {
     let fallback_reason: String
 }
 
+private struct UIReglesClassificationEntrySummary: Encodable {
+    let code: String
+    let label: String
+    let path: String
+}
+
+private struct UIReglesClassificationContext: Encodable {
+    let notice: String?
+    let error: String?
+    let source_key: String
+    let source_label: String
+    let summary: String
+    let has_data: Bool
+    let taxonomy_id: String
+    let version: String
+    let entry_count: String
+    let entries: [UIReglesClassificationEntrySummary]
+    let entries_present: Bool
+    let bundle_path: String
+    let fallback_active: Bool
+    let fallback_reason: String
+}
+
+private struct UIReglesRulesNamingRuleSummary: Encodable {
+    let id: String
+    let label: String
+    let template: String
+}
+
+private struct UIReglesRulesRoutingRuleSummary: Encodable {
+    let id: String
+    let class_code: String
+    let destination_template: String
+}
+
+private struct UIReglesRulesContext: Encodable {
+    let notice: String?
+    let error: String?
+    let source_key: String
+    let source_label: String
+    let summary: String
+    let has_data: Bool
+    let version: String
+    let naming_rule_count: String
+    let routing_rule_count: String
+    let naming_rules: [UIReglesRulesNamingRuleSummary]
+    let routing_rules: [UIReglesRulesRoutingRuleSummary]
+    let naming_rules_present: Bool
+    let routing_rules_present: Bool
+    let bundle_path: String
+    let fallback_active: Bool
+    let fallback_reason: String
+}
+
+private struct UIReglesGuideExampleSummary: Encodable {
+    let input: String
+    let output: String
+}
+
+private struct UIReglesGuideContext: Encodable {
+    let notice: String?
+    let error: String?
+    let source_key: String
+    let source_label: String
+    let summary: String
+    let has_data: Bool
+    let title: String
+    let convention_count: String
+    let conventions: [String]
+    let conventions_present: Bool
+    let examples: [UIReglesGuideExampleSummary]
+    let examples_present: Bool
+    let bundle_path: String
+    let fallback_active: Bool
+    let fallback_reason: String
+}
+
 private struct UIEventSummary: Encodable {
     let id: Int
     let type: String
@@ -1442,30 +1519,92 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "classification") { req async throws -> View in
+        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let classification = snapshot.classification
+        let entries = classification.entries.map {
+            UIReglesClassificationEntrySummary(code: $0.code, label: $0.label, path: $0.path)
+        }
+        let context = UIReglesClassificationContext(
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"],
+            source_key: classification.sourceKey,
+            source_label: classification.sourceLabel,
+            summary: classification.summary,
+            has_data: classification.sourceKey == "muniregles_artifact" || classification.sourceKey == "muniregles_request_path",
+            taxonomy_id: classification.taxonomyID ?? "-",
+            version: classification.version ?? "-",
+            entry_count: classification.entryCount.map(String.init) ?? "-",
+            entries: entries,
+            entries_present: !entries.isEmpty,
+            bundle_path: classification.bundlePath ?? "-",
+            fallback_active: classification.sourceKey == "legacy_fallback" || classification.sourceKey == "unavailable",
+            fallback_reason: classification.fallbackReason ?? "-"
+        )
         return try await req.view.render(
             "regles_classification",
-            UIReglesContext(
-                notice: req.query[String.self, at: "notice"],
-                error: req.query[String.self, at: "error"]
-            )
+            context
         )
     }
     app.get("ui", "regles", "rules") { req async throws -> View in
+        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let rules = snapshot.rules
+        let namingRules = rules.namingRules.map {
+            UIReglesRulesNamingRuleSummary(id: $0.id, label: $0.label, template: $0.template)
+        }
+        let routingRules = rules.routingRules.map {
+            UIReglesRulesRoutingRuleSummary(
+                id: $0.id,
+                class_code: $0.classCode,
+                destination_template: $0.destinationTemplate
+            )
+        }
+        let context = UIReglesRulesContext(
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"],
+            source_key: rules.sourceKey,
+            source_label: rules.sourceLabel,
+            summary: rules.summary,
+            has_data: rules.sourceKey == "muniregles_artifact" || rules.sourceKey == "muniregles_request_path",
+            version: rules.version ?? "-",
+            naming_rule_count: rules.namingRuleCount.map(String.init) ?? "-",
+            routing_rule_count: rules.routingRuleCount.map(String.init) ?? "-",
+            naming_rules: namingRules,
+            routing_rules: routingRules,
+            naming_rules_present: !namingRules.isEmpty,
+            routing_rules_present: !routingRules.isEmpty,
+            bundle_path: rules.bundlePath ?? "-",
+            fallback_active: rules.sourceKey == "legacy_fallback" || rules.sourceKey == "unavailable",
+            fallback_reason: rules.fallbackReason ?? "-"
+        )
         return try await req.view.render(
             "regles_rules",
-            UIReglesContext(
-                notice: req.query[String.self, at: "notice"],
-                error: req.query[String.self, at: "error"]
-            )
+            context
         )
     }
     app.get("ui", "regles", "guide") { req async throws -> View in
+        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let guide = snapshot.guide
+        let examples = guide.examples.map { UIReglesGuideExampleSummary(input: $0.input, output: $0.output) }
+        let context = UIReglesGuideContext(
+            notice: req.query[String.self, at: "notice"],
+            error: req.query[String.self, at: "error"],
+            source_key: guide.sourceKey,
+            source_label: guide.sourceLabel,
+            summary: guide.summary,
+            has_data: guide.sourceKey == "muniregles_artifact" || guide.sourceKey == "muniregles_request_path",
+            title: guide.title ?? "-",
+            convention_count: guide.conventionCount.map(String.init) ?? "-",
+            conventions: guide.conventions,
+            conventions_present: !guide.conventions.isEmpty,
+            examples: examples,
+            examples_present: !examples.isEmpty,
+            bundle_path: guide.bundlePath ?? "-",
+            fallback_active: guide.sourceKey == "legacy_fallback" || guide.sourceKey == "unavailable",
+            fallback_reason: guide.fallbackReason ?? "-"
+        )
         return try await req.view.render(
             "regles_guide",
-            UIReglesContext(
-                notice: req.query[String.self, at: "notice"],
-                error: req.query[String.self, at: "error"]
-            )
+            context
         )
     }
     app.get("ui", "regles", "versions") { req async throws -> View in

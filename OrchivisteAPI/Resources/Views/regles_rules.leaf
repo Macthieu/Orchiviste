@@ -70,6 +70,48 @@
             border-radius: 8px;
             padding: 8px;
         }
+        .badge {
+            display: inline-block;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #f8f4ec;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 12px;
+            vertical-align: top;
+        }
+        th {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .kpi {
+            margin: 8px 0 0;
+            padding-left: 18px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -105,10 +147,68 @@
 
     <section class="card">
         <h1>Règles</h1>
-        <p class="lead">
-            Cette vue structure le futur regroupement des règles de renommage et de classement.
-            Le contenu métier reste pour l'instant dans les écrans legacy pour éviter tout risque de régression.
-        </p>
+        <span class="badge">Source: #(source_label)</span>
+        <p class="lead">#(summary)</p>
+
+        #if(has_data):
+        <ul class="kpi">
+            <li>Version règles: <strong>#(version)</strong></li>
+            <li>Règles de nommage: <strong>#(naming_rule_count)</strong></li>
+            <li>Règles de routage: <strong>#(routing_rule_count)</strong></li>
+        </ul>
+        <p class="mono">Source fichier: #(bundle_path)</p>
+
+        #if(naming_rules_present):
+        <h2 style="margin-top:14px;">Nommage</h2>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Label</th>
+                    <th>Template</th>
+                </tr>
+                </thead>
+                <tbody>
+                #for(rule in naming_rules):
+                <tr>
+                    <td class="mono">#(rule.id)</td>
+                    <td>#(rule.label)</td>
+                    <td class="mono">#(rule.template)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </div>
+        #endif
+
+        #if(routing_rules_present):
+        <h2 style="margin-top:14px;">Routage</h2>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Class code</th>
+                    <th>Destination template</th>
+                </tr>
+                </thead>
+                <tbody>
+                #for(rule in routing_rules):
+                <tr>
+                    <td class="mono">#(rule.id)</td>
+                    <td class="mono">#(rule.class_code)</td>
+                    <td class="mono">#(rule.destination_template)</td>
+                </tr>
+                #endfor
+                </tbody>
+            </table>
+        </div>
+        #endif
+        #else:
+        <p class="lead">Fallback legacy actif pour cette page.</p>
+        <p class="meta">Raison: #(fallback_reason)</p>
+        #endif
     </section>
 
     <section class="grid">
