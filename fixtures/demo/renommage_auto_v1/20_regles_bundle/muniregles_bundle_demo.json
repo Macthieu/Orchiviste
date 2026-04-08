@@ -1,0 +1,58 @@
+{
+  "classification_plan" : {
+    "entries" : [
+      {
+        "code" : "ADM-02",
+        "label" : "Resolutions",
+        "path" : "Municipal/Administration/Resolutions"
+      }
+    ],
+    "taxonomy_id" : "TAX-DEMO-RENOMMAGE",
+    "version" : "2026.1-demo"
+  },
+  "manifest" : {
+    "bundle_version" : "1.0",
+    "generated_at" : "2026-03-24T13:00:06Z",
+    "module_version" : "0.1.0",
+    "source_checksums" : {
+      "classification_plan" : "eafde69eaaef358f",
+      "naming_and_routing_rules" : "496dc4754ed4fbbf",
+      "renaming_guide" : "84f211eb9d16de39"
+    }
+  },
+  "naming_and_routing_rules" : {
+    "naming_rules" : [
+      {
+        "id" : "rule-demo-simple",
+        "label" : "Demo simple",
+        "template" : "{class_code}-{subject}"
+      },
+      {
+        "id" : "rule-demo-seq",
+        "label" : "Demo sequence",
+        "template" : "{class_code}-{subject}-{seq}"
+      }
+    ],
+    "routing_rules" : [
+      {
+        "class_code" : "ADM-02",
+        "destination_template" : "Archives/{year}/ADM/{class_code}",
+        "id" : "route-adm-02"
+      }
+    ],
+    "version" : "2026.1-demo"
+  },
+  "renaming_guide" : {
+    "conventions" : [
+      "Use ISO date format when date is present",
+      "Keep stable subject identifiers"
+    ],
+    "examples" : [
+      {
+        "input" : "resolution-17.txt",
+        "output" : "ADM-02-resolution-17.txt"
+      }
+    ],
+    "title" : "Guide demo renommage"
+  }
+}

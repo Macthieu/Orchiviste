@@ -1,0 +1,13 @@
+{
+  "title": "Guide demo renommage",
+  "conventions": [
+    "Use ISO date format when date is present",
+    "Keep stable subject identifiers"
+  ],
+  "examples": [
+    {
+      "input": "resolution-17.txt",
+      "output": "ADM-02-resolution-17.txt"
+    }
+  ]
+}

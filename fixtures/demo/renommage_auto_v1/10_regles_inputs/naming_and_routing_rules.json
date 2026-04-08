@@ -1,0 +1,22 @@
+{
+  "version": "2026.1-demo",
+  "naming_rules": [
+    {
+      "id": "rule-demo-simple",
+      "label": "Demo documentaire exact",
+      "template": "{document_type} – {document_subject} – {document_date}"
+    },
+    {
+      "id": "rule-demo-seq",
+      "label": "Demo sequence",
+      "template": "{class_code}-{subject}-{seq}"
+    }
+  ],
+  "routing_rules": [
+    {
+      "id": "route-adm-02",
+      "class_code": "ADM-02",
+      "destination_template": "Archives/{year}/ADM/{class_code}"
+    }
+  ]
+}

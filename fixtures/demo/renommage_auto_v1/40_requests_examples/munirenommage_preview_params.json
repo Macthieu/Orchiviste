@@ -1,0 +1,12 @@
+{
+  "preset_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/30_presets/munirenommage_demo_neutre.json",
+  "directory_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/00_sources/inbox_preview",
+  "recursive": false,
+  "include_hidden": false,
+  "dry_run": true,
+  "confirm_apply": false,
+  "regles_bundle_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/20_regles_bundle/muniregles_bundle_demo.json",
+  "regles_naming_rule_id": "rule-demo-simple",
+  "regles_class_code": "ADM-02",
+  "regles_apply_rule": true
+}

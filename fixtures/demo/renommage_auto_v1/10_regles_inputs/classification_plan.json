@@ -1,0 +1,11 @@
+{
+  "taxonomy_id": "TAX-DEMO-RENOMMAGE",
+  "version": "2026.1-demo",
+  "entries": [
+    {
+      "code": "ADM-02",
+      "label": "Resolutions",
+      "path": "Municipal/Administration/Resolutions"
+    }
+  ]
+}

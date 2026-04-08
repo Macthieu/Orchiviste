@@ -1,0 +1,7 @@
+{
+  "operation": "bundle",
+  "classification_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/10_regles_inputs/classification_plan.json",
+  "rules_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/10_regles_inputs/naming_and_routing_rules.json",
+  "guide_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/10_regles_inputs/renaming_guide.json",
+  "bundle_path": "/Volumes/MAC_HDD/Logiciel test/MunicipalApps/Orchiviste/fixtures/demo/renommage_auto_v1/20_regles_bundle/muniregles_bundle_demo.json"
+}

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "preset": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "formatVersion": 1,
+    "name": "Demo-Neutre-MuniRegles",
+    "category": "Demo",
+    "rules": {
+      "replace": {
+        "enabled": false,
+        "find": "",
+        "replace": "",
+        "regex": true,
+        "caseSensitive": false
+      },
+      "remove": {
+        "enabled": false,
+        "from": null,
+        "to": null,
+        "collapseSpaces": false,
+        "trimWhitespace": false
+      },
+      "add": {
+        "enabled": false,
+        "usePrefix": false,
+        "prefix": "",
+        "useSuffix": false,
+        "suffix": "",
+        "insertText": "",
+        "insertIndex": 1
+      },
+      "date": {
+        "enabled": false,
+        "format": "yyyy-MM-dd",
+        "usePrefix": false,
+        "useSuffix": false,
+        "useAtPosition": true,
+        "atIndex": 1
+      },
+      "numbering": {
+        "enabled": false,
+        "asPrefix": true,
+        "start": 1,
+        "step": 1,
+        "pad": 3,
+        "separator": " - ",
+        "onlySelection": false,
+        "pattern": ""
+      },
+      "casing": {
+        "enabled": false,
+        "style": "unchanged"
+      },
+      "ext": {
+        "enabled": false,
+        "newExtension": "",
+        "caseStyle": "unchanged"
+      },
+      "folder": {
+        "enabled": false,
+        "addParentAsPrefix": true,
+        "separator": " - "
+      },
+      "special": {
+        "enabled": false,
+        "normalizeUnicode": true,
+        "stripDiacritics": false,
+        "dashToEnDash": false,
+        "spacesToUnderscore": false
+      },
+      "filters": {
+        "recursive": false,
+        "includeHidden": false,
+        "includeRegex": "",
+        "excludeRegex": ""
+      },
+      "destination": {
+        "enabled": false,
+        "url": null,
+        "copyInsteadOfMove": false
+      }
+    }
+  }
+}
