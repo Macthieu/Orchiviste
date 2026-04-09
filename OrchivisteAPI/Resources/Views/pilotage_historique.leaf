@@ -112,6 +112,23 @@
         .status-failed { color: var(--danger); font-weight: 700; }
         .status-needs_review { color: var(--warning); font-weight: 700; }
         .status-not_implemented { color: #555; font-weight: 700; }
+        .diag {
+            display: grid;
+            gap: 4px;
+            min-width: 260px;
+        }
+        .diag-item {
+            border-left: 2px solid #d8e8e2;
+            padding-left: 7px;
+            line-height: 1.35;
+        }
+        .diag-key {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-right: 6px;
+        }
     </style>
 </head>
 <body>
@@ -158,6 +175,7 @@
                     <th>Résumé</th>
                     <th>Horodatage</th>
                     <th>Code sortie</th>
+                    <th>Diagnostics</th>
                     <th>Fichiers</th>
                 </tr>
                 </thead>
@@ -171,6 +189,35 @@
                     <td>#(row.summary)</td>
                     <td class="mono">Début: #(row.started_at)<br>Fin: #(row.finished_at)</td>
                     <td class="mono">#(row.exit_code)</td>
+                    <td class="mono">
+                        #if(row.diagnostics_present):
+                        <div class="diag">
+                            #if(row.extraction_provenance_present):
+                            <div class="diag-item"><span class="diag-key">Extraction</span>#(row.extraction_provenance)</div>
+                            #endif
+                            #if(row.regles_source_present):
+                            <div class="diag-item"><span class="diag-key">Source règles</span>#(row.regles_source)</div>
+                            #endif
+                            #if(row.regles_bundle_version_present):
+                            <div class="diag-item"><span class="diag-key">Bundle</span>#(row.regles_bundle_version)</div>
+                            #endif
+                            #if(row.regles_module_version_present):
+                            <div class="diag-item"><span class="diag-key">Module</span>#(row.regles_module_version)</div>
+                            #endif
+                            #if(row.regles_rule_id_present):
+                            <div class="diag-item"><span class="diag-key">Règle</span>#(row.regles_rule_id)</div>
+                            #endif
+                            #if(row.regles_fallback_reason_present):
+                            <div class="diag-item"><span class="diag-key">Fallback</span>#(row.regles_fallback_reason)</div>
+                            #endif
+                            #if(row.warnings_present):
+                            <div class="diag-item"><span class="diag-key">Warnings</span>#(row.warnings_count) · #(row.warnings_summary)</div>
+                            #endif
+                        </div>
+                        #else:
+                        -
+                        #endif
+                    </td>
                     <td class="mono">req: #(row.request_file)<br>res: #(row.result_file)</td>
                 </tr>
                 #endfor

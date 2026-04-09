@@ -118,7 +118,17 @@ result = {
     "errors": [],
     "summary": "Smoke tool completed successfully.",
     "metadata": {
-        "dry_run": request.get("parameters", {}).get("dry_run", True)
+        "dry_run": request.get("parameters", {}).get("dry_run", True),
+        "regles_source": "muniregles_bundle",
+        "regles_bundle_version": "0.1.0",
+        "regles_module_version": "0.1.0",
+        "regles_rule_id": "rule-smoke",
+        "warnings": [
+            {
+                "code": "SMOKE_WARNING",
+                "message": "Synthetic warning for cockpit diagnostics rendering."
+            }
+        ]
     }
 }
 
@@ -285,6 +295,21 @@ UI_HISTORIQUE_CODE="$(curl -sS -o "$UI_HISTORIQUE_HTML" -w "%{http_code}" "http:
 assert_code "$UI_HISTORIQUE_CODE" "200" "ui.pilotage.historique" "$UI_HISTORIQUE_HTML"
 if ! grep -q "Historique local" "$UI_HISTORIQUE_HTML"; then
   echo "ECHEC [ui.pilotage.historique] contenu absent" >&2
+  cat "$UI_HISTORIQUE_HTML" >&2
+  exit 1
+fi
+if ! grep -q "Diagnostics" "$UI_HISTORIQUE_HTML"; then
+  echo "ECHEC [ui.pilotage.historique] colonne diagnostics absente" >&2
+  cat "$UI_HISTORIQUE_HTML" >&2
+  exit 1
+fi
+if ! grep -q "rule-smoke" "$UI_HISTORIQUE_HTML"; then
+  echo "ECHEC [ui.pilotage.historique] rule id diagnostic absent" >&2
+  cat "$UI_HISTORIQUE_HTML" >&2
+  exit 1
+fi
+if ! grep -q "SMOKE_WARNING" "$UI_HISTORIQUE_HTML"; then
+  echo "ECHEC [ui.pilotage.historique] warning diagnostic absent" >&2
   cat "$UI_HISTORIQUE_HTML" >&2
   exit 1
 fi
