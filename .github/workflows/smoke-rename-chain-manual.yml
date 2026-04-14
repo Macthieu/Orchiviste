@@ -1,0 +1,105 @@
+name: Smoke Rename Chain (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Strict mode for positive smoke (0 or 1)"
+        required: false
+        default: "0"
+      muni_analyse_ref:
+        description: "Git ref for MuniAnalyse"
+        required: false
+        default: "main"
+      muni_regles_ref:
+        description: "Git ref for MuniRegles"
+        required: false
+        default: "main"
+      muni_renommage_ref:
+        description: "Git ref for MuniRenommage"
+        required: false
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-rename-chain:
+    name: Smoke rename chain (macOS 14 / Swift 6)
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Orchiviste
+        uses: actions/checkout@v5
+
+      - name: Select latest Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(ls -1d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${XCODE_PATH:-}" ]]; then
+            echo "No Xcode installation found on runner." >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Verify Swift 6 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift --version
+          if ! swift --version | grep -E "Swift version 6\\." >/dev/null; then
+            echo "Swift 6.x is required for this smoke workflow." >&2
+            exit 1
+          fi
+
+      - name: Clone tool repositories
+        shell: bash
+        env:
+          MUNI_ANALYSE_REF: ${{ github.event.inputs.muni_analyse_ref || 'main' }}
+          MUNI_REGLES_REF: ${{ github.event.inputs.muni_regles_ref || 'main' }}
+          MUNI_RENOMMAGE_REF: ${{ github.event.inputs.muni_renommage_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          SUITE_ROOT="$RUNNER_TEMP/municipal-suite"
+          rm -rf "$SUITE_ROOT"
+          mkdir -p "$SUITE_ROOT"
+
+          git clone --depth 1 --branch "$MUNI_ANALYSE_REF" https://github.com/Macthieu/MuniAnalyse.git "$SUITE_ROOT/MuniAnalyse"
+          git clone --depth 1 --branch "$MUNI_REGLES_REF" https://github.com/Macthieu/MuniRegles.git "$SUITE_ROOT/MuniRegles"
+          git clone --depth 1 --branch "$MUNI_RENOMMAGE_REF" https://github.com/Macthieu/MuniRenommage.git "$SUITE_ROOT/MuniRenommage"
+
+      - name: Run positive rename chain smoke
+        shell: bash
+        env:
+          STRICT: ${{ github.event.inputs.strict || '0' }}
+        run: |
+          set -euo pipefail
+          SUITE_ROOT="$RUNNER_TEMP/municipal-suite"
+          LOG_DIR="$RUNNER_TEMP/rename-chain-smoke-logs"
+          mkdir -p "$LOG_DIR"
+          chmod +x scripts/smoke_rename_chain_v1.sh
+
+          MUNI_ANALYSE_DIR="$SUITE_ROOT/MuniAnalyse" \
+          MUNI_REGLES_DIR="$SUITE_ROOT/MuniRegles" \
+          MUNI_RENOMMAGE_DIR="$SUITE_ROOT/MuniRenommage" \
+          STRICT="$STRICT" \
+          KEEP_TMP=1 \
+          ./scripts/smoke_rename_chain_v1.sh 2>&1 | tee "$LOG_DIR/positive.log"
+
+      - name: Run negative rename chain smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUITE_ROOT="$RUNNER_TEMP/municipal-suite"
+          LOG_DIR="$RUNNER_TEMP/rename-chain-smoke-logs"
+          mkdir -p "$LOG_DIR"
+          chmod +x scripts/smoke_rename_chain_v1_negative.sh
+
+          MUNI_ANALYSE_DIR="$SUITE_ROOT/MuniAnalyse" \
+          MUNI_REGLES_DIR="$SUITE_ROOT/MuniRegles" \
+          MUNI_RENOMMAGE_DIR="$SUITE_ROOT/MuniRenommage" \
+          KEEP_TMP=1 \
+          ./scripts/smoke_rename_chain_v1_negative.sh 2>&1 | tee "$LOG_DIR/negative.log"
