@@ -163,6 +163,12 @@
             gap: 8px;
             margin-top: 8px;
         }
+        .diag-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 6px 0 2px;
+        }
         .diag-row {
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -193,6 +199,11 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.03em;
+        }
+        .diag-chip.legend {
+            font-size: 10px;
+            padding: 2px 8px;
+            margin: 0;
         }
         .diag-blocking {
             background: var(--sev-blocking-bg);
@@ -265,6 +276,11 @@
     <section class="card">
         <h2 style="margin:0 0 10px;">Lancement canonique (`run --request --result`)</h2>
         <p class="quick-link">Consulter les exécutions récentes: <a href="/ui/pilotage/historique">Historique</a></p>
+        <div class="diag-legend" aria-label="Légende des niveaux diagnostics">
+            <span class="diag-chip legend diag-info">info</span>
+            <span class="diag-chip legend diag-warning">warning</span>
+            <span class="diag-chip legend diag-blocking">blocking</span>
+        </div>
 
         <form id="pilotageRunForm" action="/ui/pilotage/run" method="post" data-apply-blocking="#(apply_blocking_guard_available)">
             <div class="form-grid">
@@ -322,14 +338,14 @@
             <article class="diag-row diag-row-level-#(row.priority_diagnostic_severity)">
                 <div class="diag-head">
                     <span class="mono">#(row.execution_id)</span>
-                    <span class="diag-chip diag-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity_label)</span>
+                    <span class="diag-chip diag-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity)</span>
                     <strong>#(row.priority_diagnostic_label)</strong>
                 </div>
                 <div class="diag-meta">
                     Tool: #(row.tool_id) · Action: <span class="mono">#(row.action)</span> · Statut: #(row.status_label) · ID: <span class="mono">#(row.priority_diagnostic_id)</span>
                 </div>
                 #if(row.priority_diagnostic_cta_present):
-                <div class="diag-cta">CTA recommandé: #(row.priority_diagnostic_cta)</div>
+                <div class="diag-cta">Action recommandée: #(row.priority_diagnostic_cta)</div>
                 #endif
             </article>
             #endfor

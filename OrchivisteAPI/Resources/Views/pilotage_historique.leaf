@@ -143,6 +143,12 @@
             background: #fff;
             border-left-width: 4px;
         }
+        .diag-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 4px 0 10px;
+        }
         .diag-priority-level-info {
             border-left-color: var(--sev-info-ink);
         }
@@ -161,6 +167,9 @@
             text-transform: uppercase;
             letter-spacing: 0.03em;
             margin-right: 6px;
+        }
+        .diag-pill.legend {
+            margin-right: 0;
         }
         .diag-pill-blocking {
             background: var(--sev-blocking-bg);
@@ -230,6 +239,11 @@
     <section class="card">
         <h2 style="margin:0 0 8px;">Historique local (`history.jsonl`)</h2>
         <p class="mono" style="margin:0 0 8px;">#(history_file)</p>
+        <div class="diag-legend" aria-label="Légende des niveaux diagnostics">
+            <span class="diag-pill legend diag-pill-info">info</span>
+            <span class="diag-pill legend diag-pill-warning">warning</span>
+            <span class="diag-pill legend diag-pill-blocking">blocking</span>
+        </div>
 
         #if(history_present):
         <div style="overflow-x:auto;">
@@ -262,13 +276,13 @@
                         <div class="diag">
                             #if(row.priority_diagnostic_present):
                             <div class="diag-priority diag-priority-level-#(row.priority_diagnostic_severity)">
-                                <span class="diag-pill diag-pill-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity_label)</span>
+                                <span class="diag-pill diag-pill-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity)</span>
                                 <span class="diag-priority-label">#(row.priority_diagnostic_label)</span>
                                 #if(row.priority_diagnostic_cta_present):
                                 <div class="diag-priority-meta">
                                     ID: #(row.priority_diagnostic_id)
                                     <br>
-                                    <span class="diag-cta-pill">CTA: #(row.priority_diagnostic_cta)</span>
+                                    <span class="diag-cta-pill">Action recommandée: #(row.priority_diagnostic_cta)</span>
                                 </div>
                                 #else:
                                 <div class="diag-priority-meta">ID: #(row.priority_diagnostic_id)</div>
