@@ -12,6 +12,12 @@
             --muted: #5f676a;
             --accent: #0c6b58;
             --warning: #ac5d0c;
+            --sev-info-bg: #e8f4f0;
+            --sev-info-ink: #0c6b58;
+            --sev-warning-bg: #fff2df;
+            --sev-warning-ink: #915007;
+            --sev-blocking-bg: #fbe4de;
+            --sev-blocking-ink: #8b2b14;
             --border: #d9d2c4;
         }
         * { box-sizing: border-box; }
@@ -162,6 +168,16 @@
             border-radius: 8px;
             padding: 9px;
             background: #fff;
+            border-left-width: 4px;
+        }
+        .diag-row-level-info {
+            border-left-color: var(--sev-info-ink);
+        }
+        .diag-row-level-warning {
+            border-left-color: var(--sev-warning-ink);
+        }
+        .diag-row-level-blocking {
+            border-left-color: var(--sev-blocking-ink);
         }
         .diag-head {
             display: flex;
@@ -172,32 +188,38 @@
         }
         .diag-chip {
             border-radius: 999px;
-            padding: 2px 8px;
+            padding: 2px 9px;
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.03em;
         }
         .diag-blocking {
-            background: #fbe4de;
-            color: #8b2b14;
+            background: var(--sev-blocking-bg);
+            color: var(--sev-blocking-ink);
         }
         .diag-warning {
-            background: #fff2df;
-            color: #915007;
+            background: var(--sev-warning-bg);
+            color: var(--sev-warning-ink);
         }
         .diag-info {
-            background: #e8f4f0;
-            color: #0c6b58;
+            background: var(--sev-info-bg);
+            color: var(--sev-info-ink);
         }
         .diag-meta {
             color: var(--muted);
             font-size: 12px;
+            line-height: 1.4;
         }
         .diag-cta {
+            margin-top: 7px;
+            border: 1px solid #cbe7df;
+            background: #f4fbf9;
+            color: var(--accent);
+            border-radius: 6px;
+            padding: 6px 8px;
             font-size: 12px;
             font-weight: 700;
-            color: var(--accent);
         }
         .apply-blocking-note {
             display: none;
@@ -297,7 +319,7 @@
         <h2 style="margin:0 0 8px;">Diagnostics prioritaires récents</h2>
         <div class="diag-list">
             #for(row in priority_rows):
-            <article class="diag-row">
+            <article class="diag-row diag-row-level-#(row.priority_diagnostic_severity)">
                 <div class="diag-head">
                     <span class="mono">#(row.execution_id)</span>
                     <span class="diag-chip diag-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity_label)</span>
@@ -307,7 +329,7 @@
                     Tool: #(row.tool_id) · Action: <span class="mono">#(row.action)</span> · Statut: #(row.status_label) · ID: <span class="mono">#(row.priority_diagnostic_id)</span>
                 </div>
                 #if(row.priority_diagnostic_cta_present):
-                <div class="diag-cta">Action recommandée: #(row.priority_diagnostic_cta)</div>
+                <div class="diag-cta">CTA recommandé: #(row.priority_diagnostic_cta)</div>
                 #endif
             </article>
             #endfor

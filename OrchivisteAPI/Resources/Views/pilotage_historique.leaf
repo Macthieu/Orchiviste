@@ -13,6 +13,12 @@
             --accent: #0c6b58;
             --warning: #ac5d0c;
             --danger: #9b3a16;
+            --sev-info-bg: #e8f4f0;
+            --sev-info-ink: #0c6b58;
+            --sev-warning-bg: #fff2df;
+            --sev-warning-ink: #915007;
+            --sev-blocking-bg: #fbe4de;
+            --sev-blocking-ink: #8b2b14;
             --border: #d9d2c4;
         }
         * { box-sizing: border-box; }
@@ -133,8 +139,18 @@
             margin-bottom: 6px;
             border: 1px solid var(--border);
             border-radius: 7px;
-            padding: 6px;
+            padding: 7px;
             background: #fff;
+            border-left-width: 4px;
+        }
+        .diag-priority-level-info {
+            border-left-color: var(--sev-info-ink);
+        }
+        .diag-priority-level-warning {
+            border-left-color: var(--sev-warning-ink);
+        }
+        .diag-priority-level-blocking {
+            border-left-color: var(--sev-blocking-ink);
         }
         .diag-pill {
             display: inline-block;
@@ -147,21 +163,39 @@
             margin-right: 6px;
         }
         .diag-pill-blocking {
-            background: #fbe4de;
-            color: #8b2b14;
+            background: var(--sev-blocking-bg);
+            color: var(--sev-blocking-ink);
         }
         .diag-pill-warning {
-            background: #fff2df;
-            color: #915007;
+            background: var(--sev-warning-bg);
+            color: var(--sev-warning-ink);
         }
         .diag-pill-info {
-            background: #e8f4f0;
-            color: #0c6b58;
+            background: var(--sev-info-bg);
+            color: var(--sev-info-ink);
+        }
+        .diag-priority-label {
+            font-weight: 700;
+            line-height: 1.35;
         }
         .diag-priority-meta {
             color: var(--muted);
             font-size: 11px;
-            margin-top: 3px;
+            margin-top: 4px;
+            line-height: 1.35;
+        }
+        .diag-cta-pill {
+            display: inline-block;
+            margin-top: 4px;
+            border-radius: 999px;
+            padding: 2px 7px;
+            background: #f4fbf9;
+            border: 1px solid #cbe7df;
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
         }
     </style>
 </head>
@@ -227,11 +261,15 @@
                         #if(row.diagnostics_present):
                         <div class="diag">
                             #if(row.priority_diagnostic_present):
-                            <div class="diag-priority">
+                            <div class="diag-priority diag-priority-level-#(row.priority_diagnostic_severity)">
                                 <span class="diag-pill diag-pill-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity_label)</span>
-                                #(row.priority_diagnostic_label)
+                                <span class="diag-priority-label">#(row.priority_diagnostic_label)</span>
                                 #if(row.priority_diagnostic_cta_present):
-                                <div class="diag-priority-meta">CTA: #(row.priority_diagnostic_cta) · ID: #(row.priority_diagnostic_id)</div>
+                                <div class="diag-priority-meta">
+                                    ID: #(row.priority_diagnostic_id)
+                                    <br>
+                                    <span class="diag-cta-pill">CTA: #(row.priority_diagnostic_cta)</span>
+                                </div>
                                 #else:
                                 <div class="diag-priority-meta">ID: #(row.priority_diagnostic_id)</div>
                                 #endif
