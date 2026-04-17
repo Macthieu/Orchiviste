@@ -129,6 +129,11 @@
             font-weight: 700;
             cursor: pointer;
         }
+        .btn:disabled {
+            background: #98a4a0;
+            border-color: #98a4a0;
+            cursor: not-allowed;
+        }
         .warning-box {
             margin-top: 8px;
             border: 1px solid #e0c9b0;
@@ -145,6 +150,64 @@
         .quick-link a {
             color: var(--accent);
             text-decoration: none;
+            font-weight: 700;
+        }
+        .diag-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .diag-row {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px;
+            background: #fff;
+        }
+        .diag-head {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .diag-chip {
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .diag-blocking {
+            background: #fbe4de;
+            color: #8b2b14;
+        }
+        .diag-warning {
+            background: #fff2df;
+            color: #915007;
+        }
+        .diag-info {
+            background: #e8f4f0;
+            color: #0c6b58;
+        }
+        .diag-meta {
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .diag-cta {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .apply-blocking-note {
+            display: none;
+            margin-top: 8px;
+            border: 1px solid #efb8aa;
+            background: #fff3ef;
+            color: #8b2b14;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
             font-weight: 700;
         }
     </style>
@@ -181,7 +244,7 @@
         <h2 style="margin:0 0 10px;">Lancement canonique (`run --request --result`)</h2>
         <p class="quick-link">Consulter les exécutions récentes: <a href="/ui/pilotage/historique">Historique</a></p>
 
-        <form action="/ui/pilotage/run" method="post">
+        <form id="pilotageRunForm" action="/ui/pilotage/run" method="post" data-apply-blocking="#(apply_blocking_guard_available)">
             <div class="form-grid">
                 <label>Tool
                     <select name="tool_id">
@@ -191,7 +254,7 @@
                     </select>
                 </label>
                 <label>Action
-                    <input type="text" name="action" value="#(selected_action)" placeholder="run">
+                    <input id="pilotageActionInput" type="text" name="action" value="#(selected_action)" placeholder="run">
                 </label>
                 <label>Workspace path (optionnel)
                     <input type="text" name="workspace_path" value="#(selected_workspace_path)">
@@ -216,9 +279,61 @@
                 et les paramètres de confirmation (`confirm_*`) doivent aussi être présents dans le JSON.
             </div>
 
-            <button class="btn" type="submit">Exécuter</button>
+            <div id="applyBlockingNote" class="apply-blocking-note">
+                Apply bloqué par un diagnostic prioritaire blocking:
+                #if(apply_blocking_guard_reason_present):
+                <span class="mono">#(apply_blocking_guard_reason)</span>
+                #else:
+                <span class="mono">diagnostic blocking actif</span>
+                #endif
+            </div>
+
+            <button id="pilotageSubmitButton" class="btn" type="submit" #(selected_action_apply_blocked_attr)>Exécuter</button>
         </form>
     </section>
+
+    #if(priority_present):
+    <section class="card">
+        <h2 style="margin:0 0 8px;">Diagnostics prioritaires récents</h2>
+        <div class="diag-list">
+            #for(row in priority_rows):
+            <article class="diag-row">
+                <div class="diag-head">
+                    <span class="mono">#(row.execution_id)</span>
+                    <span class="diag-chip diag-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity_label)</span>
+                    <strong>#(row.priority_diagnostic_label)</strong>
+                </div>
+                <div class="diag-meta">
+                    Tool: #(row.tool_id) · Action: <span class="mono">#(row.action)</span> · Statut: #(row.status_label) · ID: <span class="mono">#(row.priority_diagnostic_id)</span>
+                </div>
+                #if(row.priority_diagnostic_cta_present):
+                <div class="diag-cta">Action recommandée: #(row.priority_diagnostic_cta)</div>
+                #endif
+            </article>
+            #endfor
+        </div>
+    </section>
+    #endif
 </main>
+<script>
+(() => {
+  const form = document.getElementById("pilotageRunForm");
+  const actionInput = document.getElementById("pilotageActionInput");
+  const submitButton = document.getElementById("pilotageSubmitButton");
+  const blockingNote = document.getElementById("applyBlockingNote");
+  if (!form || !actionInput || !submitButton || !blockingNote) return;
+
+  const hasBlocking = form.dataset.applyBlocking === "true";
+  const syncState = () => {
+    const action = (actionInput.value || "").trim().toLowerCase();
+    const shouldBlock = hasBlocking && action === "apply";
+    submitButton.disabled = shouldBlock;
+    blockingNote.style.display = shouldBlock ? "block" : "none";
+  };
+
+  actionInput.addEventListener("input", syncState);
+  syncState();
+})();
+</script>
 </body>
 </html>

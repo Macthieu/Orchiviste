@@ -129,6 +129,40 @@
             letter-spacing: 0.02em;
             margin-right: 6px;
         }
+        .diag-priority {
+            margin-bottom: 6px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 6px;
+            background: #fff;
+        }
+        .diag-pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-right: 6px;
+        }
+        .diag-pill-blocking {
+            background: #fbe4de;
+            color: #8b2b14;
+        }
+        .diag-pill-warning {
+            background: #fff2df;
+            color: #915007;
+        }
+        .diag-pill-info {
+            background: #e8f4f0;
+            color: #0c6b58;
+        }
+        .diag-priority-meta {
+            color: var(--muted);
+            font-size: 11px;
+            margin-top: 3px;
+        }
     </style>
 </head>
 <body>
@@ -192,6 +226,17 @@
                     <td class="mono">
                         #if(row.diagnostics_present):
                         <div class="diag">
+                            #if(row.priority_diagnostic_present):
+                            <div class="diag-priority">
+                                <span class="diag-pill diag-pill-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity_label)</span>
+                                #(row.priority_diagnostic_label)
+                                #if(row.priority_diagnostic_cta_present):
+                                <div class="diag-priority-meta">CTA: #(row.priority_diagnostic_cta) · ID: #(row.priority_diagnostic_id)</div>
+                                #else:
+                                <div class="diag-priority-meta">ID: #(row.priority_diagnostic_id)</div>
+                                #endif
+                            </div>
+                            #endif
                             #if(row.extraction_provenance_present):
                             <div class="diag-item"><span class="diag-key">Extraction</span>#(row.extraction_provenance)</div>
                             #endif

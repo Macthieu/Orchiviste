@@ -48,6 +48,28 @@ private struct UICockpitHistoryRow: Encodable {
     let warnings_count: String
     let warnings_summary: String
     let warnings_present: Bool
+    let priority_diagnostic_present: Bool
+    let priority_diagnostic_id: String
+    let priority_diagnostic_label: String
+    let priority_diagnostic_severity: String
+    let priority_diagnostic_severity_label: String
+    let priority_diagnostic_cta: String
+    let priority_diagnostic_cta_present: Bool
+    let priority_diagnostic_blocking: Bool
+}
+
+private struct UICockpitPriorityRunRow: Encodable {
+    let execution_id: String
+    let tool_id: String
+    let action: String
+    let status_label: String
+    let priority_diagnostic_id: String
+    let priority_diagnostic_label: String
+    let priority_diagnostic_severity: String
+    let priority_diagnostic_severity_label: String
+    let priority_diagnostic_cta: String
+    let priority_diagnostic_cta_present: Bool
+    let priority_diagnostic_blocking: Bool
 }
 
 private struct UICockpitContext: Encodable {
@@ -59,9 +81,16 @@ private struct UICockpitContext: Encodable {
     let selected_parameters_json: String
     let selected_input_artifacts_json: String
     let selected_allow_destructive_attr: String
+    let selected_action_apply_blocked: Bool
+    let selected_action_apply_blocked_attr: String
+    let apply_blocking_guard_available: Bool
+    let apply_blocking_guard_reason: String
+    let apply_blocking_guard_reason_present: Bool
     let history_rows: [UICockpitHistoryRow]
     let history_present: Bool
     let history_file: String
+    let priority_rows: [UICockpitPriorityRunRow]
+    let priority_present: Bool
     let notice: String?
     let error: String?
 }
@@ -82,6 +111,10 @@ private struct UICockpitHistoryDiagnostics: Sendable {
     var reglesModuleVersion: String?
     var reglesRuleID: String?
     var reglesFallbackReason: String?
+    var collisionCount: Int?
+    var idempotentCount: Int?
+    var planDigest: String?
+    var errors: [String]
     var warnings: [String]
 
     static let empty = UICockpitHistoryDiagnostics(
@@ -91,6 +124,10 @@ private struct UICockpitHistoryDiagnostics: Sendable {
         reglesModuleVersion: nil,
         reglesRuleID: nil,
         reglesFallbackReason: nil,
+        collisionCount: nil,
+        idempotentCount: nil,
+        planDigest: nil,
+        errors: [],
         warnings: []
     )
 
@@ -101,7 +138,23 @@ private struct UICockpitHistoryDiagnostics: Sendable {
         reglesModuleVersion != nil ||
         reglesRuleID != nil ||
         reglesFallbackReason != nil ||
+        collisionCount != nil ||
+        idempotentCount != nil ||
+        planDigest != nil ||
+        !errors.isEmpty ||
         !warnings.isEmpty
+    }
+}
+
+private struct UICockpitPriorityDiagnosticSummary: Sendable {
+    let id: String
+    let label: String
+    let severity: String
+    let severityLabel: String
+    let cta: String?
+
+    var isBlocking: Bool {
+        severity == "blocking"
     }
 }
 
@@ -141,6 +194,7 @@ func registerCockpitUIRoutes(_ app: Application) {
         let historyRows = history.entries.map { entry in
             let diagnostics = loadHistoryDiagnostics(for: entry, logger: req.logger)
             let warningSummary = summarizeWarnings(diagnostics.warnings)
+            let priorityDiagnostic = prioritizedDiagnostic(for: entry, diagnostics: diagnostics)
             return UICockpitHistoryRow(
                 execution_id: entry.executionID,
                 request_id: entry.requestID,
@@ -169,9 +223,43 @@ func registerCockpitUIRoutes(_ app: Application) {
                 regles_fallback_reason_present: diagnostics.reglesFallbackReason != nil,
                 warnings_count: diagnostics.warnings.isEmpty ? "-" : String(diagnostics.warnings.count),
                 warnings_summary: warningSummary ?? "-",
-                warnings_present: !diagnostics.warnings.isEmpty
+                warnings_present: !diagnostics.warnings.isEmpty,
+                priority_diagnostic_present: priorityDiagnostic != nil,
+                priority_diagnostic_id: priorityDiagnostic?.id ?? "-",
+                priority_diagnostic_label: priorityDiagnostic?.label ?? "-",
+                priority_diagnostic_severity: priorityDiagnostic?.severity ?? "info",
+                priority_diagnostic_severity_label: priorityDiagnostic?.severityLabel ?? "Info",
+                priority_diagnostic_cta: priorityDiagnostic?.cta ?? "-",
+                priority_diagnostic_cta_present: priorityDiagnostic?.cta != nil,
+                priority_diagnostic_blocking: priorityDiagnostic?.isBlocking ?? false
             )
         }
+
+        let priorityRows = historyRows
+            .filter(\.priority_diagnostic_present)
+            .prefix(5)
+            .map { row in
+                UICockpitPriorityRunRow(
+                    execution_id: row.execution_id,
+                    tool_id: row.tool_id,
+                    action: row.action,
+                    status_label: row.status_label,
+                    priority_diagnostic_id: row.priority_diagnostic_id,
+                    priority_diagnostic_label: row.priority_diagnostic_label,
+                    priority_diagnostic_severity: row.priority_diagnostic_severity,
+                    priority_diagnostic_severity_label: row.priority_diagnostic_severity_label,
+                    priority_diagnostic_cta: row.priority_diagnostic_cta,
+                    priority_diagnostic_cta_present: row.priority_diagnostic_cta_present,
+                    priority_diagnostic_blocking: row.priority_diagnostic_blocking
+                )
+            }
+
+        let latestBlockingDiagnostic = historyRows.first { $0.priority_diagnostic_blocking }
+        let applyBlockingGuardAvailable = latestBlockingDiagnostic != nil
+        let applyBlockingGuardReason = latestBlockingDiagnostic.map { row in
+            "[\(row.priority_diagnostic_id)] \(row.priority_diagnostic_label)"
+        } ?? ""
+        let selectedActionApplyBlocked = selectedAction.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "apply" && applyBlockingGuardAvailable
 
         return UICockpitContext(
             tools: toolCards,
@@ -182,9 +270,16 @@ func registerCockpitUIRoutes(_ app: Application) {
             selected_parameters_json: selectedParametersJSON,
             selected_input_artifacts_json: selectedInputArtifactsJSON,
             selected_allow_destructive_attr: selectedAllowDestructive ? "checked" : "",
+            selected_action_apply_blocked: selectedActionApplyBlocked,
+            selected_action_apply_blocked_attr: selectedActionApplyBlocked ? "disabled" : "",
+            apply_blocking_guard_available: applyBlockingGuardAvailable,
+            apply_blocking_guard_reason: applyBlockingGuardReason,
+            apply_blocking_guard_reason_present: applyBlockingGuardAvailable,
             history_rows: historyRows,
             history_present: !historyRows.isEmpty,
             history_file: history.historyFile,
+            priority_rows: priorityRows,
+            priority_present: !priorityRows.isEmpty,
             notice: nonEmpty(req.query[String.self, at: "notice"]),
             error: nonEmpty(req.query[String.self, at: "error"])
         )
@@ -297,8 +392,134 @@ private func loadHistoryDiagnostics(for entry: CockpitHistoryEntry, logger: Logg
         reglesModuleVersion: stringValue(from: metadata["regles_module_version"]),
         reglesRuleID: stringValue(from: metadata["regles_rule_id"]),
         reglesFallbackReason: stringValue(from: metadata["regles_fallback_reason"]),
+        collisionCount: intValue(from: metadata["collision_count"]),
+        idempotentCount: intValue(from: metadata["idempotent_count"]),
+        planDigest: stringValue(from: metadata["plan_digest"]),
+        errors: extractErrorLabels(fromResultRoot: resultRoot),
         warnings: warnings
     )
+}
+
+private func prioritizedDiagnostic(
+    for entry: CockpitHistoryEntry,
+    diagnostics: UICockpitHistoryDiagnostics
+) -> UICockpitPriorityDiagnosticSummary? {
+    let status = entry.status
+    let summary = (entry.summary ?? "").lowercased()
+    let fallbackReason = (diagnostics.reglesFallbackReason ?? "").lowercased()
+    let errorsText = diagnostics.errors.joined(separator: " ").lowercased()
+
+    if diagnostics.collisionCount ?? 0 > 0 || summary.contains("collision") || errorsText.contains("collision") {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RN_COLLISION_BLOCKING",
+            label: "Collision de destination bloquante",
+            severity: "blocking",
+            severityLabel: "Blocking",
+            cta: "Stop Apply"
+        )
+    }
+
+    if summary.contains("expected_plan_digest") || summary.contains("digest") || errorsText.contains("expected_plan_digest") {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RN_PLAN_DIGEST_MISMATCH",
+            label: "Digest preview/apply incohérent",
+            severity: "blocking",
+            severityLabel: "Blocking",
+            cta: "Re-preview"
+        )
+    }
+
+    if summary.contains("allow_destructive") || summary.contains("confirm_apply") || errorsText.contains("allow_destructive") {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RN_DESTRUCTIVE_GUARD_MISSING",
+            label: "Garde-fou apply manquant",
+            severity: "blocking",
+            severityLabel: "Blocking",
+            cta: "Stop Apply"
+        )
+    }
+
+    if fallbackReason == "required_metadata_fields_missing" {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RG_REQUIRED_METADATA_FIELDS_MISSING",
+            label: "Metadata requises manquantes",
+            severity: "blocking",
+            severityLabel: "Blocking",
+            cta: "Re-run Analyse"
+        )
+    }
+
+    if ["bundle_unreadable_or_invalid", "bundle_has_no_naming_rules"].contains(fallbackReason) {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RG_BUNDLE_UNREADABLE_OR_INVALID",
+            label: "Bundle règles invalide",
+            severity: "blocking",
+            severityLabel: "Blocking",
+            cta: "Rebuild Bundle"
+        )
+    }
+
+    if ["naming_rule_not_found", "template_not_supported", "naming_rule_id_missing", "class_code_missing", "document_metadata_not_provided"].contains(fallbackReason) {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RG_RULE_NOT_FOUND_OR_NOT_APPLICABLE",
+            label: "Règle absente ou non applicable",
+            severity: "blocking",
+            severityLabel: "Blocking",
+            cta: "Re-preview"
+        )
+    }
+
+    if !fallbackReason.isEmpty {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RG_FALLBACK_REASON_PRESENT",
+            label: "Fallback règle: \(fallbackReason)",
+            severity: "warning",
+            severityLabel: "Warning",
+            cta: "Re-preview"
+        )
+    }
+
+    if !diagnostics.warnings.isEmpty {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "AN_EXTRACTION_WARNING_STRUCTURED",
+            label: "Qualité extraction à vérifier",
+            severity: "warning",
+            severityLabel: "Warning",
+            cta: "Re-run Analyse"
+        )
+    }
+
+    if diagnostics.extractionProvenance?.lowercased() == "filename_fallback" {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "AN_EXTRACTION_PROVENANCE_FALLBACK",
+            label: "Extraction en provenance fallback",
+            severity: "warning",
+            severityLabel: "Warning",
+            cta: "Re-run Analyse"
+        )
+    }
+
+    if diagnostics.idempotentCount ?? 0 > 0, status == .succeeded {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RN_IDEMPOTENT_NOOP",
+            label: "Aucun changement requis (no-op)",
+            severity: "info",
+            severityLabel: "Info",
+            cta: nil
+        )
+    }
+
+    if status == .failed {
+        return UICockpitPriorityDiagnosticSummary(
+            id: "RN_EXECUTION_FAILED",
+            label: "Échec d'exécution à revoir",
+            severity: "warning",
+            severityLabel: "Warning",
+            cta: "Re-preview"
+        )
+    }
+
+    return nil
 }
 
 private func summarizeWarnings(_ warnings: [String]) -> String? {
@@ -439,6 +660,18 @@ private func extractWarningLabels(from rawValue: Any?) -> [String] {
         }
 
         return stringValue(from: object["message"])
+    }
+}
+
+private func extractErrorLabels(fromResultRoot root: [String: Any]) -> [String] {
+    guard let errors = root["errors"] as? [[String: Any]] else {
+        return []
+    }
+    return errors.compactMap { error in
+        if let code = stringValue(from: error["code"]) {
+            return code
+        }
+        return stringValue(from: error["message"])
     }
 }
 
