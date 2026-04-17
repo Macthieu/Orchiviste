@@ -158,6 +158,67 @@
             text-decoration: none;
             font-weight: 700;
         }
+        .decision-box {
+            margin: 10px 0 6px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            padding: 10px;
+        }
+        .decision-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .decision-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .decision-state {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 2px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .decision-state-go {
+            background: var(--sev-info-bg);
+            color: var(--sev-info-ink);
+        }
+        .decision-state-no-go {
+            background: var(--sev-blocking-bg);
+            color: var(--sev-blocking-ink);
+        }
+        .decision-text {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .decision-list {
+            margin: 6px 0 0;
+            padding-left: 18px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        .decision-links {
+            margin-top: 7px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .decision-links a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
         .diag-list {
             display: grid;
             gap: 8px;
@@ -281,6 +342,32 @@
             <span class="diag-chip legend diag-warning">warning</span>
             <span class="diag-chip legend diag-blocking">blocking</span>
         </div>
+        <section class="decision-box" aria-label="Decision Apply">
+            <div class="decision-header">
+                <h3 class="decision-title">Decision Apply</h3>
+                #if(apply_blocking_guard_available):
+                <span class="decision-state decision-state-no-go">No-Go</span>
+                #else:
+                <span class="decision-state decision-state-go">Go</span>
+                #endif
+            </div>
+            #if(apply_blocking_guard_available):
+            <p class="decision-text">Apply doit rester bloqué tant qu'un diagnostic prioritaire <strong>blocking</strong> est actif.</p>
+            #if(apply_blocking_guard_reason_present):
+            <p class="decision-text"><span class="mono">#(apply_blocking_guard_reason)</span></p>
+            #endif
+            #else:
+            <p class="decision-text">Apply peut etre envisage apres un preview valide et verification operateur finale.</p>
+            #endif
+            <ul class="decision-list">
+                <li>Stop Apply si un diagnostic <strong>blocking</strong> est present.</li>
+                <li>Conserver les garde-fous existants (`allow_destructive` + confirmations `confirm_*`).</li>
+            </ul>
+            <div class="decision-links">
+                <a href="https://github.com/Macthieu/Orchiviste/blob/main/docs/S3.1-RUNBOOK-RENAME-CHAIN.md" target="_blank" rel="noopener noreferrer">Runbook</a>
+                <a href="https://github.com/Macthieu/Orchiviste/blob/main/docs/S3.1-INCIDENT-PLAYBOOK.md" target="_blank" rel="noopener noreferrer">Incident playbook</a>
+            </div>
+        </section>
 
         <form id="pilotageRunForm" action="/ui/pilotage/run" method="post" data-apply-blocking="#(apply_blocking_guard_available)">
             <div class="form-grid">
