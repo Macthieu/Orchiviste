@@ -193,6 +193,29 @@
             margin-top: 4px;
             line-height: 1.35;
         }
+        .diag-decision {
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .decision-pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .decision-pill-go {
+            background: var(--sev-info-bg);
+            color: var(--sev-info-ink);
+        }
+        .decision-pill-no-go {
+            background: var(--sev-blocking-bg);
+            color: var(--sev-blocking-ink);
+        }
         .diag-cta-pill {
             display: inline-block;
             margin-top: 4px;
@@ -278,6 +301,14 @@
                             <div class="diag-priority diag-priority-level-#(row.priority_diagnostic_severity)">
                                 <span class="diag-pill diag-pill-#(row.priority_diagnostic_severity)">#(row.priority_diagnostic_severity)</span>
                                 <span class="diag-priority-label">#(row.priority_diagnostic_label)</span>
+                                <div class="diag-decision">
+                                    <span class="diag-key">Decision Apply</span>
+                                    #if(row.priority_diagnostic_blocking):
+                                    <span class="decision-pill decision-pill-no-go">No-Go</span>
+                                    #else:
+                                    <span class="decision-pill decision-pill-go">Go</span>
+                                    #endif
+                                </div>
                                 #if(row.priority_diagnostic_cta_present):
                                 <div class="diag-priority-meta">
                                     ID: #(row.priority_diagnostic_id)
