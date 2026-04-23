@@ -254,11 +254,8 @@ func registerCockpitUIRoutes(_ app: Application) {
                 )
             }
 
-        let latestBlockingDiagnostic = historyRows.first { $0.priority_diagnostic_blocking }
-        let applyBlockingGuardAvailable = latestBlockingDiagnostic != nil
-        let applyBlockingGuardReason = latestBlockingDiagnostic.map { row in
-            "[\(row.priority_diagnostic_id)] \(row.priority_diagnostic_label)"
-        } ?? ""
+        let applyBlockingGuardReason = latestBlockingGuardReason(in: history.entries, logger: req.logger)
+        let applyBlockingGuardAvailable = applyBlockingGuardReason != nil
         let selectedActionApplyBlocked = selectedAction.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "apply" && applyBlockingGuardAvailable
 
         return UICockpitContext(
@@ -273,7 +270,7 @@ func registerCockpitUIRoutes(_ app: Application) {
             selected_action_apply_blocked: selectedActionApplyBlocked,
             selected_action_apply_blocked_attr: selectedActionApplyBlocked ? "disabled" : "",
             apply_blocking_guard_available: applyBlockingGuardAvailable,
-            apply_blocking_guard_reason: applyBlockingGuardReason,
+            apply_blocking_guard_reason: applyBlockingGuardReason ?? "",
             apply_blocking_guard_reason_present: applyBlockingGuardAvailable,
             history_rows: historyRows,
             history_present: !historyRows.isEmpty,
@@ -293,11 +290,21 @@ func registerCockpitUIRoutes(_ app: Application) {
                 throw Abort(.badRequest, reason: "Le tool_id est requis.")
             }
 
+            let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
+            let selectedTool = runtime.tools.first(where: { $0.descriptor.id == toolID }) ?? runtime.tools.first
+            let selectedAction = normalizedCockpitAction(form.action, fallback: selectedTool?.descriptor.defaultAction ?? "run")
+            if selectedAction == "apply" {
+                let history = await CockpitCanonicalLauncher.history(limit: 25, logger: req.logger)
+                if let blockingGuardReason = latestBlockingGuardReason(in: history.entries, logger: req.logger) {
+                    throw Abort(.badRequest, reason: "Apply bloqué par un diagnostic prioritaire blocking: \(blockingGuardReason)")
+                }
+            }
+
             let parameters = try parseParametersJSON(form.parameters_json)
             let inputArtifacts = try parseInputArtifactsJSON(form.input_artifacts_json)
             let launchRequest = CockpitLaunchRequest(
                 toolID: toolID,
-                action: nonEmpty(form.action),
+                action: selectedAction,
                 correlationID: req.headers.first(name: "x-correlation-id"),
                 workspacePath: nonEmpty(form.workspace_path),
                 inputArtifacts: inputArtifacts,
@@ -408,18 +415,31 @@ private func prioritizedDiagnostic(
     let summary = (entry.summary ?? "").lowercased()
     let fallbackReason = (diagnostics.reglesFallbackReason ?? "").lowercased()
     let errorsText = diagnostics.errors.joined(separator: " ").lowercased()
+    let destinationExistsSignal =
+        summary.contains("destination_exists") ||
+        summary.contains("destination already exists") ||
+        summary.contains("destination existante") ||
+        errorsText.contains("destination_exists") ||
+        errorsText.contains("destination already exists") ||
+        errorsText.contains("destination existante")
 
-    if diagnostics.collisionCount ?? 0 > 0 || summary.contains("collision") || errorsText.contains("collision") {
+    if diagnostics.collisionCount ?? 0 > 0 ||
+        summary.contains("collision") ||
+        errorsText.contains("collision") ||
+        destinationExistsSignal {
         return UICockpitPriorityDiagnosticSummary(
             id: "RN_COLLISION_BLOCKING",
-            label: "Collision de destination bloquante",
+            label: "Collision bloquante / destination existante",
             severity: "blocking",
             severityLabel: "Blocking",
             cta: "Stop Apply"
         )
     }
 
-    if summary.contains("expected_plan_digest") || summary.contains("digest") || errorsText.contains("expected_plan_digest") {
+    if summary.contains("expected_plan_digest") ||
+        summary.contains("digest") ||
+        errorsText.contains("expected_plan_digest") ||
+        errorsText.contains("plan_digest") {
         return UICockpitPriorityDiagnosticSummary(
             id: "RN_PLAN_DIGEST_MISMATCH",
             label: "Digest preview/apply incohérent",
@@ -439,7 +459,9 @@ private func prioritizedDiagnostic(
         )
     }
 
-    if fallbackReason == "required_metadata_fields_missing" {
+    if fallbackReason == "required_metadata_fields_missing" ||
+        summary.contains("required_metadata_fields") ||
+        errorsText.contains("required_metadata_fields") {
         return UICockpitPriorityDiagnosticSummary(
             id: "RG_REQUIRED_METADATA_FIELDS_MISSING",
             label: "Metadata requises manquantes",
@@ -544,6 +566,22 @@ private func summarizeWarnings(_ warnings: [String]) -> String? {
 
     let prefix = summarized.prefix(3).joined(separator: ", ")
     return "\(prefix), +\(summarized.count - 3) autre(s)"
+}
+
+private func latestBlockingGuardReason(
+    in historyEntries: [CockpitHistoryEntry],
+    logger: Logger
+) -> String? {
+    for entry in historyEntries {
+        let diagnostics = loadHistoryDiagnostics(for: entry, logger: logger)
+        guard let priorityDiagnostic = prioritizedDiagnostic(for: entry, diagnostics: diagnostics),
+              priorityDiagnostic.isBlocking else {
+            continue
+        }
+        return "[\(priorityDiagnostic.id)] \(priorityDiagnostic.label)"
+    }
+
+    return nil
 }
 
 private func readJSONObject(atPath path: String, logger: Logger) -> [String: Any]? {
@@ -744,6 +782,12 @@ private func parseBooleanFlag(_ raw: String?, defaultValue: Bool = false) -> Boo
     default:
         return defaultValue
     }
+}
+
+private func normalizedCockpitAction(_ rawAction: String?, fallback: String) -> String {
+    let fallbackValue = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+    let candidate = rawAction?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return candidate.isEmpty ? fallbackValue : candidate
 }
 
 private func uiStatusLabel(_ status: ToolStatus) -> String {
