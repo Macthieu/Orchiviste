@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "preset": {
+    "id": "8fcf8b70-5f54-479f-9d2a-5ce38fbda2b8",
+    "formatVersion": 1,
+    "name": "Orchiviste - Renommage standard",
+    "category": "Orchiviste",
+    "rules": {
+      "replace": {
+        "enabled": true,
+        "find": "\\s+",
+        "replace": " ",
+        "regex": true,
+        "caseSensitive": false
+      },
+      "remove": {
+        "enabled": true,
+        "from": null,
+        "to": null,
+        "collapseSpaces": true,
+        "trimWhitespace": true
+      },
+      "add": {
+        "enabled": false,
+        "usePrefix": false,
+        "prefix": "",
+        "useSuffix": false,
+        "suffix": "",
+        "insertText": "",
+        "insertIndex": 1
+      },
+      "date": {
+        "enabled": false,
+        "format": "yyyy-MM-dd",
+        "usePrefix": false,
+        "useSuffix": false,
+        "useAtPosition": true,
+        "atIndex": 1
+      },
+      "numbering": {
+        "enabled": false,
+        "asPrefix": true,
+        "start": 1,
+        "step": 1,
+        "pad": 3,
+        "separator": " - ",
+        "onlySelection": false,
+        "pattern": ""
+      },
+      "casing": {
+        "enabled": false,
+        "style": "unchanged"
+      },
+      "ext": {
+        "enabled": false,
+        "newExtension": "",
+        "caseStyle": "unchanged"
+      },
+      "folder": {
+        "enabled": false,
+        "addParentAsPrefix": true,
+        "separator": " - "
+      },
+      "special": {
+        "enabled": true,
+        "normalizeUnicode": true,
+        "stripDiacritics": false,
+        "dashToEnDash": false,
+        "spacesToUnderscore": false
+      },
+      "filters": {
+        "recursive": false,
+        "includeHidden": false,
+        "includeRegex": "",
+        "excludeRegex": ""
+      },
+      "destination": {
+        "enabled": false,
+        "url": null,
+        "copyInsteadOfMove": false
+      }
+    }
+  }
+}

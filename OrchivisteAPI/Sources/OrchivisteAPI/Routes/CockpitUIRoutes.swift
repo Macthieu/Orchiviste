@@ -246,7 +246,9 @@ func registerCockpitUIRoutes(_ app: Application) {
                 default_action: tool.descriptor.defaultAction,
                 default_parameters_json: prettyJSONString(tool.descriptor.defaultParameters),
                 repository_path: tool.descriptor.repositoryPath ?? "-",
-                detail_url: "/ui/muni/apps/\(urlPathComponentEncoded(tool.descriptor.id))"
+                detail_url: tool.descriptor.id == "MuniRenommage"
+                    ? "/ui/muni/apps/MuniRenommage/employe"
+                    : "/ui/muni/apps/\(urlPathComponentEncoded(tool.descriptor.id))"
             )
         }
 
