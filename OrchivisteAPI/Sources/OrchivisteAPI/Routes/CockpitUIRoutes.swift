@@ -1,3 +1,4 @@
+import Fluent
 import Foundation
 import OrchivisteKitContracts
 import Vapor
@@ -17,6 +18,7 @@ private struct UICockpitToolCard: Encodable {
     let default_action: String
     let default_parameters_json: String
     let repository_path: String
+    let detail_url: String
 }
 
 private struct UICockpitHistoryRow: Encodable {
@@ -95,6 +97,62 @@ private struct UICockpitContext: Encodable {
     let error: String?
 }
 
+private struct UIMuniAppActionSummary: Encodable {
+    let action_key: String
+    let action_label: String
+    let is_primary: Bool
+    let launch_url: String
+}
+
+private struct UIMuniRunProfileSummary: Encodable {
+    let profile_key: String
+    let display_name: String
+    let action_key: String
+    let parameters_json: String
+    let allow_destructive: Bool
+    let expert_only: Bool
+    let launch_url: String
+}
+
+private struct UIMuniAppRunSummary: Encodable {
+    let execution_id: String
+    let action: String
+    let status: String
+    let status_label: String
+    let finished_at: String
+    let summary: String
+    let diagnostic_present: Bool
+    let diagnostic_label: String
+    let diagnostic_severity: String
+    let diagnostic_severity_label: String
+    let diagnostic_cta: String
+    let diagnostic_cta_present: Bool
+}
+
+private struct UIMuniAppContext: Encodable {
+    let app_id: String
+    let display_name: String
+    let mission: String
+    let version: String
+    let integration_status: String
+    let capabilities: String
+    let repository_path: String
+    let executable: String
+    let default_action: String
+    let availability_label: String
+    let availability_reason: String
+    let actions: [UIMuniAppActionSummary]
+    let actions_present: Bool
+    let profiles: [UIMuniRunProfileSummary]
+    let profiles_present: Bool
+    let recent_runs: [UIMuniAppRunSummary]
+    let recent_runs_present: Bool
+    let expert_launch_url: String
+    let back_to_catalog_url: String
+    let notice: String?
+    let error: String?
+}
+
 private struct UICockpitRunForm: Content {
     let tool_id: String
     let action: String?
@@ -160,7 +218,7 @@ private struct UICockpitPriorityDiagnosticSummary: Sendable {
 
 func registerCockpitUIRoutes(_ app: Application) {
     let buildPilotageContext: @Sendable (Request) async -> UICockpitContext = { req in
-        let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
+        let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
         let selectedToolID = nonEmpty(req.query[String.self, at: "tool"]) ?? runtime.tools.first?.descriptor.id ?? ""
         let selectedTool = runtime.tools.first(where: { $0.descriptor.id == selectedToolID }) ?? runtime.tools.first
 
@@ -170,7 +228,7 @@ func registerCockpitUIRoutes(_ app: Application) {
         let selectedInputArtifactsJSON = nonEmpty(req.query[String.self, at: "input_artifacts_json"]) ?? "[]"
         let selectedAllowDestructive = parseBooleanFlag(req.query[String.self, at: "allow_destructive"], defaultValue: false)
 
-        let history = await CockpitCanonicalLauncher.history(limit: 25, logger: req.logger)
+        let history = await CockpitCanonicalLauncher.history(limit: 25, on: req.db, logger: req.logger)
 
         let toolCards = runtime.tools.map { tool in
             UICockpitToolCard(
@@ -187,7 +245,8 @@ func registerCockpitUIRoutes(_ app: Application) {
                 selected_attribute: tool.descriptor.id == selectedToolID ? "selected" : "",
                 default_action: tool.descriptor.defaultAction,
                 default_parameters_json: prettyJSONString(tool.descriptor.defaultParameters),
-                repository_path: tool.descriptor.repositoryPath ?? "-"
+                repository_path: tool.descriptor.repositoryPath ?? "-",
+                detail_url: "/ui/muni/apps/\(urlPathComponentEncoded(tool.descriptor.id))"
             )
         }
 
@@ -282,6 +341,91 @@ func registerCockpitUIRoutes(_ app: Application) {
         )
     }
 
+    let buildMuniAppContext: @Sendable (Request) async throws -> UIMuniAppContext = { req in
+        guard let appID = nonEmpty(req.parameters.get("id")) else {
+            throw Abort(.badRequest, reason: "Identifiant application Muni manquant.")
+        }
+
+        let baseConfig = CockpitConfigLoader.load(logger: req.logger)
+        guard let appRecord = try await CockpitRegistryRepository.fetchMuniApp(
+            appID: appID,
+            baseConfig: baseConfig,
+            on: req.db
+        ) else {
+            throw Abort(.notFound, reason: "Application Muni introuvable: \(appID)")
+        }
+
+        let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
+        let runtimeTool = runtime.tools.first(where: { $0.descriptor.id == appID })
+        let recentEntries = try await CockpitRegistryRepository.listRecentRuns(appID: appID, limit: 6, on: req.db)
+
+        var recentRuns: [UIMuniAppRunSummary] = []
+        recentRuns.reserveCapacity(recentEntries.count)
+        for entry in recentEntries {
+            let diagnostic = try await CockpitRegistryRepository.topDiagnostic(executionID: entry.executionID, on: req.db)
+            recentRuns.append(
+                UIMuniAppRunSummary(
+                    execution_id: entry.executionID,
+                    action: entry.action,
+                    status: entry.status.rawValue,
+                    status_label: uiStatusLabel(entry.status),
+                    finished_at: entry.finishedAt,
+                    summary: entry.summary ?? "-",
+                    diagnostic_present: diagnostic != nil,
+                    diagnostic_label: diagnostic?.label ?? "-",
+                    diagnostic_severity: diagnostic?.severity ?? "info",
+                    diagnostic_severity_label: uiDiagnosticSeverityLabel(diagnostic?.severity),
+                    diagnostic_cta: diagnostic?.cta ?? "-",
+                    diagnostic_cta_present: diagnostic?.cta != nil
+                )
+            )
+        }
+
+        let actions = appRecord.actions.map { action in
+            UIMuniAppActionSummary(
+                action_key: action.actionKey,
+                action_label: action.actionLabel,
+                is_primary: action.isPrimary,
+                launch_url: "/ui/pilotage/lancer?tool=\(urlQueryEncoded(appID))&action=\(urlQueryEncoded(action.actionKey))"
+            )
+        }
+        let profiles = appRecord.profiles.map { profile in
+            UIMuniRunProfileSummary(
+                profile_key: profile.profileKey,
+                display_name: profile.displayName,
+                action_key: profile.actionKey,
+                parameters_json: prettyJSONString(profile.parameters),
+                allow_destructive: profile.allowDestructive,
+                expert_only: profile.expertOnly,
+                launch_url: "/ui/pilotage/lancer?tool=\(urlQueryEncoded(appID))&action=\(urlQueryEncoded(profile.actionKey))&parameters_json=\(urlQueryEncoded(prettyJSONString(profile.parameters)))&allow_destructive=\(profile.allowDestructive ? "true" : "false")"
+            )
+        }
+
+        return UIMuniAppContext(
+            app_id: appRecord.descriptor.id,
+            display_name: appRecord.descriptor.displayName,
+            mission: appRecord.descriptor.mission,
+            version: appRecord.descriptor.version,
+            integration_status: appRecord.descriptor.integrationStatus,
+            capabilities: appRecord.descriptor.capabilities.joined(separator: ", "),
+            repository_path: appRecord.descriptor.repositoryPath ?? "-",
+            executable: runtimeTool?.resolvedExecutable ?? appRecord.descriptor.executablePath ?? appRecord.descriptor.executable,
+            default_action: appRecord.descriptor.defaultAction,
+            availability_label: runtimeTool?.isAvailable == true ? "Prêt" : "Non prêt",
+            availability_reason: runtimeTool?.availabilityReason ?? "Disponibilité non déterminée.",
+            actions: actions,
+            actions_present: !actions.isEmpty,
+            profiles: profiles,
+            profiles_present: !profiles.isEmpty,
+            recent_runs: recentRuns,
+            recent_runs_present: !recentRuns.isEmpty,
+            expert_launch_url: "/ui/pilotage/lancer?tool=\(urlQueryEncoded(appID))",
+            back_to_catalog_url: "/ui/pilotage/catalogue",
+            notice: nonEmpty(req.query[String.self, at: "notice"]),
+            error: nonEmpty(req.query[String.self, at: "error"])
+        )
+    }
+
     let runPilotage: @Sendable (Request) async throws -> Response = { req in
         do {
             let form = try req.content.decode(UICockpitRunForm.self)
@@ -290,11 +434,11 @@ func registerCockpitUIRoutes(_ app: Application) {
                 throw Abort(.badRequest, reason: "Le tool_id est requis.")
             }
 
-            let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
+            let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
             let selectedTool = runtime.tools.first(where: { $0.descriptor.id == toolID }) ?? runtime.tools.first
             let selectedAction = normalizedCockpitAction(form.action, fallback: selectedTool?.descriptor.defaultAction ?? "run")
             if selectedAction == "apply" {
-                let history = await CockpitCanonicalLauncher.history(limit: 25, logger: req.logger)
+                let history = await CockpitCanonicalLauncher.history(limit: 25, on: req.db, logger: req.logger)
                 if let blockingGuardReason = latestBlockingGuardReason(in: history.entries, logger: req.logger) {
                     throw Abort(.badRequest, reason: "Apply bloqué par un diagnostic prioritaire blocking: \(blockingGuardReason)")
                 }
@@ -312,7 +456,7 @@ func registerCockpitUIRoutes(_ app: Application) {
                 allowDestructive: parseBooleanFlag(form.allow_destructive, defaultValue: false)
             )
 
-            let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, logger: req.logger)
+            let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, on: req.db, logger: req.logger)
             let notice = "Exécution \(outcome.executionID) terminée avec statut \(outcome.result.status.rawValue)."
             return req.redirect(to: "/ui/pilotage/lancer?notice=\(urlQueryEncoded(notice))&tool=\(urlQueryEncoded(toolID))")
         } catch let abort as AbortError {
@@ -353,6 +497,10 @@ func registerCockpitUIRoutes(_ app: Application) {
     app.get("ui", "pilotage", "historique") { req async throws -> View in
         let context = await buildPilotageContext(req)
         return try await req.view.render("pilotage_historique", context)
+    }
+    app.get("ui", "muni", "apps", ":id") { req async throws -> View in
+        let context = try await buildMuniAppContext(req)
+        return try await req.view.render("muni_app", context)
     }
 
     app.on(.POST, "ui", "cockpit", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
@@ -809,6 +957,17 @@ private func uiStatusLabel(_ status: ToolStatus) -> String {
     }
 }
 
+private func uiDiagnosticSeverityLabel(_ severity: String?) -> String {
+    switch severity {
+    case "blocking":
+        return "Blocking"
+    case "warning":
+        return "Warning"
+    default:
+        return "Info"
+    }
+}
+
 private func nonEmpty(_ value: String?) -> String? {
     guard let value else { return nil }
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -818,4 +977,8 @@ private func nonEmpty(_ value: String?) -> String? {
 private func urlQueryEncoded(_ value: String) -> String {
     let allowed = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "+&=?#"))
     return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+}
+
+private func urlPathComponentEncoded(_ value: String) -> String {
+    value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
 }

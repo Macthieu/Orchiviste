@@ -1,3 +1,4 @@
+import Fluent
 import Foundation
 import OrchivisteKitContracts
 import OrchivisteKitInterop
@@ -47,8 +48,17 @@ actor CockpitHistoryStore {
 }
 
 enum CockpitCanonicalLauncher {
-    static func loadRuntimeCatalog(logger: Logger? = nil) -> (config: CockpitConfig, tools: [CockpitToolRuntimeDescriptor]) {
-        let config = CockpitConfigLoader.load(logger: logger)
+    static func loadRuntimeCatalog(
+        on db: Database,
+        logger: Logger? = nil
+    ) async -> (config: CockpitConfig, tools: [CockpitToolRuntimeDescriptor]) {
+        var config = CockpitConfigLoader.load(logger: logger)
+        config.tools = await CockpitRegistryRepository.loadToolDescriptors(
+            baseConfig: config,
+            on: db,
+            logger: logger
+        )
+
         let tools = config.tools.map { tool in
             let resolution = resolveExecutable(for: tool)
             return CockpitToolRuntimeDescriptor(
@@ -63,9 +73,10 @@ enum CockpitCanonicalLauncher {
 
     static func launch(
         _ launchRequest: CockpitLaunchRequest,
+        on db: Database,
         logger: Logger
     ) async throws -> CockpitLaunchOutcome {
-        let runtime = loadRuntimeCatalog(logger: logger)
+        let runtime = await loadRuntimeCatalog(on: db, logger: logger)
 
         guard let toolRuntime = runtime.tools.first(where: { $0.descriptor.id == launchRequest.toolID }) else {
             throw Abort(.badRequest, reason: "Tool inconnu: \(launchRequest.toolID)")
@@ -152,7 +163,7 @@ enum CockpitCanonicalLauncher {
                 historyFile: directories.historyFile,
                 exitCode: nil
             )
-            try await appendHistory(outcome)
+            try await appendHistory(outcome, on: db, logger: logger)
             return outcome
         }
 
@@ -237,18 +248,32 @@ enum CockpitCanonicalLauncher {
             exitCode: shell.exitCode
         )
 
-        try await appendHistory(outcome)
+        try await appendHistory(outcome, on: db, logger: logger)
         return outcome
     }
 
-    static func history(limit: Int, logger: Logger? = nil) async -> CockpitHistoryResponse {
+    static func history(
+        limit: Int,
+        on db: Database,
+        logger: Logger? = nil
+    ) async -> CockpitHistoryResponse {
         let config = CockpitConfigLoader.load(logger: logger)
         let historyURL = URL(fileURLWithPath: config.historyFile)
-        let entries = await CockpitHistoryStore.shared.read(from: historyURL, limit: limit)
+        let entries: [CockpitHistoryEntry]
+        if let dbEntries = try? await CockpitRegistryRepository.listHistoryEntries(limit: limit, on: db),
+           !dbEntries.isEmpty {
+            entries = dbEntries
+        } else {
+            entries = await CockpitHistoryStore.shared.read(from: historyURL, limit: limit)
+        }
         return CockpitHistoryResponse(historyFile: historyURL.path, entries: entries)
     }
 
-    private static func appendHistory(_ outcome: CockpitLaunchOutcome) async throws {
+    private static func appendHistory(
+        _ outcome: CockpitLaunchOutcome,
+        on db: Database,
+        logger: Logger
+    ) async throws {
         let entry = CockpitHistoryEntry(
             executionID: outcome.executionID,
             requestID: outcome.request.requestID,
@@ -265,6 +290,7 @@ enum CockpitCanonicalLauncher {
             dryRun: boolParameter("dry_run", from: outcome.request.parameters),
             errorCodes: outcome.result.errors.map(\.code)
         )
+        try await CockpitRegistryRepository.appendHistoryEntry(entry, on: db, logger: logger)
         try await CockpitHistoryStore.shared.append(entry, to: outcome.historyFile)
     }
 

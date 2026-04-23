@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Muni - #(display_name)</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --danger: #9b3a16;
+            --border: #d9d2c4;
+            --info-bg: #e8f4f0;
+            --warning-bg: #fff2df;
+            --blocking-bg: #fbe4de;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1240px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .subnav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .subnav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
+        .hero {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+        .hero-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .hero h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+        }
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .badge {
+            display: inline-block;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .badge-ready { background: #ebf8f4; color: var(--accent); }
+        .badge-active { background: #e7f4ff; color: #145a97; }
+        .badge-alpha { background: #fff6e7; color: var(--warning); }
+        .badge-scaffold { background: #f3f3f3; color: #555; }
+        .badge-primary {
+            background: #edf7f3;
+            color: var(--accent);
+            border-color: #cde7de;
+        }
+        .status {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .actions {
+            margin-top: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .actions a {
+            text-decoration: none;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .actions .primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .actions .secondary {
+            background: #fff;
+            color: var(--accent);
+            border: 1px solid #bde2d7;
+        }
+        .cta-link {
+            display: inline-block;
+            text-decoration: none;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: 13px;
+            background: #fff;
+            color: var(--accent);
+            border: 1px solid #bde2d7;
+        }
+        .grid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: 1.15fr 0.85fr;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+        .card h2 {
+            margin: 0 0 10px;
+            font-size: 17px;
+        }
+        .stack {
+            display: grid;
+            gap: 10px;
+        }
+        .row {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fff;
+        }
+        .row-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .row-title {
+            margin: 0;
+            font-weight: 700;
+        }
+        .muted {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        pre {
+            margin: 8px 0 0;
+            padding: 10px;
+            border-radius: 10px;
+            background: #f6f3ee;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            vertical-align: top;
+            font-size: 12px;
+        }
+        th {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 11px;
+        }
+        .diag-pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .diag-pill-info {
+            background: var(--info-bg);
+            color: var(--accent);
+        }
+        .diag-pill-warning {
+            background: var(--warning-bg);
+            color: #915007;
+        }
+        .diag-pill-blocking {
+            background: var(--blocking-bg);
+            color: #8b2b14;
+        }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        @media (max-width: 860px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Pilotage Muni</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+        <a href="/ui/workers">Agents</a>
+        <a href="/ui/regles">Règles documentaires</a>
+        <a href="/ui/events">Événements</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <nav class="subnav">
+        <a href="#(back_to_catalog_url)">Catalogue</a>
+        <a href="#(expert_launch_url)">Pilotage expert</a>
+        <a class="active" href="/ui/muni/apps/#(app_id)">Fiche application</a>
+    </nav>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="hero">
+        <div class="hero-top">
+            <div>
+                <h1>#(display_name)</h1>
+                <p>#(mission)</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span class="badge badge-#(integration_status)">v#(version)</span>
+                <span class="badge">#(availability_label)</span>
+            </div>
+        </div>
+        <div class="status">
+            <span><strong>Capacités:</strong> #(capabilities)</span>
+            <span><strong>Action par défaut:</strong> <span class="mono">#(default_action)</span></span>
+            <span><strong>Exécutable:</strong> <span class="mono">#(executable)</span></span>
+            <span><strong>Dépôt:</strong> <span class="mono">#(repository_path)</span></span>
+        </div>
+        <div class="status">
+            <span><strong>Disponibilité:</strong> #(availability_reason)</span>
+        </div>
+        <div class="actions">
+            <a class="primary" href="#(expert_launch_url)">Ouvrir Pilotage expert</a>
+            <a class="secondary" href="#(back_to_catalog_url)">Retour catalogue</a>
+        </div>
+    </section>
+
+    <section class="grid">
+        <div class="stack">
+            <section class="card">
+                <h2>Actions applicatives</h2>
+                #if(actions_present):
+                <div class="stack">
+                    #for(action in actions):
+                    <article class="row">
+                        <div class="row-head">
+                            <p class="row-title">#(action.action_label)</p>
+                            #if(action.is_primary):
+                            <span class="badge badge-primary">Par défaut</span>
+                            #endif
+                        </div>
+                        <p class="muted" style="margin:0 0 8px;">Clé d’action: <span class="mono">#(action.action_key)</span></p>
+                        <a class="cta-link" href="#(action.launch_url)">Lancer dans l’interface expert</a>
+                    </article>
+                    #endfor
+                </div>
+                #else:
+                <p>Aucune action cataloguée.</p>
+                #endif
+            </section>
+
+            <section class="card">
+                <h2>Profils de run</h2>
+                #if(profiles_present):
+                <div class="stack">
+                    #for(profile in profiles):
+                    <article class="row">
+                        <div class="row-head">
+                            <p class="row-title">#(profile.display_name)</p>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                #if(profile.expert_only):
+                                <span class="badge">Expert</span>
+                                #endif
+                                #if(profile.allow_destructive):
+                                <span class="badge">Destructif permis</span>
+                                #endif
+                            </div>
+                        </div>
+                        <p class="muted" style="margin:0 0 8px;">
+                            Profil <span class="mono">#(profile.profile_key)</span> · action <span class="mono">#(profile.action_key)</span>
+                        </p>
+                        <a class="cta-link" href="#(profile.launch_url)">Préremplir dans Pilotage expert</a>
+                        <pre class="mono">#(profile.parameters_json)</pre>
+                    </article>
+                    #endfor
+                </div>
+                #else:
+                <p>Aucun profil de run stocké.</p>
+                #endif
+            </section>
+        </div>
+
+        <section class="card">
+            <h2>Derniers runs</h2>
+            #if(recent_runs_present):
+            <table>
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>Statut</th>
+                        <th>Diagnostic</th>
+                        <th>Résumé</th>
+                        <th>Terminé</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    #for(run in recent_runs):
+                    <tr>
+                        <td>
+                            <span class="mono">#(run.action)</span><br>
+                            <span class="muted mono">#(run.execution_id)</span>
+                        </td>
+                        <td>#(run.status_label)</td>
+                        <td>
+                            #if(run.diagnostic_present):
+                            <span class="diag-pill diag-pill-#(run.diagnostic_severity)">#(run.diagnostic_severity_label)</span>
+                            <div class="muted" style="margin-top:6px;">#(run.diagnostic_label)</div>
+                            #if(run.diagnostic_cta_present):
+                            <div class="muted">Action: #(run.diagnostic_cta)</div>
+                            #endif
+                            #else:
+                            <span class="muted">Aucun diagnostic prioritaire</span>
+                            #endif
+                        </td>
+                        <td class="muted">#(run.summary)</td>
+                        <td class="mono">#(run.finished_at)</td>
+                    </tr>
+                    #endfor
+                </tbody>
+            </table>
+            #else:
+            <p>Aucun run enregistré pour cette application dans le registre SQLite.</p>
+            #endif
+        </section>
+    </section>
+</main>
+</body>
+</html>

@@ -3,12 +3,12 @@ import Vapor
 func registerCockpitRoutes(_ app: Application) {
     app.group("v1", "cockpit") { cockpit in
         cockpit.get("tools") { req async throws -> [CockpitToolRuntimeDescriptor] in
-            let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
+            let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
             return runtime.tools
         }
 
         cockpit.get("config") { req async throws -> CockpitConfigSummary in
-            let runtime = CockpitCanonicalLauncher.loadRuntimeCatalog(logger: req.logger)
+            let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
             return CockpitConfigSummary(
                 workspacePath: runtime.config.workspacePath,
                 runtimeDirectory: runtime.config.runtimeDirectory,
@@ -21,7 +21,7 @@ func registerCockpitRoutes(_ app: Application) {
 
         cockpit.get("history") { req async throws -> CockpitHistoryResponse in
             let requestedLimit = req.query[Int.self, at: "limit"] ?? 50
-            return await CockpitCanonicalLauncher.history(limit: requestedLimit, logger: req.logger)
+            return await CockpitCanonicalLauncher.history(limit: requestedLimit, on: req.db, logger: req.logger)
         }
 
         cockpit.post("runs") { req async throws -> CockpitRunResponsePayload in
@@ -36,7 +36,7 @@ func registerCockpitRoutes(_ app: Application) {
                 allowDestructive: payload.allowDestructive ?? false
             )
 
-            let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, logger: req.logger)
+            let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, on: req.db, logger: req.logger)
             return CockpitRunResponsePayload(
                 executionID: outcome.executionID,
                 requestID: outcome.request.requestID,

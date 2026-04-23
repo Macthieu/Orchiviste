@@ -1519,7 +1519,7 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "classification") { req async throws -> View in
-        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let snapshot = await MuniReglesReadModelLoader.load(on: req.db, logger: req.logger)
         let classification = snapshot.classification
         let entries = classification.entries.map {
             UIReglesClassificationEntrySummary(code: $0.code, label: $0.label, path: $0.path)
@@ -1546,7 +1546,7 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "rules") { req async throws -> View in
-        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let snapshot = await MuniReglesReadModelLoader.load(on: req.db, logger: req.logger)
         let rules = snapshot.rules
         let namingRules = rules.namingRules.map {
             UIReglesRulesNamingRuleSummary(id: $0.id, label: $0.label, template: $0.template)
@@ -1582,7 +1582,7 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "guide") { req async throws -> View in
-        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let snapshot = await MuniReglesReadModelLoader.load(on: req.db, logger: req.logger)
         let guide = snapshot.guide
         let examples = guide.examples.map { UIReglesGuideExampleSummary(input: $0.input, output: $0.output) }
         let context = UIReglesGuideContext(
@@ -1608,7 +1608,7 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "versions") { req async throws -> View in
-        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let snapshot = await MuniReglesReadModelLoader.load(on: req.db, logger: req.logger)
         let versions = snapshot.versions
         let context = UIReglesVersionsContext(
             notice: req.query[String.self, at: "notice"],
@@ -1638,7 +1638,7 @@ func registerUIRoutes(_ app: Application) {
         )
     }
     app.get("ui", "regles", "validation") { req async throws -> View in
-        let snapshot = await MuniReglesReadModelLoader.load(logger: req.logger)
+        let snapshot = await MuniReglesReadModelLoader.load(on: req.db, logger: req.logger)
         let validation = snapshot.validation
         let issues = validation.issues.map {
             UIReglesValidationIssueSummary(

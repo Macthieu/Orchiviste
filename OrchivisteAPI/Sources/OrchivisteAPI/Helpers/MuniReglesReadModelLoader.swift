@@ -1,3 +1,4 @@
+import Fluent
 import Foundation
 import Vapor
 
@@ -114,8 +115,8 @@ enum MuniReglesReadModelLoader {
         let bundle: ReglesBundleProbe
     }
 
-    static func load(logger: Logger) async -> MuniReglesUISnapshot {
-        let history = await CockpitCanonicalLauncher.history(limit: 200, logger: logger)
+    static func load(on db: Database, logger: Logger) async -> MuniReglesUISnapshot {
+        let history = await CockpitCanonicalLauncher.history(limit: 200, on: db, logger: logger)
         let entries = history.entries.filter { entry in
             entry.toolID == "MuniRegles" && shouldConsider(status: entry.status.rawValue)
         }
