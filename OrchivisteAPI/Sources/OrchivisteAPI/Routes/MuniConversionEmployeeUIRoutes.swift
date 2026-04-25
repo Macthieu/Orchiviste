@@ -32,12 +32,26 @@ private struct UIMuniConversionEmployeeRecentRun: Encodable {
     let execution_id: String
     let action_label: String
     let status_label: String
+    let status_class: String
     let finished_at: String
     let summary: String
     let diagnostic_label: String
     let diagnostic_present: Bool
     let diagnostic_severity_class: String
     let view_url: String
+    let result_file_url: String
+}
+
+private struct UIMuniConversionResultEvent: Encodable {
+    let stage_label: String
+    let percent_label: String
+    let message: String
+    let occurred_at: String
+}
+
+private struct UIMuniConversionResultError: Encodable {
+    let code: String
+    let message: String
 }
 
 private struct UIMuniConversionEmployeeContext: Encodable {
@@ -61,6 +75,18 @@ private struct UIMuniConversionEmployeeContext: Encodable {
     let result_source_path: String
     let result_output_root_path: String
     let result_profile_id: String
+    let result_result_file_path: String
+    let result_result_file_url: String
+    let result_output_folder_url: String
+    let result_output_folder_link_present: Bool
+    let result_output_folder_status: String
+    let result_output_file_count: String
+    let result_output_file_names: [String]
+    let result_output_files_present: Bool
+    let result_progress_events: [UIMuniConversionResultEvent]
+    let result_progress_present: Bool
+    let result_error_items: [UIMuniConversionResultError]
+    let result_errors_present: Bool
     let result_total_scanned: String
     let result_total_matched: String
     let result_converted: String
@@ -109,6 +135,24 @@ private struct MuniConversionResultMetadata {
     )
 }
 
+private struct MuniConversionResultDetails {
+    let resultFilePath: String
+    let resultFileURL: String
+    let outputFolderURL: String?
+    let outputFolderStatus: String
+    let outputFileCount: String
+    let outputFileNames: [String]
+    let progressEvents: [UIMuniConversionResultEvent]
+    let errors: [UIMuniConversionResultError]
+}
+
+private struct MuniConversionOutputFolderSummary {
+    let url: String?
+    let status: String
+    let itemCount: String
+    let itemNames: [String]
+}
+
 private struct MuniConversionResultSnapshot {
     let executionID: String
     let actionLabel: String
@@ -117,6 +161,7 @@ private struct MuniConversionResultSnapshot {
     let summary: String
     let finishedAt: String
     let metadata: MuniConversionResultMetadata
+    let details: MuniConversionResultDetails
     let diagnostic: RunDiagnosticRecord?
 }
 
@@ -150,6 +195,7 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
         if let selectedEntry {
             let diagnostic = try await CockpitRegistryRepository.topDiagnostic(executionID: selectedEntry.executionID, on: req.db)
             let metadata = loadMuniConversionResultMetadata(resultFilePath: selectedEntry.resultFile, logger: req.logger)
+            let details = loadMuniConversionResultDetails(entry: selectedEntry, metadata: metadata, logger: req.logger)
             resultSnapshot = MuniConversionResultSnapshot(
                 executionID: selectedEntry.executionID,
                 actionLabel: selectedEntry.action == "convert" ? "Conversion" : "Analyse",
@@ -158,6 +204,7 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
                 summary: muniConversionSummary(selectedEntry.summary, action: selectedEntry.action, metadata: metadata),
                 finishedAt: selectedEntry.finishedAt,
                 metadata: metadata,
+                details: details,
                 diagnostic: diagnostic
             )
         }
@@ -166,12 +213,14 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
         recentRuns.reserveCapacity(min(recentEntries.count, 6))
         for entry in recentEntries.prefix(6) {
             let diagnostic = try await CockpitRegistryRepository.topDiagnostic(executionID: entry.executionID, on: req.db)
+            let metadata = loadMuniConversionResultMetadata(resultFilePath: entry.resultFile, logger: req.logger)
             recentRuns.append(UIMuniConversionEmployeeRecentRun(
                 execution_id: entry.executionID,
                 action_label: entry.action == "convert" ? "Conversion" : "Analyse",
                 status_label: muniConversionStatusLabel(entry.status),
+                status_class: muniConversionStatusClass(entry.status),
                 finished_at: entry.finishedAt,
-                summary: muniConversionSummary(entry.summary, action: entry.action, metadata: .empty),
+                summary: muniConversionSummary(entry.summary, action: entry.action, metadata: metadata),
                 diagnostic_label: diagnostic?.label ?? "Aucun diagnostic prioritaire",
                 diagnostic_present: diagnostic != nil,
                 diagnostic_severity_class: muniConversionDiagnosticSeverityClass(diagnostic?.severity),
@@ -184,7 +233,8 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
                     profileID: selectedProfileID,
                     collisionPolicy: selectedCollisionPolicy,
                     executionID: entry.executionID
-                )
+                ),
+                result_file_url: employeeMuniConversionResultFileURL(executionID: entry.executionID)
             ))
         }
 
@@ -209,6 +259,18 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
             result_source_path: resultSnapshot?.metadata.sourcePath ?? "-",
             result_output_root_path: resultSnapshot?.metadata.outputRootPath ?? "-",
             result_profile_id: resultSnapshot?.metadata.profileID ?? "-",
+            result_result_file_path: resultSnapshot?.details.resultFilePath ?? "-",
+            result_result_file_url: resultSnapshot?.details.resultFileURL ?? "",
+            result_output_folder_url: resultSnapshot?.details.outputFolderURL ?? "",
+            result_output_folder_link_present: resultSnapshot?.details.outputFolderURL != nil,
+            result_output_folder_status: resultSnapshot?.details.outputFolderStatus ?? "Aucun dossier de sortie disponible.",
+            result_output_file_count: resultSnapshot?.details.outputFileCount ?? "-",
+            result_output_file_names: resultSnapshot?.details.outputFileNames ?? [],
+            result_output_files_present: !(resultSnapshot?.details.outputFileNames ?? []).isEmpty,
+            result_progress_events: resultSnapshot?.details.progressEvents ?? [],
+            result_progress_present: !(resultSnapshot?.details.progressEvents ?? []).isEmpty,
+            result_error_items: resultSnapshot?.details.errors ?? [],
+            result_errors_present: !(resultSnapshot?.details.errors ?? []).isEmpty,
             result_total_scanned: muniConversionStringOrDash(resultSnapshot?.metadata.totalScanned),
             result_total_matched: muniConversionStringOrDash(resultSnapshot?.metadata.totalMatched),
             result_converted: muniConversionStringOrDash(resultSnapshot?.metadata.converted),
@@ -233,6 +295,25 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
     app.get("ui", "muni", "apps", "MuniConversion", "employe") { req async throws -> View in
         let context = try await buildContext(req)
         return try await req.view.render("muni_conversion_employee", context)
+    }
+
+    app.get("ui", "muni", "apps", "MuniConversion", "employe", "result", ":executionID") { req async throws -> Response in
+        guard let executionID = nonEmptyMuniConversionValue(req.parameters.get("executionID")) else {
+            throw Abort(.badRequest, reason: "Identifiant d'exécution manquant.")
+        }
+        let entry = try await fetchMuniConversionRun(executionID: executionID, on: req.db)
+        let resultURL = URL(fileURLWithPath: entry.resultFile)
+        guard FileManager.default.fileExists(atPath: resultURL.path) else {
+            throw Abort(.notFound, reason: "Le fichier résultat est indisponible.")
+        }
+
+        let response = try await req.fileio.asyncStreamFile(at: resultURL.path)
+        response.headers.replaceOrAdd(name: .contentType, value: "application/json; charset=utf-8")
+        response.headers.replaceOrAdd(
+            name: .contentDisposition,
+            value: "inline; filename=\"\(resultURL.lastPathComponent)\""
+        )
+        return response
     }
 
     app.on(.POST, "ui", "muni", "apps", "MuniConversion", "employe", "run", body: .collect(maxSize: "2mb")) { req async throws -> Response in
@@ -404,6 +485,18 @@ private func employeeMuniConversionPageURL(
     return "/ui/muni/apps/MuniConversion/employe?\(params.joined(separator: "&"))"
 }
 
+private func employeeMuniConversionResultFileURL(executionID: String) -> String {
+    "/ui/muni/apps/MuniConversion/employe/result/\(muniConversionURLPathEncoded(executionID))"
+}
+
+private func fetchMuniConversionRun(executionID: String, on db: Database) async throws -> CockpitHistoryEntry {
+    let entries = try await CockpitRegistryRepository.listRecentRuns(appID: "MuniConversion", limit: 50, on: db)
+    guard let entry = entries.first(where: { $0.executionID == executionID }) else {
+        throw Abort(.notFound, reason: "Run MuniConversion introuvable.")
+    }
+    return entry
+}
+
 private func normalizedMuniConversionOperation(_ rawValue: String) -> String {
     rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "convert"
         ? "convert"
@@ -456,6 +549,51 @@ private func validatedOptionalMuniConversionDestination(
     return try validatedMuniConversionDirectoryPath(rawValue, label: "destination")
 }
 
+private func loadMuniConversionResultDetails(
+    entry: CockpitHistoryEntry,
+    metadata: MuniConversionResultMetadata,
+    logger: Logger
+) -> MuniConversionResultDetails {
+    let resultFileURL = URL(fileURLWithPath: entry.resultFile)
+    var progressEvents: [UIMuniConversionResultEvent] = []
+    var errors: [UIMuniConversionResultError] = []
+    var artifactOutputPath: String?
+
+    if let data = try? Data(contentsOf: resultFileURL),
+       let result = try? JSONDecoder().decode(ToolResult.self, from: data) {
+        progressEvents = result.progressEvents.suffix(4).map { event in
+            UIMuniConversionResultEvent(
+                stage_label: muniConversionProgressStageLabel(event.stage),
+                percent_label: event.percent.map { "\($0) %" } ?? "-",
+                message: nonEmptyMuniConversionValue(event.message) ?? "Étape enregistrée.",
+                occurred_at: event.occurredAt
+            )
+        }
+        errors = result.errors.prefix(5).map { error in
+            UIMuniConversionResultError(code: error.code, message: error.message)
+        }
+        artifactOutputPath = result.outputArtifacts
+            .first(where: { $0.id == "output_root" })
+            .flatMap { muniConversionLocalPath(fromURI: $0.uri) }
+    } else {
+        logger.debug("Détails result.json MuniConversion non décodés pour affichage employé.", metadata: [
+            "path": .string(resultFileURL.path)
+        ])
+    }
+
+    let outputSummary = muniConversionOutputFolderSummary(path: metadata.outputRootPath ?? artifactOutputPath)
+    return MuniConversionResultDetails(
+        resultFilePath: resultFileURL.path,
+        resultFileURL: employeeMuniConversionResultFileURL(executionID: entry.executionID),
+        outputFolderURL: outputSummary.url,
+        outputFolderStatus: outputSummary.status,
+        outputFileCount: outputSummary.itemCount,
+        outputFileNames: outputSummary.itemNames,
+        progressEvents: progressEvents,
+        errors: errors
+    )
+}
+
 private func loadMuniConversionResultMetadata(resultFilePath: String, logger: Logger) -> MuniConversionResultMetadata {
     guard let resultRoot = muniConversionReadJSONObject(atPath: resultFilePath, logger: logger) else {
         return .empty
@@ -494,6 +632,63 @@ private func muniConversionReadJSONObject(atPath path: String, logger: Logger) -
     }
 }
 
+private func muniConversionOutputFolderSummary(path rawPath: String?) -> MuniConversionOutputFolderSummary {
+    guard let rawPath = nonEmptyMuniConversionValue(rawPath), rawPath != "-" else {
+        return MuniConversionOutputFolderSummary(
+            url: nil,
+            status: "Aucun dossier de sortie déclaré.",
+            itemCount: "-",
+            itemNames: []
+        )
+    }
+
+    let url = URL(fileURLWithPath: rawPath, isDirectory: true).standardizedFileURL
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+        return MuniConversionOutputFolderSummary(
+            url: "/ui/fs/list?path=\(muniConversionURLQueryEncoded(url.path))",
+            status: "Dossier de sortie introuvable ou inaccessible: \(url.path)",
+            itemCount: "-",
+            itemNames: []
+        )
+    }
+
+    do {
+        let items = try FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        let sortedItems = items.sorted {
+            $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
+        }
+        let previewNames = sortedItems.prefix(6).map { item -> String in
+            let isChildDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            return isChildDirectory ? "\(item.lastPathComponent)/" : item.lastPathComponent
+        }
+        return MuniConversionOutputFolderSummary(
+            url: "/ui/fs/list?path=\(muniConversionURLQueryEncoded(url.path))",
+            status: "Dossier de sortie accessible: \(url.path)",
+            itemCount: "\(items.count) élément(s) visible(s)",
+            itemNames: previewNames
+        )
+    } catch {
+        return MuniConversionOutputFolderSummary(
+            url: "/ui/fs/list?path=\(muniConversionURLQueryEncoded(url.path))",
+            status: "Dossier de sortie trouvé, mais liste indisponible: \(error.localizedDescription)",
+            itemCount: "-",
+            itemNames: []
+        )
+    }
+}
+
+private func muniConversionLocalPath(fromURI rawURI: String) -> String? {
+    if rawURI.hasPrefix("file://") {
+        return URL(string: rawURI)?.path
+    }
+    return nonEmptyMuniConversionValue(rawURI)
+}
+
 private func muniConversionSummary(
     _ rawSummary: String?,
     action: String,
@@ -511,6 +706,19 @@ private func muniConversionSummary(
 
     let trimmed = rawSummary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return trimmed.isEmpty ? "Aucun résumé disponible." : trimmed
+}
+
+private func muniConversionProgressStageLabel(_ stage: String) -> String {
+    switch stage {
+    case "accepted":
+        return "Demande reçue"
+    case "processing":
+        return "Traitement"
+    case "completed":
+        return "Terminé"
+    default:
+        return stage
+    }
 }
 
 private func muniConversionStatusLabel(_ status: ToolStatus) -> String {
@@ -624,5 +832,10 @@ private func muniConversionStringOrDash(_ value: Int?) -> String {
 
 private func muniConversionURLQueryEncoded(_ value: String) -> String {
     let allowed = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "+&=?#"))
+    return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+}
+
+private func muniConversionURLPathEncoded(_ value: String) -> String {
+    let allowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?#"))
     return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
 }

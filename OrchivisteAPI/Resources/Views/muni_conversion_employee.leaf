@@ -244,6 +244,50 @@
             color: var(--muted);
             font-size: 12px;
         }
+        .result-links, .recent-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .result-links a, .recent-actions a {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 7px 10px;
+            color: var(--accent);
+            background: #fff;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .result-subsection {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .result-subsection h3 {
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        .file-list, .event-list, .error-list {
+            display: grid;
+            gap: 6px;
+            margin: 8px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+        .file-list li, .event-item, .error-list li {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            background: #fff;
+        }
+        .event-item p, .error-list p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
         .mono {
             font-family: "SF Mono", Menlo, monospace;
             font-size: 12px;
@@ -269,6 +313,9 @@
         .recent-item a {
             color: inherit;
             text-decoration: none;
+        }
+        .recent-actions a {
+            color: var(--accent);
         }
         .recent-top {
             margin-bottom: 6px;
@@ -415,11 +462,47 @@
                 <p class="hint">Source: <span class="mono">#(result_source_path)</span></p>
                 <p class="hint">Sortie: <span class="mono">#(result_output_root_path)</span></p>
                 <p class="hint">Profil: <span class="mono">#(result_profile_id)</span></p>
+                <p class="hint">Résultat canonique: <span class="mono">#(result_result_file_path)</span></p>
 
+                <div class="result-links">
+                    <a href="#(result_result_file_url)" target="_blank" rel="noopener">Ouvrir le résultat JSON</a>
+                    #if(result_output_folder_link_present):
+                    <a href="#(result_output_folder_url)" target="_blank" rel="noopener">Lister le dossier de sortie</a>
+                    #endif
+                </div>
+
+                <section class="result-subsection">
+                    <h3>Où retrouver la sortie</h3>
+                    <p class="hint">#(result_output_folder_status)</p>
+                    <p class="hint">Contenu visible: <strong>#(result_output_file_count)</strong></p>
+                    #if(result_output_files_present):
+                    <ul class="file-list">
+                        #for(file_name in result_output_file_names):
+                        <li class="mono">#(file_name)</li>
+                        #endfor
+                    </ul>
+                    #endif
+                </section>
+
+                <section class="result-subsection">
+                    <h3>Diagnostics</h3>
                 #if(result_diagnostic_present):
-                <p style="margin:10px 0 6px;"><span class="diag #(result_diagnostic_severity_class)">#(result_diagnostic_severity_label)</span></p>
-                <p style="margin-bottom:6px;"><strong>#(result_diagnostic_label)</strong></p>
+                    <p style="margin:0 0 6px;"><span class="diag #(result_diagnostic_severity_class)">#(result_diagnostic_severity_label)</span></p>
+                    <p style="margin-bottom:6px;"><strong>#(result_diagnostic_label)</strong></p>
+                #else:
+                    <p class="hint">Aucun diagnostic prioritaire.</p>
                 #endif
+                #if(result_errors_present):
+                    <ul class="error-list">
+                        #for(error in result_error_items):
+                        <li>
+                            <strong>#(error.code)</strong>
+                            <p>#(error.message)</p>
+                        </li>
+                        #endfor
+                    </ul>
+                #endif
+                </section>
 
                 <div class="meta-grid">
                     <div class="meta-box">
@@ -447,6 +530,21 @@
                         <span>Erreurs</span>
                     </div>
                 </div>
+
+                #if(result_progress_present):
+                <section class="result-subsection">
+                    <h3>Journal court</h3>
+                    <div class="event-list">
+                        #for(event in result_progress_events):
+                        <div class="event-item">
+                            <strong>#(event.stage_label)</strong>
+                            <span class="hint">#(event.percent_label) - <span class="mono">#(event.occurred_at)</span></span>
+                            <p>#(event.message)</p>
+                        </div>
+                        #endfor
+                    </div>
+                </section>
+                #endif
                 #else:
                 <p>Aucun résultat sélectionné. Lancez une analyse pour vérifier le lot avant conversion.</p>
                 #endif
@@ -459,21 +557,23 @@
             <div class="recent-list">
                 #for(run in recent_runs):
                 <article class="recent-item">
-                    <a href="#(run.view_url)">
-                        <div class="recent-top">
-                            <div>
-                                <strong>#(run.action_label)</strong><br>
-                                <span class="mono">#(run.execution_id)</span>
-                            </div>
-                            <span class="status status-info">#(run.status_label)</span>
+                    <div class="recent-top">
+                        <div>
+                            <strong>#(run.action_label)</strong><br>
+                            <span class="mono">#(run.execution_id)</span>
                         </div>
-                        <p class="summary">#(run.summary)</p>
-                        #if(run.diagnostic_present):
-                        <p style="margin:8px 0 0;"><span class="diag #(run.diagnostic_severity_class)">Diagnostic</span></p>
-                        <p class="summary">#(run.diagnostic_label)</p>
-                        #endif
-                        <p class="hint">Terminé: <span class="mono">#(run.finished_at)</span></p>
-                    </a>
+                        <span class="status #(run.status_class)">#(run.status_label)</span>
+                    </div>
+                    <p class="summary">#(run.summary)</p>
+                    #if(run.diagnostic_present):
+                    <p style="margin:8px 0 0;"><span class="diag #(run.diagnostic_severity_class)">Diagnostic</span></p>
+                    <p class="summary">#(run.diagnostic_label)</p>
+                    #endif
+                    <p class="hint">Terminé: <span class="mono">#(run.finished_at)</span></p>
+                    <div class="recent-actions">
+                        <a href="#(run.view_url)">Voir le résultat</a>
+                        <a href="#(run.result_file_url)" target="_blank" rel="noopener">JSON</a>
+                    </div>
                 </article>
                 #endfor
             </div>
