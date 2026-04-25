@@ -1,0 +1,98 @@
+.source-destination-picker {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.path-picker-field {
+    display: block;
+}
+.path-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+.path-picker-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    margin-top: 0;
+}
+.path-picker-button {
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #ebf8f4;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.path-picker-hint {
+    margin-top: 5px;
+    min-height: 17px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+}
+.path-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(25, 25, 25, 0.32);
+}
+.path-picker-overlay[hidden] {
+    display: none;
+}
+.path-picker-modal {
+    width: min(900px, 94vw);
+    max-height: 82vh;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--surface);
+}
+.path-picker-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.path-picker-toolbar button {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+}
+.path-picker-current {
+    overflow-wrap: anywhere;
+}
+.path-picker-list {
+    display: grid;
+    gap: 6px;
+}
+.path-picker-list button {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    background: #fff;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+}
+@media (max-width: 620px) {
+    .path-picker-row {
+        flex-wrap: wrap;
+    }
+    .path-picker-row input[type="text"] {
+        flex-basis: 100%;
+    }
+}

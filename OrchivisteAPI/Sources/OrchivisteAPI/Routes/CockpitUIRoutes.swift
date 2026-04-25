@@ -246,9 +246,7 @@ func registerCockpitUIRoutes(_ app: Application) {
                 default_action: tool.descriptor.defaultAction,
                 default_parameters_json: prettyJSONString(tool.descriptor.defaultParameters),
                 repository_path: tool.descriptor.repositoryPath ?? "-",
-                detail_url: tool.descriptor.id == "MuniRenommage"
-                    ? "/ui/muni/apps/MuniRenommage/employe"
-                    : "/ui/muni/apps/\(urlPathComponentEncoded(tool.descriptor.id))"
+                detail_url: employeeDetailURL(for: tool.descriptor.id)
             )
         }
 
@@ -344,7 +342,8 @@ func registerCockpitUIRoutes(_ app: Application) {
     }
 
     let buildMuniAppContext: @Sendable (Request) async throws -> UIMuniAppContext = { req in
-        guard let appID = nonEmpty(req.parameters.get("id")) else {
+        let explicitAppID = explicitMuniAppID(for: req.url.path)
+        guard let appID = nonEmpty(req.parameters.get("id")) ?? explicitAppID else {
             throw Abort(.badRequest, reason: "Identifiant application Muni manquant.")
         }
 
@@ -499,6 +498,14 @@ func registerCockpitUIRoutes(_ app: Application) {
     app.get("ui", "pilotage", "historique") { req async throws -> View in
         let context = await buildPilotageContext(req)
         return try await req.view.render("pilotage_historique", context)
+    }
+    app.get("ui", "muni", "apps", "MuniRenommage") { req async throws -> View in
+        let context = try await buildMuniAppContext(req)
+        return try await req.view.render("muni_app", context)
+    }
+    app.get("ui", "muni", "apps", "MuniConversion") { req async throws -> View in
+        let context = try await buildMuniAppContext(req)
+        return try await req.view.render("muni_app", context)
     }
     app.get("ui", "muni", "apps", ":id") { req async throws -> View in
         let context = try await buildMuniAppContext(req)
@@ -938,6 +945,28 @@ private func normalizedCockpitAction(_ rawAction: String?, fallback: String) -> 
     let fallbackValue = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
     let candidate = rawAction?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return candidate.isEmpty ? fallbackValue : candidate
+}
+
+private func employeeDetailURL(for appID: String) -> String {
+    switch appID {
+    case "MuniRenommage":
+        return "/ui/muni/apps/MuniRenommage/employe"
+    case "MuniConversion":
+        return "/ui/muni/apps/MuniConversion/employe"
+    default:
+        return "/ui/muni/apps/\(urlPathComponentEncoded(appID))"
+    }
+}
+
+private func explicitMuniAppID(for path: String) -> String? {
+    switch path {
+    case "/ui/muni/apps/MuniRenommage":
+        return "MuniRenommage"
+    case "/ui/muni/apps/MuniConversion":
+        return "MuniConversion"
+    default:
+        return nil
+    }
 }
 
 private func uiStatusLabel(_ status: ToolStatus) -> String {

@@ -1,0 +1,40 @@
+<label class="path-picker-field" for="#import("picker_input_id")">
+    #import("picker_label")
+    <div class="path-picker-row">
+        <input
+            id="#import("picker_input_id")"
+            type="text"
+            name="#import("picker_name")"
+            value="#import("picker_value")"
+            placeholder="#import("picker_placeholder")"
+            #import("picker_required_attr")
+            autocomplete="off"
+        >
+        <button
+            class="path-picker-button"
+            type="button"
+            onclick="openMuniLocalDirectoryPicker('#import("picker_input_id")', '#import("picker_file_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
+        >Choisir</button>
+        <button
+            class="path-picker-button"
+            type="button"
+            onclick="openMuniServerFolderPicker('#import("picker_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
+        >Serveur</button>
+    </div>
+    <input
+        id="#import("picker_file_input_id")"
+        type="file"
+        webkitdirectory
+        directory
+        multiple
+        style="display:none"
+        onchange="handleMuniLocalDirectorySelection('#import("picker_file_input_id")', '#import("picker_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
+    >
+    <input
+        id="#import("picker_mode_input_id")"
+        type="hidden"
+        name="#import("picker_mode_name")"
+        value="#import("picker_mode")"
+    >
+    <div id="#import("picker_hint_id")" class="path-picker-hint">#import("picker_hint")</div>
+</label>

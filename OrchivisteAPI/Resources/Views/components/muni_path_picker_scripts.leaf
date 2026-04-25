@@ -1,0 +1,185 @@
+<div id="muniPathPickerOverlay" class="path-picker-overlay" onclick="closeMuniPathPicker(event)" hidden>
+    <div class="path-picker-modal" onclick="event.stopPropagation()">
+        <h3>Sélectionner un dossier serveur</h3>
+        <div class="path-picker-toolbar">
+            <button type="button" onclick="muniPathPickerGoParent()">Parent</button>
+            <span id="muniPathPickerCurrent" class="mono path-picker-current"></span>
+        </div>
+        <div id="muniPathPickerRoots" class="path-picker-toolbar"></div>
+        <div id="muniPathPickerList" class="path-picker-list"></div>
+        <div class="path-picker-toolbar" style="margin-top:10px;">
+            <button type="button" onclick="applyMuniPickedFolder()">Utiliser ce dossier</button>
+            <button type="button" onclick="closeMuniPathPicker()">Fermer</button>
+        </div>
+    </div>
+</div>
+<script>
+const muniPathPickerState = {
+    targetInputId: null,
+    targetHintId: null,
+    targetModeInputId: null,
+    currentPath: null,
+    parentPath: null,
+    roots: []
+};
+
+async function openMuniLocalDirectoryPicker(inputId, fileInputId, hintId, modeInputId) {
+    setMuniPathPickerMode(modeInputId, "local");
+
+    if (window.showDirectoryPicker) {
+        try {
+            const handle = await window.showDirectoryPicker({ mode: "read" });
+            const hint = document.getElementById(hintId);
+            if (hint) {
+                hint.textContent = `Dossier local choisi: ${handle.name}. Chemin complet requis dans le champ.`;
+            }
+            return;
+        } catch (error) {
+            if (!error || error.name !== "AbortError") {
+                console.warn("Sélection locale indisponible.", error);
+            }
+        }
+    }
+
+    const picker = document.getElementById(fileInputId);
+    if (!picker) {
+        return;
+    }
+    picker.value = "";
+    picker.click();
+}
+
+function handleMuniLocalDirectorySelection(fileInputId, inputId, hintId, modeInputId) {
+    setMuniPathPickerMode(modeInputId, "local");
+
+    const picker = document.getElementById(fileInputId);
+    const input = document.getElementById(inputId);
+    const hint = document.getElementById(hintId);
+    const files = Array.from((picker && picker.files) || []);
+    if (!files.length) {
+        if (hint) {
+            hint.textContent = "Aucun dossier local sélectionné.";
+        }
+        return;
+    }
+
+    const firstFile = files[0];
+    const relativePath = firstFile.webkitRelativePath || firstFile.name;
+    const pathParts = relativePath.split("/").filter(Boolean);
+    const folderName = pathParts.length > 1 ? pathParts[0] : firstFile.name;
+    const exposedPath = firstFile.path || firstFile.mozFullPath || "";
+    const inferredRoot = inferMuniLocalRootPath(exposedPath, relativePath);
+
+    if (input && inferredRoot) {
+        input.value = inferredRoot;
+    }
+    if (hint) {
+        const selectedLabel = inferredRoot || folderName;
+        hint.textContent = `Dossier local sélectionné: ${selectedLabel} (${files.length} élément(s)).`;
+    }
+}
+
+function inferMuniLocalRootPath(exposedPath, relativePath) {
+    if (!exposedPath || !relativePath || !relativePath.includes("/")) {
+        return "";
+    }
+
+    const relativeParts = relativePath.split("/").filter(Boolean);
+    const remainder = relativeParts.slice(1).join("/");
+    if (!remainder || !exposedPath.endsWith(remainder)) {
+        return "";
+    }
+
+    return exposedPath.slice(0, -remainder.length).replace(/\/$/, "");
+}
+
+function openMuniServerFolderPicker(inputId, hintId, modeInputId) {
+    muniPathPickerState.targetInputId = inputId;
+    muniPathPickerState.targetHintId = hintId;
+    muniPathPickerState.targetModeInputId = modeInputId;
+    setMuniPathPickerMode(modeInputId, "server");
+
+    const input = document.getElementById(inputId);
+    const startPath = input && input.value ? input.value : "";
+    document.getElementById("muniPathPickerOverlay").hidden = false;
+    loadMuniFolderList(startPath);
+}
+
+function closeMuniPathPicker(event) {
+    if (event && event.target && event.target.id !== "muniPathPickerOverlay") {
+        return;
+    }
+    document.getElementById("muniPathPickerOverlay").hidden = true;
+}
+
+async function loadMuniFolderList(path) {
+    const query = path ? `?path=${encodeURIComponent(path)}` : "";
+    const response = await fetch(`/ui/fs/list${query}`);
+    if (!response.ok) {
+        alert(`Impossible de lister les dossiers (${response.status}).`);
+        return;
+    }
+
+    const data = await response.json();
+    muniPathPickerState.currentPath = data.current;
+    muniPathPickerState.parentPath = data.parent || null;
+    muniPathPickerState.roots = data.roots || [];
+    document.getElementById("muniPathPickerCurrent").textContent = muniPathPickerState.currentPath;
+    renderMuniPathPickerRoots();
+    renderMuniPathPickerList(data.directories || []);
+}
+
+function renderMuniPathPickerRoots() {
+    const rootContainer = document.getElementById("muniPathPickerRoots");
+    rootContainer.innerHTML = "";
+    for (const root of muniPathPickerState.roots) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = `Racine: ${root}`;
+        button.onclick = () => loadMuniFolderList(root);
+        rootContainer.appendChild(button);
+    }
+}
+
+function renderMuniPathPickerList(entries) {
+    const list = document.getElementById("muniPathPickerList");
+    list.innerHTML = "";
+    for (const entry of entries) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = `${entry.name} (${entry.path})`;
+        button.onclick = () => loadMuniFolderList(entry.path);
+        list.appendChild(button);
+    }
+}
+
+function muniPathPickerGoParent() {
+    if (muniPathPickerState.parentPath) {
+        loadMuniFolderList(muniPathPickerState.parentPath);
+    }
+}
+
+function applyMuniPickedFolder() {
+    if (!muniPathPickerState.targetInputId || !muniPathPickerState.currentPath) {
+        return;
+    }
+
+    const input = document.getElementById(muniPathPickerState.targetInputId);
+    if (input) {
+        input.value = muniPathPickerState.currentPath;
+    }
+    const hint = document.getElementById(muniPathPickerState.targetHintId);
+    if (hint) {
+        hint.textContent = `Dossier serveur: ${muniPathPickerState.currentPath}`;
+    }
+    setMuniPathPickerMode(muniPathPickerState.targetModeInputId, "server");
+    closeMuniPathPicker();
+}
+
+function setMuniPathPickerMode(modeInputId, mode) {
+    const modeInput = document.getElementById(modeInputId);
+    if (modeInput) {
+        modeInput.value = mode;
+    }
+}
+</script>

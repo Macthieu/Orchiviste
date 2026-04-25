@@ -6,6 +6,8 @@ import Vapor
 private struct UIMuniRenommageEmployeeForm: Content {
     let source_directory: String
     let destination_directory: String
+    let source_directory_mode: String?
+    let destination_directory_mode: String?
     let recursive: String?
     let include_hidden: String?
     let preview_execution_id: String?
