@@ -16,6 +16,13 @@ private struct UIMuniConversionEmployeeForm: Content {
     let operation: String
 }
 
+private struct UIMuniConversionEmployeeResumeForm: Content {
+    let execution_id: String
+    let destination_directory: String?
+    let use_separate_destination: String?
+    let collision_policy: String?
+}
+
 private struct UIMuniConversionProfileOption: Encodable {
     let id: String
     let label: String
@@ -40,6 +47,8 @@ private struct UIMuniConversionEmployeeRecentRun: Encodable {
     let diagnostic_severity_class: String
     let view_url: String
     let result_file_url: String
+    let resume_present: Bool
+    let resume_url: String
 }
 
 private struct UIMuniConversionResultEvent: Encodable {
@@ -98,6 +107,16 @@ private struct UIMuniConversionEmployeeContext: Encodable {
     let result_diagnostic_label: String
     let result_diagnostic_severity_label: String
     let result_diagnostic_severity_class: String
+    let resume_present: Bool
+    let resume_execution_id: String
+    let resume_source_directory: String
+    let resume_destination_directory: String
+    let resume_use_separate_destination_checked_attr: String
+    let resume_profile_label: String
+    let resume_include_subdirectories_label: String
+    let resume_mode_label: String
+    let resume_collision_options: [UIMuniConversionCollisionOption]
+    let resume_button_label: String
     let recent_runs: [UIMuniConversionEmployeeRecentRun]
     let recent_runs_present: Bool
     let technical_app_url: String
@@ -146,6 +165,17 @@ private struct MuniConversionResultDetails {
     let errors: [UIMuniConversionResultError]
 }
 
+private struct MuniConversionRunParameters {
+    let sourceDirectory: String
+    let destinationDirectory: String?
+    let includeSubdirectories: Bool
+    let dryRun: Bool
+    let profileID: String
+    let collisionPolicy: String
+    let operation: String
+    let rawParameters: [String: JSONValue]
+}
+
 private struct MuniConversionOutputFolderSummary {
     let url: String?
     let status: String
@@ -176,6 +206,7 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
         let selectedProfileID = normalizedMuniConversionProfileID(req.query[String.self, at: "profile_id"])
         let selectedCollisionPolicy = normalizedMuniConversionCollisionPolicy(req.query[String.self, at: "collision_policy"])
         let requestedExecutionID = nonEmptyMuniConversionValue(req.query[String.self, at: "execution_id"])
+        let requestedResumeExecutionID = nonEmptyMuniConversionValue(req.query[String.self, at: "resume_execution_id"])
 
         let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
         let runtimeTool = runtime.tools.first(where: { $0.descriptor.id == "MuniConversion" })
@@ -192,8 +223,10 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
         }
 
         var resultSnapshot: MuniConversionResultSnapshot?
+        var selectedDiagnostic: RunDiagnosticRecord?
         if let selectedEntry {
             let diagnostic = try await CockpitRegistryRepository.topDiagnostic(executionID: selectedEntry.executionID, on: req.db)
+            selectedDiagnostic = diagnostic
             let metadata = loadMuniConversionResultMetadata(resultFilePath: selectedEntry.resultFile, logger: req.logger)
             let details = loadMuniConversionResultDetails(entry: selectedEntry, metadata: metadata, logger: req.logger)
             resultSnapshot = MuniConversionResultSnapshot(
@@ -209,11 +242,47 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
             )
         }
 
+        let explicitResumeEntry = requestedResumeExecutionID.flatMap { executionID in
+            recentEntries.first(where: { $0.executionID == executionID })
+        }
+        let resumeSourceEntry = explicitResumeEntry ?? selectedEntry
+        var resumeEntry: CockpitHistoryEntry?
+        var resumeParameters: MuniConversionRunParameters?
+        if let candidateEntry = resumeSourceEntry {
+            let candidateMetadata: MuniConversionResultMetadata
+            let candidateDiagnostic: RunDiagnosticRecord?
+            if candidateEntry.executionID == selectedEntry?.executionID {
+                candidateMetadata = resultSnapshot?.metadata
+                    ?? loadMuniConversionResultMetadata(resultFilePath: candidateEntry.resultFile, logger: req.logger)
+                candidateDiagnostic = selectedDiagnostic
+            } else {
+                candidateMetadata = loadMuniConversionResultMetadata(resultFilePath: candidateEntry.resultFile, logger: req.logger)
+                candidateDiagnostic = try await CockpitRegistryRepository.topDiagnostic(executionID: candidateEntry.executionID, on: req.db)
+            }
+            let candidateParameters = loadMuniConversionRunParameters(entry: candidateEntry, logger: req.logger)
+            if isMuniConversionResumeCandidate(
+                entry: candidateEntry,
+                metadata: candidateMetadata,
+                diagnostic: candidateDiagnostic,
+                parameters: candidateParameters
+            ) {
+                resumeEntry = candidateEntry
+                resumeParameters = candidateParameters
+            }
+        }
+
         var recentRuns: [UIMuniConversionEmployeeRecentRun] = []
         recentRuns.reserveCapacity(min(recentEntries.count, 6))
         for entry in recentEntries.prefix(6) {
             let diagnostic = try await CockpitRegistryRepository.topDiagnostic(executionID: entry.executionID, on: req.db)
             let metadata = loadMuniConversionResultMetadata(resultFilePath: entry.resultFile, logger: req.logger)
+            let runParameters = loadMuniConversionRunParameters(entry: entry, logger: req.logger)
+            let resumePresent = isMuniConversionResumeCandidate(
+                entry: entry,
+                metadata: metadata,
+                diagnostic: diagnostic,
+                parameters: runParameters
+            )
             recentRuns.append(UIMuniConversionEmployeeRecentRun(
                 execution_id: entry.executionID,
                 action_label: entry.action == "convert" ? "Conversion" : "Analyse",
@@ -234,10 +303,23 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
                     collisionPolicy: selectedCollisionPolicy,
                     executionID: entry.executionID
                 ),
-                result_file_url: employeeMuniConversionResultFileURL(executionID: entry.executionID)
+                result_file_url: employeeMuniConversionResultFileURL(executionID: entry.executionID),
+                resume_present: resumePresent,
+                resume_url: resumePresent ? employeeMuniConversionPageURL(
+                    sourceDirectory: sourceDirectory,
+                    destinationDirectory: destinationDirectory,
+                    useSeparateDestination: useSeparateDestination,
+                    includeSubdirectories: includeSubdirectories,
+                    dryRun: dryRun,
+                    profileID: selectedProfileID,
+                    collisionPolicy: selectedCollisionPolicy,
+                    executionID: entry.executionID,
+                    resumeExecutionID: entry.executionID
+                ) : ""
             ))
         }
 
+        let resumeCollisionPolicy = resumeParameters?.collisionPolicy ?? selectedCollisionPolicy
         return UIMuniConversionEmployeeContext(
             source_directory: sourceDirectory,
             destination_directory: destinationDirectory,
@@ -282,6 +364,16 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
             result_diagnostic_label: resultSnapshot?.diagnostic?.label ?? "",
             result_diagnostic_severity_label: muniConversionDiagnosticSeverityLabel(resultSnapshot?.diagnostic?.severity),
             result_diagnostic_severity_class: muniConversionDiagnosticSeverityClass(resultSnapshot?.diagnostic?.severity),
+            resume_present: resumeParameters != nil,
+            resume_execution_id: resumeEntry?.executionID ?? "",
+            resume_source_directory: resumeParameters?.sourceDirectory ?? "",
+            resume_destination_directory: resumeParameters?.destinationDirectory ?? "",
+            resume_use_separate_destination_checked_attr: resumeParameters?.destinationDirectory != nil ? "checked" : "",
+            resume_profile_label: resumeParameters.map { muniConversionProfileLabel($0.profileID) } ?? "",
+            resume_include_subdirectories_label: resumeParameters?.includeSubdirectories == true ? "Oui" : "Non",
+            resume_mode_label: resumeParameters.map(muniConversionResumeModeLabel) ?? "",
+            resume_collision_options: muniConversionCollisionOptions(selectedID: resumeCollisionPolicy),
+            resume_button_label: resumeParameters.map(muniConversionResumeButtonLabel) ?? "Relancer",
             recent_runs: recentRuns,
             recent_runs_present: !recentRuns.isEmpty,
             technical_app_url: "/ui/muni/apps/MuniConversion",
@@ -406,6 +498,110 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
             ))
         }
     }
+
+    app.on(.POST, "ui", "muni", "apps", "MuniConversion", "employe", "resume", body: .collect(maxSize: "2mb")) { req async throws -> Response in
+        let form = try req.content.decode(UIMuniConversionEmployeeResumeForm.self)
+        let collisionPolicy = normalizedMuniConversionCollisionPolicy(form.collision_policy)
+        let useSeparateDestination = parseMuniConversionFlag(form.use_separate_destination)
+            || nonEmptyMuniConversionValue(form.destination_directory) != nil
+
+        var redirectSourceDirectory = ""
+        var redirectDestinationDirectory = form.destination_directory ?? ""
+        var redirectIncludeSubdirectories = false
+        var redirectDryRun = true
+        var redirectProfileID = "docx_to_pdf"
+
+        do {
+            let previousEntry = try await fetchMuniConversionRun(executionID: form.execution_id, on: req.db)
+            guard let previousRun = loadMuniConversionRunParameters(entry: previousEntry, logger: req.logger),
+                  previousRun.operation == "convert" else {
+                throw Abort(.badRequest, reason: "Ce run ne contient pas les paramètres nécessaires à une reprise employé.")
+            }
+
+            let sourceDirectory = try validatedMuniConversionDirectoryPath(previousRun.sourceDirectory, label: "source")
+            let destinationDirectory = try validatedOptionalMuniConversionDestination(
+                form.destination_directory,
+                useSeparateDestination: useSeparateDestination
+            )
+
+            redirectSourceDirectory = sourceDirectory
+            redirectDestinationDirectory = destinationDirectory ?? ""
+            redirectIncludeSubdirectories = previousRun.includeSubdirectories
+            redirectDryRun = previousRun.dryRun
+            redirectProfileID = previousRun.profileID
+
+            let confirmConvert = previousRun.operation == "convert" && !previousRun.dryRun
+            var parameters = previousRun.rawParameters
+            parameters["source_path"] = .string(sourceDirectory)
+            parameters["profile_id"] = .string(previousRun.profileID)
+            parameters["include_subdirectories"] = .bool(previousRun.includeSubdirectories)
+            parameters["collision_policy"] = .string(collisionPolicy)
+            parameters["dry_run"] = .bool(previousRun.dryRun)
+            parameters["confirm_convert"] = .bool(confirmConvert)
+            if let destinationDirectory {
+                parameters["output_path"] = .string(destinationDirectory)
+            } else {
+                parameters.removeValue(forKey: "output_path")
+            }
+
+            let launchRequest = CockpitLaunchRequest(
+                toolID: "MuniConversion",
+                action: previousRun.operation,
+                correlationID: req.headers.first(name: "x-correlation-id"),
+                workspacePath: nil,
+                inputArtifacts: [],
+                parameters: parameters,
+                allowDestructive: confirmConvert
+            )
+
+            let outcome = try await CockpitCanonicalLauncher.launch(launchRequest, on: req.db, logger: req.logger)
+            let notice = previousRun.dryRun
+                ? "Reprise en simulation \(outcome.executionID) terminée."
+                : "Reprise de conversion \(outcome.executionID) terminée."
+
+            return req.redirect(to: employeeMuniConversionPageURL(
+                sourceDirectory: sourceDirectory,
+                destinationDirectory: destinationDirectory ?? "",
+                useSeparateDestination: destinationDirectory != nil,
+                includeSubdirectories: previousRun.includeSubdirectories,
+                dryRun: previousRun.dryRun,
+                profileID: previousRun.profileID,
+                collisionPolicy: collisionPolicy,
+                executionID: outcome.executionID,
+                notice: notice
+            ))
+        } catch let abort as AbortError {
+            return req.redirect(to: employeeMuniConversionPageURL(
+                sourceDirectory: redirectSourceDirectory,
+                destinationDirectory: redirectDestinationDirectory,
+                useSeparateDestination: useSeparateDestination,
+                includeSubdirectories: redirectIncludeSubdirectories,
+                dryRun: redirectDryRun,
+                profileID: redirectProfileID,
+                collisionPolicy: collisionPolicy,
+                executionID: form.execution_id,
+                resumeExecutionID: form.execution_id,
+                error: abort.reason.isEmpty ? "Échec reprise MuniConversion." : abort.reason
+            ))
+        } catch {
+            req.logger.error("Échec reprise employé MuniConversion.", metadata: [
+                "execution_id": .string(form.execution_id),
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: employeeMuniConversionPageURL(
+                sourceDirectory: redirectSourceDirectory,
+                destinationDirectory: redirectDestinationDirectory,
+                useSeparateDestination: useSeparateDestination,
+                includeSubdirectories: redirectIncludeSubdirectories,
+                dryRun: redirectDryRun,
+                profileID: redirectProfileID,
+                collisionPolicy: collisionPolicy,
+                executionID: form.execution_id,
+                resumeExecutionID: form.execution_id,
+                error: "Erreur interne pendant la reprise de MuniConversion."
+            ))
+        }
+    }
 }
 
 private func muniConversionProfileOptions(selectedID: String) -> [UIMuniConversionProfileOption] {
@@ -444,6 +640,26 @@ private func muniConversionCollisionOptions(selectedID: String) -> [UIMuniConver
     }
 }
 
+private func muniConversionProfileLabel(_ profileID: String) -> String {
+    muniConversionProfileOptions(selectedID: profileID)
+        .first(where: { $0.id == profileID })?
+        .label ?? profileID
+}
+
+private func muniConversionResumeModeLabel(_ parameters: MuniConversionRunParameters) -> String {
+    if parameters.dryRun {
+        return "Simulation de conversion"
+    }
+    return "Conversion réelle"
+}
+
+private func muniConversionResumeButtonLabel(_ parameters: MuniConversionRunParameters) -> String {
+    if parameters.dryRun {
+        return "Relancer la simulation"
+    }
+    return "Relancer la conversion"
+}
+
 private func employeeMuniConversionPageURL(
     sourceDirectory: String,
     destinationDirectory: String,
@@ -453,6 +669,7 @@ private func employeeMuniConversionPageURL(
     profileID: String,
     collisionPolicy: String,
     executionID: String?,
+    resumeExecutionID: String? = nil,
     notice: String? = nil,
     error: String? = nil
 ) -> String {
@@ -475,6 +692,9 @@ private func employeeMuniConversionPageURL(
     if let executionID {
         params.append("execution_id=\(muniConversionURLQueryEncoded(executionID))")
     }
+    if let resumeExecutionID {
+        params.append("resume_execution_id=\(muniConversionURLQueryEncoded(resumeExecutionID))")
+    }
     if let notice {
         params.append("notice=\(muniConversionURLQueryEncoded(notice))")
     }
@@ -495,6 +715,77 @@ private func fetchMuniConversionRun(executionID: String, on db: Database) async 
         throw Abort(.notFound, reason: "Run MuniConversion introuvable.")
     }
     return entry
+}
+
+private func loadMuniConversionRunParameters(
+    entry: CockpitHistoryEntry,
+    logger: Logger
+) -> MuniConversionRunParameters? {
+    let requestURL = URL(fileURLWithPath: entry.requestFile)
+    guard FileManager.default.fileExists(atPath: requestURL.path) else {
+        return nil
+    }
+
+    do {
+        let data = try Data(contentsOf: requestURL)
+        let request = try JSONDecoder().decode(ToolRequest.self, from: data)
+        guard request.tool == "MuniConversion",
+              let sourceDirectory = muniConversionStringParameter("source_path", from: request.parameters) else {
+            return nil
+        }
+
+        let profileID = normalizedMuniConversionProfileID(
+            muniConversionStringParameter("profile_id", from: request.parameters)
+        )
+        let collisionPolicy = normalizedMuniConversionCollisionPolicy(
+            muniConversionStringParameter("collision_policy", from: request.parameters)
+        )
+        let includeSubdirectories = muniConversionBoolParameter("include_subdirectories", from: request.parameters) ?? false
+        let dryRun = muniConversionBoolParameter("dry_run", from: request.parameters) ?? entry.dryRun ?? true
+
+        return MuniConversionRunParameters(
+            sourceDirectory: sourceDirectory,
+            destinationDirectory: muniConversionStringParameter("output_path", from: request.parameters),
+            includeSubdirectories: includeSubdirectories,
+            dryRun: dryRun,
+            profileID: profileID,
+            collisionPolicy: collisionPolicy,
+            operation: normalizedMuniConversionOperation(request.action),
+            rawParameters: request.parameters
+        )
+    } catch {
+        logger.debug("Lecture request.json MuniConversion ignorée pour reprise employé.", metadata: [
+            "path": .string(requestURL.path),
+            "error": .string(error.localizedDescription)
+        ])
+        return nil
+    }
+}
+
+private func isMuniConversionResumeCandidate(
+    entry: CockpitHistoryEntry,
+    metadata: MuniConversionResultMetadata,
+    diagnostic: RunDiagnosticRecord?,
+    parameters: MuniConversionRunParameters?
+) -> Bool {
+    guard let parameters, parameters.operation == "convert" else {
+        return false
+    }
+    if entry.status == .failed || entry.status == .needsReview {
+        return true
+    }
+    if (metadata.errors ?? 0) > 0 || (metadata.skippedExisting ?? 0) > 0 {
+        return true
+    }
+    if diagnostic != nil {
+        return true
+    }
+
+    let summary = (entry.summary ?? "").lowercased()
+    return summary.contains("collision") ||
+        summary.contains("destination") ||
+        summary.contains("existant") ||
+        summary.contains("existing")
 }
 
 private func normalizedMuniConversionOperation(_ rawValue: String) -> String {
@@ -784,6 +1075,32 @@ private func parseMuniConversionFlag(_ rawValue: String?, defaultValue: Bool = f
         return false
     default:
         return defaultValue
+    }
+}
+
+private func muniConversionStringParameter(_ key: String, from parameters: [String: JSONValue]) -> String? {
+    guard let value = parameters[key] else {
+        return nil
+    }
+    if case .string(let text) = value {
+        return nonEmptyMuniConversionValue(text)
+    }
+    return nil
+}
+
+private func muniConversionBoolParameter(_ key: String, from parameters: [String: JSONValue]) -> Bool? {
+    guard let value = parameters[key] else {
+        return nil
+    }
+    switch value {
+    case .bool(let flag):
+        return flag
+    case .string(let text):
+        return parseMuniConversionFlag(text)
+    case .number(let number):
+        return number != 0
+    default:
+        return nil
     }
 }
 

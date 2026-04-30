@@ -265,6 +265,33 @@
             padding-top: 12px;
             border-top: 1px solid var(--border);
         }
+        .resume-panel {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .resume-static {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            margin: 10px 0 12px;
+        }
+        .resume-static div {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            background: #fff;
+            min-width: 0;
+        }
+        .resume-static span {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
         .result-subsection h3 {
             margin-bottom: 8px;
             font-size: 15px;
@@ -471,6 +498,68 @@
                     #endif
                 </div>
 
+                #if(resume_present):
+                <section class="resume-panel">
+                    <h3>Reprendre ce lot</h3>
+                    <p class="hint">Source, profil et mode conservés depuis le run <span class="mono">#(resume_execution_id)</span>.</p>
+                    <div class="resume-static">
+                        <div>
+                            <span>Source</span>
+                            <strong class="mono">#(resume_source_directory)</strong>
+                        </div>
+                        <div>
+                            <span>Profil</span>
+                            <strong>#(resume_profile_label)</strong>
+                        </div>
+                        <div>
+                            <span>Sous-dossiers</span>
+                            <strong>#(resume_include_subdirectories_label)</strong>
+                        </div>
+                        <div>
+                            <span>Mode</span>
+                            <strong>#(resume_mode_label)</strong>
+                        </div>
+                    </div>
+
+                    <form action="/ui/muni/apps/MuniConversion/employe/resume" method="post">
+                        <input type="hidden" name="execution_id" value="#(resume_execution_id)">
+                        #extend("components/muni_path_picker"):
+                            #export("picker_label", "Dossier destination")
+                            #export("picker_input_id", "muniConversionResumeDestinationDirectory")
+                            #export("picker_name", "destination_directory")
+                            #export("picker_value", resume_destination_directory)
+                            #export("picker_placeholder", "/Volumes/.../convertis")
+                            #export("picker_file_input_id", "muniConversionResumeDestinationLocalPicker")
+                            #export("picker_hint_id", "muniConversionResumeDestinationHint")
+                            #export("picker_mode_input_id", "muniConversionResumeDestinationMode")
+                            #export("picker_mode_name", "destination_directory_mode")
+                            #export("picker_mode", "server")
+                            #export("picker_required_attr", "")
+                            #export("picker_hint", "Optionnel: choisissez un autre dossier pour la reprise.")
+                        #endextend
+
+                        <div class="checkboxes">
+                            <label><input id="muniConversionResumeUseDestination" type="checkbox" name="use_separate_destination" #(resume_use_separate_destination_checked_attr) onchange="syncMuniConversionDestinationRequired('muniConversionResumeUseDestination', 'muniConversionResumeDestinationDirectory')"> Destination distincte</label>
+                        </div>
+
+                        <div class="form-grid" style="margin-top:12px;">
+                            <label>
+                                Collision
+                                <select name="collision_policy">
+                                    #for(option in resume_collision_options):
+                                    <option value="#(option.id)" #(option.selected_attr)>#(option.label)</option>
+                                    #endfor
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="actions">
+                            <button class="btn-primary" type="submit">#(resume_button_label)</button>
+                        </div>
+                    </form>
+                </section>
+                #endif
+
                 <section class="result-subsection">
                     <h3>Où retrouver la sortie</h3>
                     <p class="hint">#(result_output_folder_status)</p>
@@ -572,6 +661,9 @@
                     <p class="hint">Terminé: <span class="mono">#(run.finished_at)</span></p>
                     <div class="recent-actions">
                         <a href="#(run.view_url)">Voir le résultat</a>
+                        #if(run.resume_present):
+                        <a href="#(run.resume_url)">Reprendre</a>
+                        #endif
                         <a href="#(run.result_file_url)" target="_blank" rel="noopener">JSON</a>
                     </div>
                 </article>
@@ -585,15 +677,16 @@
 </main>
 #extend("components/muni_path_picker_scripts")
 <script>
-function syncMuniConversionDestinationRequired() {
-    const checkbox = document.getElementById("muniConversionUseDestination");
-    const destination = document.getElementById("muniConversionDestinationDirectory");
+function syncMuniConversionDestinationRequired(checkboxId, destinationId) {
+    const checkbox = document.getElementById(checkboxId || "muniConversionUseDestination");
+    const destination = document.getElementById(destinationId || "muniConversionDestinationDirectory");
     if (!checkbox || !destination) {
         return;
     }
     destination.required = checkbox.checked;
 }
 syncMuniConversionDestinationRequired();
+syncMuniConversionDestinationRequired("muniConversionResumeUseDestination", "muniConversionResumeDestinationDirectory");
 </script>
 </body>
 </html>
