@@ -28,6 +28,7 @@ private struct UIMuniStoreAction: Encodable {
     let is_disabled: Bool
     let is_primary: Bool
     let action_class: String
+    let disabled_reason: String
 }
 
 private struct UIMuniStoreModule: Encodable {
@@ -607,22 +608,25 @@ private func muniStoreVisibleState(
 }
 
 private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
-    [
+    let employeeURL = employeeFacadeURL(for: appID)
+    return [
         UIMuniStoreAction(
             action_key: "ouvrir",
-            action_label: "Ouvrir",
-            action_url: employeeDetailURL(for: appID),
-            is_disabled: false,
+            action_label: "Ouvrir l’outil",
+            action_url: employeeURL ?? "#",
+            is_disabled: employeeURL == nil,
             is_primary: true,
-            action_class: "primary"
+            action_class: "primary",
+            disabled_reason: employeeURL == nil ? "Façade employé non disponible." : ""
         ),
         UIMuniStoreAction(
             action_key: "voir_details",
-            action_label: "Voir détails",
+            action_label: "Voir la fiche",
             action_url: "/ui/muni/apps/\(urlPathComponentEncoded(appID))",
             is_disabled: false,
             is_primary: false,
-            action_class: ""
+            action_class: "",
+            disabled_reason: ""
         ),
         UIMuniStoreAction(
             action_key: "activer",
@@ -630,7 +634,8 @@ private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
             action_url: "#",
             is_disabled: true,
             is_primary: false,
-            action_class: ""
+            action_class: "",
+            disabled_reason: "Activation non disponible dans S7.3."
         ),
         UIMuniStoreAction(
             action_key: "desactiver",
@@ -638,7 +643,8 @@ private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
             action_url: "#",
             is_disabled: true,
             is_primary: false,
-            action_class: ""
+            action_class: "",
+            disabled_reason: "Désactivation non disponible dans S7.3."
         )
     ]
 }
@@ -1075,13 +1081,17 @@ private func normalizedCockpitAction(_ rawAction: String?, fallback: String) -> 
 }
 
 private func employeeDetailURL(for appID: String) -> String {
+    employeeFacadeURL(for: appID) ?? "/ui/muni/apps/\(urlPathComponentEncoded(appID))"
+}
+
+private func employeeFacadeURL(for appID: String) -> String? {
     switch appID {
     case "MuniRenommage":
         return "/ui/muni/apps/MuniRenommage/employe"
     case "MuniConversion":
         return "/ui/muni/apps/MuniConversion/employe"
     default:
-        return "/ui/muni/apps/\(urlPathComponentEncoded(appID))"
+        return nil
     }
 }
 
