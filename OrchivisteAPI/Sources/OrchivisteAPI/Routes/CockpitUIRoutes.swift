@@ -39,6 +39,9 @@ private struct UIMuniStoreModule: Encodable {
     let installed_label: String
     let visible_state: String
     let visible_state_class: String
+    let employee_readiness_label: String
+    let employee_readiness_class: String
+    let employee_readiness_reason: String
     let integration_status: String
     let availability_reason: String
     let actions: [UIMuniStoreAction]
@@ -260,6 +263,7 @@ func registerCockpitUIRoutes(_ app: Application) {
             let descriptor = appRecord.descriptor
             let runtimeTool = runtime.tools.first(where: { $0.descriptor.id == descriptor.id })
             let state = muniStoreVisibleState(for: descriptor, runtimeTool: runtimeTool)
+            let employeeReadiness = muniStoreEmployeeReadiness(for: descriptor.id)
             let actions = muniStoreActions(for: descriptor.id)
 
             return UIMuniStoreModule(
@@ -270,6 +274,9 @@ func registerCockpitUIRoutes(_ app: Application) {
                 installed_label: "installe",
                 visible_state: state.label,
                 visible_state_class: state.cssClass,
+                employee_readiness_label: employeeReadiness.label,
+                employee_readiness_class: employeeReadiness.cssClass,
+                employee_readiness_reason: employeeReadiness.reason,
                 integration_status: descriptor.integrationStatus,
                 availability_reason: runtimeTool?.availabilityReason ?? "Disponibilité non déterminée.",
                 actions: actions,
@@ -607,6 +614,21 @@ private func muniStoreVisibleState(
     return ("non disponible", "state-unavailable")
 }
 
+private func muniStoreEmployeeReadiness(for appID: String) -> (label: String, cssClass: String, reason: String) {
+    if employeeFacadeURL(for: appID) != nil {
+        return (
+            "Prêt employé",
+            "employee-ready",
+            "Façade employé dédiée et point d'entrée App Store disponibles."
+        )
+    }
+    return (
+        "Technique seulement",
+        "employee-technical",
+        "Aucune façade employé stabilisée pour ce module."
+    )
+}
+
 private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
     let employeeURL = employeeFacadeURL(for: appID)
     return [
@@ -635,7 +657,7 @@ private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
             is_disabled: true,
             is_primary: false,
             action_class: "",
-            disabled_reason: "Activation non disponible dans S7.3."
+            disabled_reason: "Activation non disponible à ce stade."
         ),
         UIMuniStoreAction(
             action_key: "desactiver",
@@ -644,7 +666,7 @@ private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
             is_disabled: true,
             is_primary: false,
             action_class: "",
-            disabled_reason: "Désactivation non disponible dans S7.3."
+            disabled_reason: "Désactivation non disponible à ce stade."
         )
     ]
 }

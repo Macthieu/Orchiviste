@@ -131,6 +131,8 @@
         .state-disabled { background: #f3f3f3; color: #555; }
         .state-unavailable { background: #fff6e7; color: var(--warning); border-color: #ead0a8; }
         .state-error { background: #fbe4de; color: var(--danger); border-color: #edc1b6; }
+        .employee-ready { background: #edf7f3; color: var(--accent); border-color: #cde7de; }
+        .employee-technical { background: #eef3f8; color: var(--info); border-color: #c9d8e8; }
         .version { color: var(--info); }
         .availability {
             margin: 0;
@@ -231,6 +233,7 @@
             <div class="meta">
                 <span class="badge">#(module.installed_label)</span>
                 <span class="badge #(module.visible_state_class)">#(module.visible_state)</span>
+                <span class="badge #(module.employee_readiness_class)" title="#(module.employee_readiness_reason)">#(module.employee_readiness_label)</span>
                 <span class="badge">#(module.integration_status)</span>
             </div>
             <p class="description">#(module.description)</p>
