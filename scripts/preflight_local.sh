@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_WEBHOOK="1"
 RUN_WORKER="1"
 RUN_GRAPH="1"
+RUN_MUNICONV_RESUME="1"
 SKIP_UP="0"
 run_pdf_batch="0"
 start_epoch="$(date +%s)"
@@ -18,8 +19,8 @@ usage() {
 Usage: ./scripts/preflight_local.sh [options]
 
 Modes:
-  --full            validation complète (défaut) : smoke + openapi + webhook + worker
-  --quick           validation rapide : smoke + openapi (sans webhook, sans worker, sans graph)
+  --full            validation complète (défaut) : smoke + openapi + webhook + worker + reprise MuniConversion
+  --quick           validation rapide : smoke + openapi (sans webhook, sans worker, sans graph, sans reprise MuniConversion)
 
 Options:
   --skip-up         n'exécute pas ./scripts/dev_up.sh (stack déjà démarrée)
@@ -40,11 +41,13 @@ while (($# > 0)); do
     --full)
       RUN_WEBHOOK="1"
       RUN_WORKER="1"
+      RUN_MUNICONV_RESUME="1"
       ;;
     --quick)
       RUN_WEBHOOK="0"
       RUN_WORKER="0"
       RUN_GRAPH="0"
+      RUN_MUNICONV_RESUME="0"
       ;;
     --skip-up)
       SKIP_UP="1"
@@ -125,6 +128,13 @@ if [[ "$RUN_WORKER" == "1" ]]; then
   ./scripts/smoke_worker_controlplane.sh
 else
   echo "INFO: test worker ignoré (mode rapide ou --no-worker)."
+fi
+
+if [[ "$RUN_MUNICONV_RESUME" == "1" ]]; then
+  echo "== Smoke reprise employé MuniConversion =="
+  ./scripts/smoke_muni_conversion_employee_resume.sh
+else
+  echo "INFO: smoke reprise employé MuniConversion ignoré (--quick)."
 fi
 
 if [[ "$run_pdf_batch" == "1" ]]; then
