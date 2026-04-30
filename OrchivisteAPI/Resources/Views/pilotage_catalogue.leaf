@@ -154,6 +154,7 @@
 
 <main class="wrap">
     <nav class="subnav">
+        <a href="/ui/muni/store">App Store Muni</a>
         <a class="active" href="/ui/pilotage/catalogue">Catalogue</a>
         <a href="/ui/pilotage/lancer">Lancer</a>
         <a href="/ui/pilotage/historique">Historique</a>

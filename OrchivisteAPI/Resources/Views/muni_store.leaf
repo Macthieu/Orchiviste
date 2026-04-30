@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste Muni - App Store local</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --warning: #ac5d0c;
+            --danger: #9b3a16;
+            --border: #d9d2c4;
+            --info: #145a97;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1240px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .subnav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .subnav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
+        .hero {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+        .hero h1 {
+            margin: 0 0 6px;
+            font-size: 28px;
+        }
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+        }
+        .module-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            min-height: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .module-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .module-head h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+        .description {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.45;
+            flex: 1;
+        }
+        .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .badge {
+            display: inline-block;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+            background: #fff;
+        }
+        .state-active { background: #ebf8f4; color: var(--accent); border-color: #bde2d7; }
+        .state-disabled { background: #f3f3f3; color: #555; }
+        .state-unavailable { background: #fff6e7; color: var(--warning); border-color: #ead0a8; }
+        .state-error { background: #fbe4de; color: var(--danger); border-color: #edc1b6; }
+        .version { color: var(--info); }
+        .availability {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 2px;
+        }
+        .actions a,
+        .actions button {
+            border-radius: 999px;
+            padding: 8px 11px;
+            font-weight: 700;
+            font-size: 13px;
+            border: 1px solid #bde2d7;
+            background: #fff;
+            color: var(--accent);
+            text-decoration: none;
+            font-family: inherit;
+        }
+        .actions .primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .actions button[disabled] {
+            color: #7c8588;
+            border-color: var(--border);
+            background: #f5f3ef;
+            cursor: not-allowed;
+        }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        @media (max-width: 720px) {
+            header nav a {
+                margin-left: 0;
+                margin-right: 12px;
+            }
+            .hero h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste Muni</strong>
+    <nav>
+        <a href="/ui">Tableau de bord</a>
+        <a href="/ui/muni/store">App Store Muni</a>
+        <a href="/ui/pilotage/lancer">Pilotage expert</a>
+        <a href="/ui/setup">Configuration</a>
+        <a href="/ui/jobs">Tâches</a>
+    </nav>
+</header>
+
+<main class="wrap">
+    <nav class="subnav">
+        <a class="active" href="/ui/muni/store">App Store Muni</a>
+        <a href="/ui/pilotage/catalogue">Catalogue technique</a>
+        <a href="/ui/pilotage/lancer">Lancer</a>
+        <a href="/ui/pilotage/historique">Historique</a>
+    </nav>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="hero">
+        <h1>App Store Muni local</h1>
+        <p>Catalogue local en lecture seule des modules Muni connus par Orchiviste.</p>
+    </section>
+
+    #if(modules_present):
+    <section class="grid">
+        #for(module in modules):
+        <article class="module-card">
+            <div class="module-head">
+                <h2>#(module.display_name)</h2>
+                <span class="badge version">v#(module.version)</span>
+            </div>
+            <div class="meta">
+                <span class="badge">#(module.installed_label)</span>
+                <span class="badge #(module.visible_state_class)">#(module.visible_state)</span>
+                <span class="badge">#(module.integration_status)</span>
+            </div>
+            <p class="description">#(module.description)</p>
+            <p class="availability"><strong>Disponibilité:</strong> #(module.availability_reason)</p>
+
+            #if(module.actions_present):
+            <div class="actions" aria-label="Actions disponibles pour #(module.display_name)">
+                #for(action in module.actions):
+                #if(action.is_disabled):
+                <button type="button" disabled>#(action.action_label)</button>
+                #else:
+                <a href="#(action.action_url)" class="#(action.action_class)">#(action.action_label)</a>
+                #endif
+                #endfor
+            </div>
+            #endif
+        </article>
+        #endfor
+    </section>
+    #else:
+    <section class="hero">
+        <p>Aucun module Muni n'est connu du registre local.</p>
+    </section>
+    #endif
+</main>
+</body>
+</html>

@@ -21,6 +21,36 @@ private struct UICockpitToolCard: Encodable {
     let detail_url: String
 }
 
+private struct UIMuniStoreAction: Encodable {
+    let action_key: String
+    let action_label: String
+    let action_url: String
+    let is_disabled: Bool
+    let is_primary: Bool
+    let action_class: String
+}
+
+private struct UIMuniStoreModule: Encodable {
+    let app_id: String
+    let display_name: String
+    let description: String
+    let version: String
+    let installed_label: String
+    let visible_state: String
+    let visible_state_class: String
+    let integration_status: String
+    let availability_reason: String
+    let actions: [UIMuniStoreAction]
+    let actions_present: Bool
+}
+
+private struct UIMuniStoreContext: Encodable {
+    let modules: [UIMuniStoreModule]
+    let modules_present: Bool
+    let notice: String?
+    let error: String?
+}
+
 private struct UICockpitHistoryRow: Encodable {
     let execution_id: String
     let request_id: String
@@ -217,6 +247,43 @@ private struct UICockpitPriorityDiagnosticSummary: Sendable {
 }
 
 func registerCockpitUIRoutes(_ app: Application) {
+    let buildMuniStoreContext: @Sendable (Request) async throws -> UIMuniStoreContext = { req in
+        let baseConfig = CockpitConfigLoader.load(logger: req.logger)
+        let appRecords = try await CockpitRegistryRepository.listMuniApps(
+            baseConfig: baseConfig,
+            on: req.db
+        )
+        let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
+
+        let modules = appRecords.map { appRecord in
+            let descriptor = appRecord.descriptor
+            let runtimeTool = runtime.tools.first(where: { $0.descriptor.id == descriptor.id })
+            let state = muniStoreVisibleState(for: descriptor, runtimeTool: runtimeTool)
+            let actions = muniStoreActions(for: descriptor.id)
+
+            return UIMuniStoreModule(
+                app_id: descriptor.id,
+                display_name: descriptor.displayName,
+                description: descriptor.mission,
+                version: descriptor.version,
+                installed_label: "installe",
+                visible_state: state.label,
+                visible_state_class: state.cssClass,
+                integration_status: descriptor.integrationStatus,
+                availability_reason: runtimeTool?.availabilityReason ?? "Disponibilité non déterminée.",
+                actions: actions,
+                actions_present: !actions.isEmpty
+            )
+        }
+
+        return UIMuniStoreContext(
+            modules: modules,
+            modules_present: !modules.isEmpty,
+            notice: nonEmpty(req.query[String.self, at: "notice"]),
+            error: nonEmpty(req.query[String.self, at: "error"])
+        )
+    }
+
     let buildPilotageContext: @Sendable (Request) async -> UICockpitContext = { req in
         let runtime = await CockpitCanonicalLauncher.loadRuntimeCatalog(on: req.db, logger: req.logger)
         let selectedToolID = nonEmpty(req.query[String.self, at: "tool"]) ?? runtime.tools.first?.descriptor.id ?? ""
@@ -486,6 +553,13 @@ func registerCockpitUIRoutes(_ app: Application) {
     app.get("ui", "cockpit") { req async throws -> Response in
         req.redirect(to: "/ui/pilotage/catalogue")
     }
+    app.get("ui", "muni") { req async throws -> Response in
+        req.redirect(to: "/ui/muni/store")
+    }
+    app.get("ui", "muni", "store") { req async throws -> View in
+        let context = try await buildMuniStoreContext(req)
+        return try await req.view.render("muni_store", context)
+    }
 
     app.get("ui", "pilotage", "catalogue") { req async throws -> View in
         let context = await buildPilotageContext(req)
@@ -514,6 +588,59 @@ func registerCockpitUIRoutes(_ app: Application) {
 
     app.on(.POST, "ui", "cockpit", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
     app.on(.POST, "ui", "pilotage", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
+}
+
+private func muniStoreVisibleState(
+    for descriptor: CockpitToolDescriptor,
+    runtimeTool: CockpitToolRuntimeDescriptor?
+) -> (label: String, cssClass: String) {
+    guard descriptor.enabled else {
+        return ("desactive", "state-disabled")
+    }
+    guard let runtimeTool else {
+        return ("erreur", "state-error")
+    }
+    if runtimeTool.isAvailable {
+        return ("active", "state-active")
+    }
+    return ("non disponible", "state-unavailable")
+}
+
+private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
+    [
+        UIMuniStoreAction(
+            action_key: "ouvrir",
+            action_label: "Ouvrir",
+            action_url: employeeDetailURL(for: appID),
+            is_disabled: false,
+            is_primary: true,
+            action_class: "primary"
+        ),
+        UIMuniStoreAction(
+            action_key: "voir_details",
+            action_label: "Voir détails",
+            action_url: "/ui/muni/apps/\(urlPathComponentEncoded(appID))",
+            is_disabled: false,
+            is_primary: false,
+            action_class: ""
+        ),
+        UIMuniStoreAction(
+            action_key: "activer",
+            action_label: "Activer",
+            action_url: "#",
+            is_disabled: true,
+            is_primary: false,
+            action_class: ""
+        ),
+        UIMuniStoreAction(
+            action_key: "desactiver",
+            action_label: "Désactiver",
+            action_url: "#",
+            is_disabled: true,
+            is_primary: false,
+            action_class: ""
+        )
+    ]
 }
 
 private func loadHistoryDiagnostics(for entry: CockpitHistoryEntry, logger: Logger) -> UICockpitHistoryDiagnostics {
