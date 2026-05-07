@@ -17,6 +17,7 @@ RUN_WEBHOOK="1"
 RUN_WORKER="1"
 RUN_GRAPH="1"
 RUN_MUNICONV_RESUME="1"
+RUN_MUNI_STORE_ACTIVATION="1"
 SKIP_UP="0"
 run_pdf_batch="0"
 start_epoch="$(date +%s)"
@@ -33,8 +34,8 @@ usage() {
 Usage: ./scripts/preflight_local.sh [options]
 
 Modes:
-  --full            validation complète (défaut) : smoke + openapi + webhook + graph + reprise MuniConversion
-  --quick           validation rapide : smoke + openapi (sans webhook, sans worker, sans graph, sans reprise MuniConversion)
+  --full            validation complète (défaut) : smoke + openapi + webhook + graph + reprise MuniConversion + activation App Store Muni
+  --quick           validation rapide : smoke + openapi (sans webhook, sans worker, sans graph, sans reprise MuniConversion, sans activation App Store Muni)
 
 Options:
   --skip-up         ne démarre pas la stack native (services déjà démarrés)
@@ -299,12 +300,14 @@ while (($# > 0)); do
       RUN_WEBHOOK="1"
       RUN_WORKER="1"
       RUN_MUNICONV_RESUME="1"
+      RUN_MUNI_STORE_ACTIVATION="1"
       ;;
     --quick)
       RUN_WEBHOOK="0"
       RUN_WORKER="0"
       RUN_GRAPH="0"
       RUN_MUNICONV_RESUME="0"
+      RUN_MUNI_STORE_ACTIVATION="0"
       ;;
     --skip-up)
       SKIP_UP="1"
@@ -398,6 +401,13 @@ if [[ "$RUN_MUNICONV_RESUME" == "1" ]]; then
   ./scripts/smoke_muni_conversion_employee_resume.sh
 else
   echo "INFO: smoke reprise employé MuniConversion ignoré (--quick)."
+fi
+
+if [[ "$RUN_MUNI_STORE_ACTIVATION" == "1" ]]; then
+  echo "== Smoke activation App Store Muni =="
+  ./scripts/smoke_muni_store_activation.sh
+else
+  echo "INFO: smoke activation App Store Muni ignoré (--quick)."
 fi
 
 if [[ "$run_pdf_batch" == "1" ]]; then
