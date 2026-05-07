@@ -51,6 +51,23 @@ enum CockpitRegistryRepository {
         return try await muniAppRecord(from: row, on: db)
     }
 
+    static func updateMuniAppEnabled(
+        appID: String,
+        enabled: Bool,
+        on db: Database
+    ) async throws -> MuniAppRecord? {
+        guard let row = try await MuniAppRow.query(on: db)
+            .filter(\.$appID == appID)
+            .first() else {
+            return nil
+        }
+
+        row.enabled = enabled
+        row.updatedAt = Date()
+        try await row.update(on: db)
+        return try await muniAppRecord(from: row, on: db)
+    }
+
     static func appendHistoryEntry(
         _ entry: CockpitHistoryEntry,
         on db: Database,

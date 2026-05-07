@@ -146,6 +146,9 @@
             gap: 8px;
             padding-top: 2px;
         }
+        .actions form {
+            margin: 0;
+        }
         .actions a,
         .actions button {
             border-radius: 999px;
@@ -219,7 +222,7 @@
 
     <section class="hero">
         <h1>App Store Muni local</h1>
-        <p>Catalogue local en lecture seule des modules Muni connus par Orchiviste.</p>
+        <p>Catalogue local des modules Muni connus par Orchiviste, avec activation locale minimale.</p>
     </section>
 
     #if(modules_present):
@@ -245,7 +248,13 @@
                 #if(action.is_disabled):
                 <button type="button" disabled title="#(action.disabled_reason)">#(action.action_label)</button>
                 #else:
+                #if(action.uses_post):
+                <form action="#(action.action_url)" method="post">
+                    <button type="submit" class="#(action.action_class)">#(action.action_label)</button>
+                </form>
+                #else:
                 <a href="#(action.action_url)" class="#(action.action_class)">#(action.action_label)</a>
+                #endif
                 #endif
                 #endfor
             </div>

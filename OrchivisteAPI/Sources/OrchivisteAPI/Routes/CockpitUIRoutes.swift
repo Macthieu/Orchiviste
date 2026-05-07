@@ -25,6 +25,7 @@ private struct UIMuniStoreAction: Encodable {
     let action_key: String
     let action_label: String
     let action_url: String
+    let uses_post: Bool
     let is_disabled: Bool
     let is_primary: Bool
     let action_class: String
@@ -264,7 +265,10 @@ func registerCockpitUIRoutes(_ app: Application) {
             let runtimeTool = runtime.tools.first(where: { $0.descriptor.id == descriptor.id })
             let state = muniStoreVisibleState(for: descriptor, runtimeTool: runtimeTool)
             let employeeReadiness = muniStoreEmployeeReadiness(for: descriptor.id)
-            let actions = muniStoreActions(for: descriptor.id)
+            let actions = muniStoreActions(for: descriptor)
+            let availabilityReason = descriptor.enabled
+                ? runtimeTool?.availabilityReason ?? "Disponibilité non déterminée."
+                : "Module désactivé localement."
 
             return UIMuniStoreModule(
                 app_id: descriptor.id,
@@ -278,7 +282,7 @@ func registerCockpitUIRoutes(_ app: Application) {
                 employee_readiness_class: employeeReadiness.cssClass,
                 employee_readiness_reason: employeeReadiness.reason,
                 integration_status: descriptor.integrationStatus,
-                availability_reason: runtimeTool?.availabilityReason ?? "Disponibilité non déterminée.",
+                availability_reason: availabilityReason,
                 actions: actions,
                 actions_present: !actions.isEmpty
             )
@@ -546,6 +550,34 @@ func registerCockpitUIRoutes(_ app: Application) {
         }
     }
 
+    let setMuniAppEnabled: @Sendable (Request, Bool) async throws -> Response = { req, enabled in
+        guard let appID = nonEmpty(req.parameters.get("id")) else {
+            return req.redirect(to: "/ui/muni/store?error=\(urlQueryEncoded("Identifiant module Muni manquant."))")
+        }
+
+        do {
+            guard let record = try await CockpitRegistryRepository.updateMuniAppEnabled(
+                appID: appID,
+                enabled: enabled,
+                on: req.db
+            ) else {
+                let message = "Module Muni introuvable dans le registre local: \(appID)."
+                return req.redirect(to: "/ui/muni/store?error=\(urlQueryEncoded(message))")
+            }
+
+            let stateLabel = enabled ? "activé" : "désactivé"
+            let message = "\(record.descriptor.displayName) \(stateLabel)."
+            return req.redirect(to: "/ui/muni/store?notice=\(urlQueryEncoded(message))")
+        } catch {
+            req.logger.error("Échec mutation état module Muni.", metadata: [
+                "app_id": .string(appID),
+                "enabled": .string(String(enabled)),
+                "error": .string(error.localizedDescription)
+            ])
+            return req.redirect(to: "/ui/muni/store?error=\(urlQueryEncoded("Erreur interne pendant la mise à jour du module Muni."))")
+        }
+    }
+
     app.get("ui", "tools") { req async throws -> Response in
         req.redirect(to: "/ui/pilotage/catalogue")
     }
@@ -593,6 +625,12 @@ func registerCockpitUIRoutes(_ app: Application) {
         let context = try await buildMuniAppContext(req)
         return try await req.view.render("muni_app", context)
     }
+    app.on(.POST, "ui", "muni", "store", "apps", ":id", "activate", body: .collect(maxSize: "64kb")) { req async throws -> Response in
+        try await setMuniAppEnabled(req, true)
+    }
+    app.on(.POST, "ui", "muni", "store", "apps", ":id", "deactivate", body: .collect(maxSize: "64kb")) { req async throws -> Response in
+        try await setMuniAppEnabled(req, false)
+    }
 
     app.on(.POST, "ui", "cockpit", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
     app.on(.POST, "ui", "pilotage", "run", body: .collect(maxSize: "2mb"), use: runPilotage)
@@ -629,22 +667,26 @@ private func muniStoreEmployeeReadiness(for appID: String) -> (label: String, cs
     )
 }
 
-private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
+private func muniStoreActions(for descriptor: CockpitToolDescriptor) -> [UIMuniStoreAction] {
+    let appID = descriptor.id
     let employeeURL = employeeFacadeURL(for: appID)
+    let canOpenEmployeeTool = descriptor.enabled && employeeURL != nil
     return [
         UIMuniStoreAction(
             action_key: "ouvrir",
             action_label: "Ouvrir l’outil",
             action_url: employeeURL ?? "#",
-            is_disabled: employeeURL == nil,
+            uses_post: false,
+            is_disabled: !canOpenEmployeeTool,
             is_primary: true,
             action_class: "primary",
-            disabled_reason: employeeURL == nil ? "Façade employé non disponible." : ""
+            disabled_reason: muniStoreOpenDisabledReason(enabled: descriptor.enabled, employeeURL: employeeURL)
         ),
         UIMuniStoreAction(
             action_key: "voir_details",
             action_label: "Voir la fiche",
             action_url: "/ui/muni/apps/\(urlPathComponentEncoded(appID))",
+            uses_post: false,
             is_disabled: false,
             is_primary: false,
             action_class: "",
@@ -653,22 +695,34 @@ private func muniStoreActions(for appID: String) -> [UIMuniStoreAction] {
         UIMuniStoreAction(
             action_key: "activer",
             action_label: "Activer",
-            action_url: "#",
-            is_disabled: true,
+            action_url: "/ui/muni/store/apps/\(urlPathComponentEncoded(appID))/activate",
+            uses_post: true,
+            is_disabled: descriptor.enabled,
             is_primary: false,
             action_class: "",
-            disabled_reason: "Activation non disponible à ce stade."
+            disabled_reason: descriptor.enabled ? "Module déjà actif." : ""
         ),
         UIMuniStoreAction(
             action_key: "desactiver",
             action_label: "Désactiver",
-            action_url: "#",
-            is_disabled: true,
+            action_url: "/ui/muni/store/apps/\(urlPathComponentEncoded(appID))/deactivate",
+            uses_post: true,
+            is_disabled: !descriptor.enabled,
             is_primary: false,
             action_class: "",
-            disabled_reason: "Désactivation non disponible à ce stade."
+            disabled_reason: descriptor.enabled ? "" : "Module déjà désactivé."
         )
     ]
+}
+
+private func muniStoreOpenDisabledReason(enabled: Bool, employeeURL: String?) -> String {
+    guard enabled else {
+        return "Module désactivé localement."
+    }
+    guard employeeURL != nil else {
+        return "Façade employé non disponible."
+    }
+    return ""
 }
 
 private func loadHistoryDiagnostics(for entry: CockpitHistoryEntry, logger: Logger) -> UICockpitHistoryDiagnostics {
