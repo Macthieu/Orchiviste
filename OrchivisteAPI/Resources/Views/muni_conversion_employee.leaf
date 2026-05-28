@@ -231,7 +231,7 @@
         }
         .meta-box {
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 10px;
             background: #fff;
         }
@@ -269,6 +269,42 @@
             margin-top: 14px;
             padding-top: 12px;
             border-top: 1px solid var(--border);
+        }
+        .scope-note {
+            border: 1px solid #dfc59f;
+            border-radius: 12px;
+            padding: 10px;
+            background: #fff8ec;
+            color: #6e4308;
+            font-size: 13px;
+            line-height: 1.42;
+            margin-top: 12px;
+        }
+        .profile-catalog {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            margin-top: 12px;
+        }
+        .profile-group {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            background: #fff;
+        }
+        .profile-group strong {
+            display: block;
+            margin-bottom: 6px;
+        }
+        .profile-group span {
+            display: inline-block;
+            margin: 2px 4px 2px 0;
+            border-radius: 999px;
+            padding: 3px 7px;
+            background: var(--info-bg);
+            color: #47606a;
+            font-size: 11px;
+            font-weight: 700;
         }
         .resume-static {
             display: grid;
@@ -393,11 +429,12 @@
         <div class="hero-top">
             <div>
                 <h1>MuniConversion</h1>
-                <p class="lead">Façade employé minimale pour analyser puis convertir un lot documentaire avec les profils MuniConversion existants, sans exposer le JSON canonique.</p>
+                <p class="lead">Façade employé pour analyser puis convertir un lot documentaire avec les profils MuniConversion existants, sans exposer le JSON canonique.</p>
             </div>
             <span class="pill #(availability_class)">#(availability_label)</span>
         </div>
         <p class="hint" style="margin-top:10px;">#(availability_reason)</p>
+        <p class="scope-note">Périmètre: conversion documentaire en lot via LibreOffice. Cette façade ne fait pas d’OCR, d’analyse syntaxique ou de traitement IA ajouté artificiellement au moteur.</p>
         <div class="actions">
             <a class="primary" href="#(expert_launch_url)">Ouvrir le pilotage expert</a>
             <a class="secondary" href="#(technical_app_url)">Voir la fiche technique</a>
@@ -408,7 +445,7 @@
         <div>
             <section class="card">
                 <h2>Convertir un dossier</h2>
-                <p class="hint">L’analyse est toujours non destructive. La conversion réelle requiert que la simulation soit désactivée.</p>
+                <p class="hint">Choisissez un dossier source, un profil de conversion LibreOffice, puis lancez d’abord une analyse non destructive.</p>
 
                 <form action="/ui/muni/apps/MuniConversion/employe/run" method="post">
                     <div class="source-destination-picker">
@@ -445,15 +482,17 @@
                         <label><input type="checkbox" name="include_subdirectories" #(include_subdirectories_checked_attr)> Inclure les sous-dossiers</label>
                         <label><input type="checkbox" name="dry_run" #(dry_run_checked_attr)> Simulation seulement</label>
                     </div>
+                    <p class="hint">Le bouton Choisir ouvre le sélecteur local macOS et remplit le vrai chemin POSIX soumis au serveur. Le collage manuel reste possible.</p>
 
                     <div class="form-grid" style="margin-top:12px;">
                         <label>
-                            Profil de conversion
+                            Profil de conversion LibreOffice
                             <select name="profile_id">
                                 #for(profile in profiles):
                                 <option value="#(profile.id)" #(profile.selected_attr)>#(profile.label)</option>
                                 #endfor
                             </select>
+                            <span class="hint">Le profil définit uniquement le format source et le format cible.</span>
                         </label>
                         <label>
                             Collision
@@ -465,9 +504,40 @@
                         </label>
                     </div>
 
+                    <div class="profile-catalog" aria-label="Familles de profils disponibles">
+                        <div class="profile-group">
+                            <strong>Word</strong>
+                            <span>DOC -> DOCX</span>
+                            <span>DOC -> PDF</span>
+                            <span>DOCX -> PDF</span>
+                            <span>DOCX -> DOC</span>
+                        </div>
+                        <div class="profile-group">
+                            <strong>Excel</strong>
+                            <span>XLS -> XLSX</span>
+                            <span>XLS -> PDF</span>
+                            <span>XLSX -> PDF</span>
+                            <span>XLSX -> XLS</span>
+                        </div>
+                        <div class="profile-group">
+                            <strong>PowerPoint</strong>
+                            <span>PPT -> PPTX</span>
+                            <span>PPT -> PDF</span>
+                            <span>PPTX -> PDF</span>
+                            <span>PPTX -> PPT</span>
+                        </div>
+                        <div class="profile-group">
+                            <strong>Texte et OpenDocument</strong>
+                            <span>RTF -> DOCX</span>
+                            <span>RTF -> PDF</span>
+                            <span>TXT -> PDF</span>
+                            <span>ODT/ODS/ODP -> PDF</span>
+                        </div>
+                    </div>
+
                     <div class="actions">
-                        <button class="btn-primary" type="submit" name="operation" value="analyze">Analyser</button>
-                        <button class="btn-warning" type="submit" name="operation" value="convert">Lancer la conversion</button>
+                        <button class="btn-primary" type="submit" name="operation" value="analyze">Analyser le lot</button>
+                        <button class="btn-warning" type="submit" name="operation" value="convert">Convertir le lot</button>
                     </div>
                 </form>
             </section>
