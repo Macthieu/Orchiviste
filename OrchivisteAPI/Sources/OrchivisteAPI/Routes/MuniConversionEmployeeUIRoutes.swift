@@ -814,17 +814,7 @@ private func normalizedMuniConversionCollisionPolicy(_ rawValue: String?) -> Str
 }
 
 private func validatedMuniConversionDirectoryPath(_ rawValue: String, label: String) throws -> String {
-    let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-        throw Abort(.badRequest, reason: "Le dossier \(label) est requis.")
-    }
-
-    let url = URL(fileURLWithPath: trimmed, isDirectory: true).standardizedFileURL
-    var isDirectory: ObjCBool = false
-    guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-        throw Abort(.badRequest, reason: "Le dossier \(label) doit exister et être accessible.")
-    }
-    return url.path
+    try normalizedMuniEmployeeDirectoryPath(rawValue, label: label)
 }
 
 private func validatedOptionalMuniConversionDestination(

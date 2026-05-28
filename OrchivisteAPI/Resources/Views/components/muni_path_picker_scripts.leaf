@@ -24,25 +24,9 @@ const muniPathPickerState = {
 };
 
 async function openMuniLocalDirectoryPicker(inputId, fileInputId, hintId, modeInputId) {
-    setMuniPathPickerMode(modeInputId, "local");
-
-    if (window.showDirectoryPicker) {
-        try {
-            const handle = await window.showDirectoryPicker({ mode: "read" });
-            const hint = document.getElementById(hintId);
-            if (hint) {
-                hint.textContent = `Dossier local choisi: ${handle.name}. Chemin complet requis dans le champ.`;
-            }
-            return;
-        } catch (error) {
-            if (!error || error.name !== "AbortError") {
-                console.warn("Sélection locale indisponible.", error);
-            }
-        }
-    }
-
     const picker = document.getElementById(fileInputId);
     if (!picker) {
+        setMuniPathPickerMode(modeInputId, "local");
         return;
     }
     picker.value = "";
@@ -70,12 +54,17 @@ function handleMuniLocalDirectorySelection(fileInputId, inputId, hintId, modeInp
     const exposedPath = firstFile.path || firstFile.mozFullPath || "";
     const inferredRoot = inferMuniLocalRootPath(exposedPath, relativePath);
 
-    if (input && inferredRoot) {
-        input.value = inferredRoot;
+    if (input) {
+        input.value = inferredRoot || "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
     }
     if (hint) {
-        const selectedLabel = inferredRoot || folderName;
-        hint.textContent = `Dossier local sélectionné: ${selectedLabel} (${files.length} élément(s)).`;
+        if (inferredRoot) {
+            hint.textContent = `Dossier local sélectionné: ${inferredRoot} (${files.length} élément(s)).`;
+        } else {
+            hint.textContent = `Dossier local choisi: ${folderName}. Le navigateur n'a pas fourni le chemin complet; collez le chemin POSIX du dossier dans le champ.`;
+        }
     }
 }
 
