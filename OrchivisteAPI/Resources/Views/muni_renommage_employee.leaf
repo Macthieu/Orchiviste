@@ -160,7 +160,7 @@
             color: var(--muted);
             font-weight: 600;
         }
-        input[type="text"] {
+        input[type="text"], input[type="number"], select {
             margin-top: 6px;
             width: 100%;
             border: 1px solid var(--border);
@@ -169,6 +169,52 @@
             font: inherit;
             background: #fff;
             color: var(--ink);
+        }
+        .mode-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .mode-tabs a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 9px 12px;
+            background: #fff;
+            color: var(--ink);
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 13px;
+        }
+        .mode-tabs a.active {
+            border-color: #bde2d7;
+            background: #ebf8f4;
+            color: var(--accent);
+        }
+        .section-title-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .control-panel {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+            margin-top: 12px;
+        }
+        .control-panel h3 {
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        .field-note {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.35;
         }
         #extend("components/muni_path_picker_styles")
         .checkboxes {
@@ -329,7 +375,7 @@
         <div class="hero-top">
             <div>
                 <h1>MuniRenommage</h1>
-                <p class="lead">Façade employé minimale pour prévisualiser puis appliquer un renommage standard sur un dossier, sans exposer les paramètres experts ni les JSON canoniques.</p>
+                <p class="lead">Façade employé structurée pour prévisualiser puis appliquer un renommage manuel ou automatisé par règles municipales, sans passer par le mode expert.</p>
             </div>
             <span class="pill #(availability_class)">#(availability_label)</span>
         </div>
@@ -342,11 +388,22 @@
 
     <section class="grid">
         <div>
-            <section class="card">
-                <h2>Renommer un dossier</h2>
-                <p class="hint">Profil actif: <strong>#(standard_profile_name)</strong>. #(standard_profile_summary)</p>
+            <nav class="mode-tabs" aria-label="Modes de renommage">
+                <a class="#(manual_tab_class)" href="#renommage-manuel">Renommage manuel</a>
+                <a class="#(auto_tab_class)" href="#renommage-auto">Renommage automatisé (IA)</a>
+            </nav>
+
+            <section id="renommage-manuel" class="card">
+                <div class="section-title-row">
+                    <div>
+                        <h2>Renommage manuel</h2>
+                        <p class="hint">Profil actif: <strong>#(standard_profile_name)</strong>. #(standard_profile_summary)</p>
+                    </div>
+                    <span class="pill pill-ok">Preview / Apply</span>
+                </div>
 
                 <form action="/ui/muni/apps/MuniRenommage/employe/run" method="post">
+                    <input type="hidden" name="rename_mode" value="manual">
                     <input type="hidden" name="preview_execution_id" value="#(preview_execution_id)">
 
                     <div class="source-destination-picker">
@@ -378,6 +435,185 @@
                         #endextend
                     </div>
 
+                    <div class="form-grid">
+                        <label>
+                            Preset / profil
+                            <select name="preset_profile">
+                                #for(option in preset_options):
+                                <option value="#(option.id)" #(option.selected_attr)>#(option.label)</option>
+                                #endfor
+                            </select>
+                        </label>
+                        <label>
+                            Collisions
+                            <select name="collision_policy">
+                                #for(option in collision_options):
+                                <option value="#(option.id)" #(option.selected_attr)>#(option.label)</option>
+                                #endfor
+                            </select>
+                            <span class="field-note">Le moteur signale les collisions et l'application reste contrôlée par une prévisualisation validée.</span>
+                        </label>
+                    </div>
+
+                    <div class="checkboxes">
+                        <label><input type="checkbox" name="recursive" #(recursive_checked_attr)> Inclure les sous-dossiers</label>
+                        <label><input type="checkbox" name="include_hidden" #(include_hidden_checked_attr)> Inclure les fichiers cachés</label>
+                    </div>
+
+                    <div class="control-panel">
+                        <h3>Filtres simples</h3>
+                        <div class="form-grid">
+                            <label>
+                                Inclure seulement si le nom correspond
+                                <input type="text" name="include_regex" value="#(include_regex)" placeholder="Ex. .*\\.pdf$">
+                            </label>
+                            <label>
+                                Exclure si le nom correspond
+                                <input type="text" name="exclude_regex" value="#(exclude_regex)" placeholder="Ex. brouillon|temp">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="control-panel">
+                        <h3>Règles manuelles utiles</h3>
+                        <div class="form-grid">
+                            <label>
+                                <input type="checkbox" name="replace_enabled" #(replace_enabled_checked_attr)> Remplacer
+                                <input type="text" name="replace_find" value="#(replace_find)" placeholder="Texte ou motif à chercher">
+                            </label>
+                            <label>
+                                Remplacer par
+                                <input type="text" name="replace_with" value="#(replace_with)" placeholder="Texte de remplacement">
+                            </label>
+                            <label>
+                                <input type="checkbox" name="replace_regex" #(replace_regex_checked_attr)> Interpréter comme regex
+                                <span class="field-note">Désactivez seulement pour un remplacement texte simple.</span>
+                            </label>
+                            <label>
+                                <input type="checkbox" name="add_prefix_enabled" #(add_prefix_enabled_checked_attr)> Ajouter un préfixe
+                                <input type="text" name="prefix" value="#(prefix)" placeholder="Ex. PV - ">
+                            </label>
+                            <label>
+                                <input type="checkbox" name="add_suffix_enabled" #(add_suffix_enabled_checked_attr)> Ajouter un suffixe
+                                <input type="text" name="suffix" value="#(suffix)" placeholder="Ex. - validé">
+                            </label>
+                            <label>
+                                <input type="checkbox" name="date_prefix_enabled" #(date_prefix_enabled_checked_attr)> Date automatique en préfixe
+                                <input type="text" name="date_format" value="#(date_format)" placeholder="yyyy-MM-dd">
+                            </label>
+                            <label>
+                                <input type="checkbox" name="numbering_enabled" #(numbering_enabled_checked_attr)> Numérotation en préfixe
+                                <input type="number" name="numbering_start" value="#(numbering_start)">
+                            </label>
+                            <label>
+                                Chiffres et séparateur
+                                <div class="form-grid">
+                                    <input type="number" name="numbering_pad" value="#(numbering_pad)" min="1" max="12">
+                                    <input type="text" name="numbering_separator" value="#(numbering_separator)">
+                                </div>
+                            </label>
+                            <label>
+                                Casse
+                                <select name="casing_style">
+                                    #for(option in casing_options):
+                                    <option value="#(option.id)" #(option.selected_attr)>#(option.label)</option>
+                                    #endfor
+                                </select>
+                            </label>
+                            <label>
+                                <input type="checkbox" name="parent_prefix_enabled" #(parent_prefix_enabled_checked_attr)> Ajouter le dossier parent en préfixe
+                            </label>
+                            <label>
+                                <input type="checkbox" name="strip_diacritics" #(strip_diacritics_checked_attr)> Retirer les accents
+                            </label>
+                            <label>
+                                <input type="checkbox" name="spaces_to_underscore" #(spaces_to_underscore_checked_attr)> Remplacer les espaces par _
+                            </label>
+                        </div>
+                    </div>
+
+                    #if(apply_hint_present):
+                    <p class="hint">#(apply_hint)</p>
+                    #endif
+
+                    <div class="actions">
+                        <button class="btn-primary" type="submit" name="operation" value="preview">Prévisualiser</button>
+                        <button class="btn-warning" type="submit" name="operation" value="apply" #(apply_disabled_attr)>Appliquer</button>
+                    </div>
+                </form>
+            </section>
+
+            <section id="renommage-auto" class="card">
+                <div class="section-title-row">
+                    <div>
+                        <h2>Renommage automatisé (IA)</h2>
+                        <p class="hint">Parcours municipal fondé sur les règles MuniRegles disponibles pour PV, résolutions et lots documentaires.</p>
+                    </div>
+                    <span class="pill pill-warn">Préparation IA</span>
+                </div>
+
+                <form action="/ui/muni/apps/MuniRenommage/employe/run" method="post">
+                    <input type="hidden" name="rename_mode" value="auto">
+                    <input type="hidden" name="preview_execution_id" value="#(preview_execution_id)">
+
+                    <div class="source-destination-picker">
+                        #extend("components/muni_path_picker"):
+                            #export("picker_label", "Dossier source")
+                            #export("picker_input_id", "muniRenommageAutoSourceDirectory")
+                            #export("picker_name", "source_directory")
+                            #export("picker_value", source_directory)
+                            #export("picker_placeholder", "/Volumes/.../pv_resolutions")
+                            #export("picker_hint_id", "muniRenommageAutoSourceHint")
+                            #export("picker_mode_input_id", "muniRenommageAutoSourceMode")
+                            #export("picker_mode_name", "source_directory_mode")
+                            #export("picker_mode", "server")
+                            #export("picker_required_attr", "required")
+                            #export("picker_hint", "Choisir ouvre le sélecteur local macOS; Serveur parcourt les dossiers accessibles à Orchiviste.")
+                        #endextend
+                        #extend("components/muni_path_picker"):
+                            #export("picker_label", "Dossier destination")
+                            #export("picker_input_id", "muniRenommageAutoDestinationDirectory")
+                            #export("picker_name", "destination_directory")
+                            #export("picker_value", destination_directory)
+                            #export("picker_placeholder", "/Volumes/.../renommes")
+                            #export("picker_hint_id", "muniRenommageAutoDestinationHint")
+                            #export("picker_mode_input_id", "muniRenommageAutoDestinationMode")
+                            #export("picker_mode_name", "destination_directory_mode")
+                            #export("picker_mode", "server")
+                            #export("picker_required_attr", "required")
+                            #export("picker_hint", "Choisir ouvre le sélecteur local macOS; Serveur parcourt les dossiers accessibles à Orchiviste.")
+                        #endextend
+                    </div>
+
+                    <div class="control-panel">
+                        <h3>Bundle et règles</h3>
+                        <p class="hint">#(regles_source_label): #(regles_summary)</p>
+                        <div class="form-grid">
+                            <label>
+                                Bundle MuniRegles
+                                <input type="text" name="regles_bundle_path" value="#(regles_bundle_path)" placeholder="/Volumes/.../muniregles_bundle.json">
+                                <span class="field-note">#(regles_bundle_status)</span>
+                            </label>
+                            <label>
+                                Règle de nommage
+                                <select name="regles_naming_rule_id">
+                                    #for(option in regles_rule_options):
+                                    <option value="#(option.id)" #(option.selected_attr)>#(option.label)</option>
+                                    #endfor
+                                </select>
+                                #if(regles_rules_present):
+                                <span class="field-note">La règle est passée au moteur par les paramètres MuniRegles canoniques.</span>
+                                #else:
+                                <span class="field-note">Aucune règle disponible: le run produira un diagnostic/fallback lisible.</span>
+                                #endif
+                            </label>
+                            <label>
+                                Code de classement si requis
+                                <input type="text" name="regles_class_code" value="#(regles_class_code)" placeholder="Ex. ADM-PV">
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="checkboxes">
                         <label><input type="checkbox" name="recursive" #(recursive_checked_attr)> Inclure les sous-dossiers</label>
                         <label><input type="checkbox" name="include_hidden" #(include_hidden_checked_attr)> Inclure les fichiers cachés</label>
@@ -388,8 +624,8 @@
                     #endif
 
                     <div class="actions">
-                        <button class="btn-primary" type="submit" name="operation" value="preview">Prévisualiser</button>
-                        <button class="btn-warning" type="submit" name="operation" value="apply" #(apply_disabled_attr)>Appliquer</button>
+                        <button class="btn-primary" type="submit" name="operation" value="preview">Prévisualiser IA</button>
+                        <button class="btn-warning" type="submit" name="operation" value="apply" #(apply_disabled_attr)>Appliquer le plan IA</button>
                     </div>
                 </form>
             </section>
@@ -417,6 +653,31 @@
                 #if(result_diagnostic_cta_present):
                 <p class="hint">Action suggérée: #(result_diagnostic_cta)</p>
                 #endif
+                #endif
+
+                #if(result_regles_trace_present):
+                <div class="control-panel">
+                    <h3>Trace automatisée</h3>
+                    <div class="meta-grid">
+                        <div class="meta-box">
+                            <strong>#(result_regles_source)</strong>
+                            <span>Source règles</span>
+                        </div>
+                        <div class="meta-box">
+                            <strong>#(result_regles_rule_id)</strong>
+                            <span>Règle</span>
+                        </div>
+                        <div class="meta-box">
+                            <strong>#(result_regles_bundle_version)</strong>
+                            <span>Bundle</span>
+                        </div>
+                        <div class="meta-box">
+                            <strong>#(result_regles_apply_rule_label)</strong>
+                            <span>Règle appliquée</span>
+                        </div>
+                    </div>
+                    <p class="hint">Fallback: #(result_regles_fallback_reason)</p>
+                </div>
                 #endif
 
                 <div class="meta-grid">
