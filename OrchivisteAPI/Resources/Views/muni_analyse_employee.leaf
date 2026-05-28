@@ -156,6 +156,7 @@
             resize: vertical;
             line-height: 1.4;
         }
+        #extend("components/muni_path_picker_styles")
         .source-modes {
             display: flex;
             flex-wrap: wrap;
@@ -170,6 +171,16 @@
             font-weight: 600;
         }
         .source-panel[hidden] { display: none; }
+        .scope-note {
+            border: 1px solid #dfc59f;
+            border-radius: 8px;
+            padding: 10px;
+            background: #fff8ec;
+            color: #6e4308;
+            font-size: 13px;
+            line-height: 1.42;
+            margin-top: 12px;
+        }
         .notice {
             margin: 0 0 10px;
             font-weight: 700;
@@ -217,14 +228,14 @@
             font-weight: 700;
             font-size: 12px;
         }
-        .term-list, .warning-list, .error-list, .recent-list {
+        .term-list, .document-list, .warning-list, .error-list, .recent-list {
             display: grid;
             gap: 8px;
             margin: 10px 0 0;
             padding: 0;
             list-style: none;
         }
-        .term-list li, .warning-list li, .error-list li, .recent-item {
+        .term-list li, .document-list li, .warning-list li, .error-list li, .recent-item {
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 9px;
@@ -278,11 +289,12 @@
         <div class="hero-top">
             <div>
                 <h1>MuniAnalyse</h1>
-                <p class="lead">Première façade employé pour lancer une analyse texte déterministe sans passer par le mode expert.</p>
+                <p class="lead">Façade employé pour analyser un texte ou préparer des métadonnées documentaires déterministes sans passer par le mode expert.</p>
             </div>
             <span class="pill #(availability_class)">#(availability_label)</span>
         </div>
         <p class="hint">#(availability_reason)</p>
+        <p class="scope-note">Périmètre: analyse déterministe et extraction de métadonnées à partir de textes ou documents lisibles. Cette façade ne remplace pas le mode expert et n’ajoute pas d’OCR artificiel.</p>
         <div class="actions">
             <a class="primary" href="#(expert_launch_url)">Ouvrir le pilotage expert</a>
             <a class="secondary" href="#(technical_app_url)">Voir la fiche technique</a>
@@ -299,12 +311,13 @@
     <section class="grid">
         <div>
             <section class="card">
-                <h2>Analyser une source texte</h2>
-                <p class="hint">Analyse V1 texte-only. Pour les documents complexes, gardez le mode expert disponible dans Pilotage.</p>
+                <h2>Analyser une source</h2>
+                <p class="hint">Choisissez le parcours selon la matière disponible: texte collé, fichier texte, ou dossier documentaire pour préparer des métadonnées réutilisables.</p>
                 <form action="/ui/muni/apps/MuniAnalyse/employe/run" method="post">
                     <div class="source-modes">
                         <label><input type="radio" name="source_mode" value="text" #(source_mode_text_checked_attr) onchange="syncMuniAnalyseSourceMode()"> Texte collé</label>
                         <label><input type="radio" name="source_mode" value="file" #(source_mode_file_checked_attr) onchange="syncMuniAnalyseSourceMode()"> Fichier texte</label>
+                        <label><input type="radio" name="source_mode" value="documents" #(source_mode_documents_checked_attr) onchange="syncMuniAnalyseSourceMode()"> Documents / dossier</label>
                     </div>
 
                     <div id="muniAnalyseTextSource" class="source-panel">
@@ -317,9 +330,26 @@
                     <div id="muniAnalyseFileSource" class="source-panel">
                         <label>
                             Chemin du fichier texte accessible à Orchiviste
-                            <input type="text" name="source_path" value="#(source_path)" placeholder="/Volumes/.../document.txt">
+                            <input id="muniAnalyseTextFilePath" type="text" name="source_path" value="#(source_path)" placeholder="/Volumes/.../document.txt">
                         </label>
                         <p class="hint">Chemins POSIX avec espaces, quotes entourantes et file:// sont acceptés.</p>
+                    </div>
+
+                    <div id="muniAnalyseDocumentSource" class="source-panel">
+                        #extend("components/muni_path_picker"):
+                            #export("picker_label", "Dossier ou fichier documentaire")
+                            #export("picker_input_id", "muniAnalyseDocumentPath")
+                            #export("picker_name", "source_document_path")
+                            #export("picker_value", source_document_path)
+                            #export("picker_placeholder", "/Volumes/.../lot_pv_resolutions")
+                            #export("picker_hint_id", "muniAnalyseDocumentHint")
+                            #export("picker_mode_input_id", "muniAnalyseDocumentMode")
+                            #export("picker_mode_name", "source_document_path_mode")
+                            #export("picker_mode", "server")
+                            #export("picker_required_attr", "")
+                            #export("picker_hint", "Choisir ouvre le sélecteur local macOS pour un dossier; le collage manuel reste possible pour un fichier précis.")
+                        #endextend
+                        <p class="hint">Ce parcours produit un fichier de métadonnées documentaires utile comme base de chaîne pour les futurs usages automatisés.</p>
                     </div>
 
                     <div class="actions">
@@ -338,20 +368,36 @@
                     </div>
                     <span class="status #(result_status_class)">#(result_status_label)</span>
                 </div>
+                <h3>Résumé</h3>
                 <p>#(result_summary)</p>
                 <p class="hint">Terminé: <span class="mono">#(result_finished_at)</span></p>
+                <p class="hint">Mode: <span class="mono">#(result_mode_label)</span></p>
                 <p class="hint">Source: <span class="mono">#(result_source_kind)</span></p>
                 <p class="hint">Résultat canonique: <span class="mono">#(result_file_path)</span></p>
+                #if(result_document_metadata_present):
+                <p class="hint">Métadonnées documentaires: <span class="mono">#(result_document_metadata_path)</span></p>
+                #endif
                 <div class="result-links">
                     <a href="#(result_file_url)" target="_blank" rel="noopener">Ouvrir le résultat JSON</a>
+                    #if(result_document_metadata_present):
+                    <a href="#(result_document_metadata_url)" target="_blank" rel="noopener">Ouvrir les métadonnées</a>
+                    #endif
                 </div>
 
+                #if(result_documents_present):
+                <div class="meta-grid">
+                    <div class="meta-box"><strong>#(result_documents_extracted)</strong><span>Documents trouvés</span></div>
+                    <div class="meta-box"><strong>#(result_source_count)</strong><span>Sources lues</span></div>
+                    <div class="meta-box"><strong>#(result_warning_count)</strong><span>Points à revoir</span></div>
+                </div>
+                #else:
                 <div class="meta-grid">
                     <div class="meta-box"><strong>#(result_word_count)</strong><span>Mots</span></div>
                     <div class="meta-box"><strong>#(result_character_count)</strong><span>Caractères</span></div>
                     <div class="meta-box"><strong>#(result_sentence_count)</strong><span>Phrases</span></div>
                     <div class="meta-box"><strong>#(result_paragraph_count)</strong><span>Paragraphes</span></div>
                 </div>
+                #endif
 
                 #if(result_preview_present):
                 <h3 style="margin-top:16px;">Aperçu</h3>
@@ -367,11 +413,29 @@
                 </ul>
                 #endif
 
+                #if(result_documents_present):
+                <h3 style="margin-top:16px;">Éléments trouvés</h3>
+                <ul class="document-list">
+                    #for(document in result_documents):
+                    <li>
+                        <strong>#(document.source_file)</strong>
+                        <p style="margin:6px 0;">#(document.document_type) · #(document.document_date)</p>
+                        <p class="hint">#(document.document_subject)</p>
+                        <p class="hint">Provenance: <span class="mono">#(document.provenance)</span> · Avertissements: <span class="mono">#(document.warning_count)</span></p>
+                    </li>
+                    #endfor
+                </ul>
+                #endif
+
                 #if(result_warnings_present):
                 <h3 style="margin-top:16px;">Points à revoir</h3>
                 <ul class="warning-list">
                     #for(warning in result_warnings):
-                    <li>#(warning)</li>
+                    <li>
+                        <strong>#(warning.code)</strong>
+                        <p style="margin:6px 0;">#(warning.message)</p>
+                        <p class="hint">Source: <span class="mono">#(warning.source_file)</span></p>
+                    </li>
                     #endfor
                 </ul>
                 #endif
@@ -416,17 +480,34 @@
         </aside>
     </section>
 </main>
+#extend("components/muni_path_picker_scripts")
 <script>
 function syncMuniAnalyseSourceMode() {
     const selected = document.querySelector('input[name="source_mode"]:checked');
     const mode = selected ? selected.value : "text";
     const textPanel = document.getElementById("muniAnalyseTextSource");
     const filePanel = document.getElementById("muniAnalyseFileSource");
+    const documentPanel = document.getElementById("muniAnalyseDocumentSource");
+    const textInput = document.querySelector('#muniAnalyseTextSource textarea[name="source_text"]');
+    const fileInput = document.getElementById("muniAnalyseTextFilePath");
+    const documentInput = document.getElementById("muniAnalyseDocumentPath");
     if (textPanel) {
         textPanel.hidden = mode !== "text";
     }
     if (filePanel) {
         filePanel.hidden = mode !== "file";
+    }
+    if (documentPanel) {
+        documentPanel.hidden = mode !== "documents";
+    }
+    if (textInput) {
+        textInput.disabled = mode !== "text";
+    }
+    if (fileInput) {
+        fileInput.disabled = mode !== "file";
+    }
+    if (documentInput) {
+        documentInput.disabled = mode !== "documents";
     }
 }
 syncMuniAnalyseSourceMode();
