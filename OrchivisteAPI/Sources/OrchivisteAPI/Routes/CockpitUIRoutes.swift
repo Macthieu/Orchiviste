@@ -1166,6 +1166,8 @@ private func employeeFacadeURL(for appID: String) -> String? {
         return "/ui/muni/apps/MuniRenommage/employe"
     case "MuniConversion":
         return "/ui/muni/apps/MuniConversion/employe"
+    case "MuniAnalyse":
+        return "/ui/muni/apps/MuniAnalyse/employe"
     default:
         return nil
     }
@@ -1177,6 +1179,8 @@ private func explicitMuniAppID(for path: String) -> String? {
         return "MuniRenommage"
     case "/ui/muni/apps/MuniConversion":
         return "MuniConversion"
+    case "/ui/muni/apps/MuniAnalyse":
+        return "MuniAnalyse"
     default:
         return nil
     }

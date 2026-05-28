@@ -45,6 +45,7 @@ func configure(_ app: Application) throws {
     registerCockpitUIRoutes(app)
     registerMuniRenommageEmployeeUIRoutes(app)
     registerMuniConversionEmployeeUIRoutes(app)
+    registerMuniAnalyseEmployeeUIRoutes(app)
 }
 
 @main

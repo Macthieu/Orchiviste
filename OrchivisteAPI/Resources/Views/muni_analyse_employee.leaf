@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Orchiviste MuniAnalyse - Employé</title>
+    <style>
+        :root {
+            --bg: #f4f1eb;
+            --surface: #fffdf9;
+            --ink: #1e2528;
+            --muted: #5f676a;
+            --accent: #0c6b58;
+            --danger: #9b3a16;
+            --border: #d9d2c4;
+            --ok-bg: #ebf8f4;
+            --warn-bg: #fff2df;
+            --danger-bg: #fbe4de;
+            --info-bg: #eef4f6;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, #f9f5ee 0%, #f2ece2 100%);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header nav a {
+            margin-left: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .wrap {
+            max-width: 1180px;
+            margin: 20px auto 40px;
+            padding: 0 16px;
+        }
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .subnav a {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            text-decoration: none;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .subnav a.active {
+            background: #ebf8f4;
+            color: var(--accent);
+            border-color: #bde2d7;
+        }
+        .hero, .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+        .hero-top, .result-head, .recent-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        h1, h2, h3, p { margin-top: 0; }
+        .lead, .hint {
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .lead { max-width: 760px; }
+        .hint {
+            margin: 8px 0 0;
+            font-size: 12px;
+        }
+        .pill, .status {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+        .pill-ok { background: var(--ok-bg); color: var(--accent); }
+        .pill-warn { background: var(--warn-bg); color: #8d4e06; }
+        .status { text-transform: uppercase; letter-spacing: 0.03em; }
+        .status-success { background: var(--ok-bg); color: var(--accent); }
+        .status-warning { background: var(--warn-bg); color: #8d4e06; }
+        .status-danger { background: var(--danger-bg); color: #8b2b14; }
+        .status-info { background: var(--info-bg); color: #47606a; }
+        .actions {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .actions a, button {
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-weight: 700;
+            font-size: 13px;
+            text-decoration: none;
+            border: 1px solid var(--accent);
+            cursor: pointer;
+        }
+        .actions .primary, .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .actions .secondary {
+            background: #fff;
+            color: var(--accent);
+        }
+        .grid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        input[type="text"], textarea {
+            margin-top: 6px;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            font: inherit;
+            background: #fff;
+            color: var(--ink);
+        }
+        textarea {
+            min-height: 210px;
+            resize: vertical;
+            line-height: 1.4;
+        }
+        .source-modes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin: 0 0 12px;
+        }
+        .source-modes label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--ink);
+            font-weight: 600;
+        }
+        .source-panel[hidden] { display: none; }
+        .notice {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .error {
+            margin: 0 0 10px;
+            font-weight: 700;
+            color: var(--danger);
+        }
+        .meta-grid {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            margin-top: 12px;
+        }
+        .meta-box {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            background: #fff;
+        }
+        .meta-box strong {
+            display: block;
+            font-size: 19px;
+            margin-bottom: 4px;
+        }
+        .meta-box span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .result-links, .recent-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .result-links a, .recent-actions a {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 7px 10px;
+            color: var(--accent);
+            background: #fff;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .term-list, .warning-list, .error-list, .recent-list {
+            display: grid;
+            gap: 8px;
+            margin: 10px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+        .term-list li, .warning-list li, .error-list li, .recent-item {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 9px;
+            background: #fff;
+        }
+        .term-list li {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .preview {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fff;
+            line-height: 1.45;
+        }
+        .mono {
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .recent-item .summary {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+            margin: 0;
+        }
+        @media (max-width: 900px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <strong>Orchiviste</strong>
+    <nav>
+        <a href="/ui/muni/store">App Store Muni</a>
+        <a href="/ui/pilotage">Pilotage Muni</a>
+        <a href="/ui">Tableau de bord</a>
+    </nav>
+</header>
+<main class="wrap">
+    <nav class="subnav">
+        <a href="/ui/muni/store">App Store Muni</a>
+        <a class="active" href="/ui/muni/apps/MuniAnalyse/employe">MuniAnalyse employé</a>
+        <a href="#(technical_app_url)">Fiche technique</a>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-top">
+            <div>
+                <h1>MuniAnalyse</h1>
+                <p class="lead">Première façade employé pour lancer une analyse texte déterministe sans passer par le mode expert.</p>
+            </div>
+            <span class="pill #(availability_class)">#(availability_label)</span>
+        </div>
+        <p class="hint">#(availability_reason)</p>
+        <div class="actions">
+            <a class="primary" href="#(expert_launch_url)">Ouvrir le pilotage expert</a>
+            <a class="secondary" href="#(technical_app_url)">Voir la fiche technique</a>
+        </div>
+    </section>
+
+    #if(notice):
+    <p class="notice">#(notice)</p>
+    #endif
+    #if(error):
+    <p class="error">#(error)</p>
+    #endif
+
+    <section class="grid">
+        <div>
+            <section class="card">
+                <h2>Analyser une source texte</h2>
+                <p class="hint">Analyse V1 texte-only. Pour les documents complexes, gardez le mode expert disponible dans Pilotage.</p>
+                <form action="/ui/muni/apps/MuniAnalyse/employe/run" method="post">
+                    <div class="source-modes">
+                        <label><input type="radio" name="source_mode" value="text" #(source_mode_text_checked_attr) onchange="syncMuniAnalyseSourceMode()"> Texte collé</label>
+                        <label><input type="radio" name="source_mode" value="file" #(source_mode_file_checked_attr) onchange="syncMuniAnalyseSourceMode()"> Fichier texte</label>
+                    </div>
+
+                    <div id="muniAnalyseTextSource" class="source-panel">
+                        <label>
+                            Texte à analyser
+                            <textarea name="source_text" placeholder="Collez ici le texte municipal à analyser.">#(source_text)</textarea>
+                        </label>
+                    </div>
+
+                    <div id="muniAnalyseFileSource" class="source-panel">
+                        <label>
+                            Chemin du fichier texte accessible à Orchiviste
+                            <input type="text" name="source_path" value="#(source_path)" placeholder="/Volumes/.../document.txt">
+                        </label>
+                        <p class="hint">Chemins POSIX avec espaces, quotes entourantes et file:// sont acceptés.</p>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn-primary" type="submit">Lancer l’analyse</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>Résultat sélectionné</h2>
+                #if(result_present):
+                <div class="result-head">
+                    <div>
+                        <p style="margin-bottom:6px;"><strong>Analyse texte</strong></p>
+                        <p class="mono" style="margin-bottom:8px;">#(result_execution_id)</p>
+                    </div>
+                    <span class="status #(result_status_class)">#(result_status_label)</span>
+                </div>
+                <p>#(result_summary)</p>
+                <p class="hint">Terminé: <span class="mono">#(result_finished_at)</span></p>
+                <p class="hint">Source: <span class="mono">#(result_source_kind)</span></p>
+                <p class="hint">Résultat canonique: <span class="mono">#(result_file_path)</span></p>
+                <div class="result-links">
+                    <a href="#(result_file_url)" target="_blank" rel="noopener">Ouvrir le résultat JSON</a>
+                </div>
+
+                <div class="meta-grid">
+                    <div class="meta-box"><strong>#(result_word_count)</strong><span>Mots</span></div>
+                    <div class="meta-box"><strong>#(result_character_count)</strong><span>Caractères</span></div>
+                    <div class="meta-box"><strong>#(result_sentence_count)</strong><span>Phrases</span></div>
+                    <div class="meta-box"><strong>#(result_paragraph_count)</strong><span>Paragraphes</span></div>
+                </div>
+
+                #if(result_preview_present):
+                <h3 style="margin-top:16px;">Aperçu</h3>
+                <p class="preview">#(result_preview)</p>
+                #endif
+
+                #if(result_top_terms_present):
+                <h3 style="margin-top:16px;">Termes principaux</h3>
+                <ul class="term-list">
+                    #for(term in result_top_terms):
+                    <li><span>#(term.term)</span><strong>#(term.occurrences)</strong></li>
+                    #endfor
+                </ul>
+                #endif
+
+                #if(result_warnings_present):
+                <h3 style="margin-top:16px;">Points à revoir</h3>
+                <ul class="warning-list">
+                    #for(warning in result_warnings):
+                    <li>#(warning)</li>
+                    #endfor
+                </ul>
+                #endif
+
+                #if(result_errors_present):
+                <h3 style="margin-top:16px;">Erreurs</h3>
+                <ul class="error-list">
+                    #for(item in result_errors):
+                    <li><strong>#(item.code)</strong><p>#(item.message)</p></li>
+                    #endfor
+                </ul>
+                #endif
+                #else:
+                <p class="hint">Aucune analyse sélectionnée.</p>
+                #endif
+            </section>
+        </div>
+
+        <aside>
+            <section class="card">
+                <h2>Runs récents MuniAnalyse</h2>
+                #if(recent_runs_present):
+                <div class="recent-list">
+                    #for(run in recent_runs):
+                    <article class="recent-item">
+                        <div class="recent-top">
+                            <strong class="mono">#(run.execution_id)</strong>
+                            <span class="status #(run.status_class)">#(run.status_label)</span>
+                        </div>
+                        <p class="summary">#(run.summary)</p>
+                        <p class="hint">Terminé: <span class="mono">#(run.finished_at)</span></p>
+                        <div class="recent-actions">
+                            <a href="#(run.view_url)">Voir le résultat</a>
+                        </div>
+                    </article>
+                    #endfor
+                </div>
+                #else:
+                <p class="hint">Aucun run MuniAnalyse n’est encore enregistré.</p>
+                #endif
+            </section>
+        </aside>
+    </section>
+</main>
+<script>
+function syncMuniAnalyseSourceMode() {
+    const selected = document.querySelector('input[name="source_mode"]:checked');
+    const mode = selected ? selected.value : "text";
+    const textPanel = document.getElementById("muniAnalyseTextSource");
+    const filePanel = document.getElementById("muniAnalyseFileSource");
+    if (textPanel) {
+        textPanel.hidden = mode !== "text";
+    }
+    if (filePanel) {
+        filePanel.hidden = mode !== "file";
+    }
+}
+syncMuniAnalyseSourceMode();
+</script>
+</body>
+</html>
