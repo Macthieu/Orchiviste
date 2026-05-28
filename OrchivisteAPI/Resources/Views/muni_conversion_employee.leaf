@@ -418,13 +418,12 @@
                             #export("picker_name", "source_directory")
                             #export("picker_value", source_directory)
                             #export("picker_placeholder", "/Volumes/.../a_convertir")
-                            #export("picker_file_input_id", "muniConversionSourceLocalPicker")
                             #export("picker_hint_id", "muniConversionSourceHint")
                             #export("picker_mode_input_id", "muniConversionSourceMode")
                             #export("picker_mode_name", "source_directory_mode")
                             #export("picker_mode", "server")
                             #export("picker_required_attr", "required")
-                            #export("picker_hint", "Choisir sélectionne un dossier local; Serveur parcourt les dossiers accessibles à Orchiviste.")
+                            #export("picker_hint", "Choisir ouvre le sélecteur local macOS; Serveur parcourt les dossiers accessibles à Orchiviste.")
                         #endextend
                         #extend("components/muni_path_picker"):
                             #export("picker_label", "Dossier destination")
@@ -432,13 +431,12 @@
                             #export("picker_name", "destination_directory")
                             #export("picker_value", destination_directory)
                             #export("picker_placeholder", "/Volumes/.../convertis")
-                            #export("picker_file_input_id", "muniConversionDestinationLocalPicker")
                             #export("picker_hint_id", "muniConversionDestinationHint")
                             #export("picker_mode_input_id", "muniConversionDestinationMode")
                             #export("picker_mode_name", "destination_directory_mode")
                             #export("picker_mode", "server")
                             #export("picker_required_attr", "")
-                            #export("picker_hint", "Optionnel: activez la destination distincte pour écrire les fichiers convertis ailleurs.")
+                            #export("picker_hint", "Optionnel: Choisir ouvre le sélecteur local macOS quand la destination distincte est activée.")
                         #endextend
                     </div>
 
@@ -529,13 +527,12 @@
                             #export("picker_name", "destination_directory")
                             #export("picker_value", resume_destination_directory)
                             #export("picker_placeholder", "/Volumes/.../convertis")
-                            #export("picker_file_input_id", "muniConversionResumeDestinationLocalPicker")
                             #export("picker_hint_id", "muniConversionResumeDestinationHint")
                             #export("picker_mode_input_id", "muniConversionResumeDestinationMode")
                             #export("picker_mode_name", "destination_directory_mode")
                             #export("picker_mode", "server")
                             #export("picker_required_attr", "")
-                            #export("picker_hint", "Optionnel: choisissez un autre dossier pour la reprise.")
+                            #export("picker_hint", "Optionnel: Choisir ouvre le sélecteur local macOS pour changer le dossier de reprise.")
                         #endextend
 
                         <div class="checkboxes">

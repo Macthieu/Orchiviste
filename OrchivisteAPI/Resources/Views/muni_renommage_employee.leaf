@@ -356,13 +356,12 @@
                             #export("picker_name", "source_directory")
                             #export("picker_value", source_directory)
                             #export("picker_placeholder", "/Volumes/.../a_traiter")
-                            #export("picker_file_input_id", "muniRenommageSourceLocalPicker")
                             #export("picker_hint_id", "muniRenommageSourceHint")
                             #export("picker_mode_input_id", "muniRenommageSourceMode")
                             #export("picker_mode_name", "source_directory_mode")
                             #export("picker_mode", "server")
                             #export("picker_required_attr", "required")
-                            #export("picker_hint", "Choisir sélectionne un dossier local; Serveur parcourt les dossiers accessibles à Orchiviste.")
+                            #export("picker_hint", "Choisir ouvre le sélecteur local macOS; Serveur parcourt les dossiers accessibles à Orchiviste.")
                         #endextend
                         #extend("components/muni_path_picker"):
                             #export("picker_label", "Dossier destination")
@@ -370,13 +369,12 @@
                             #export("picker_name", "destination_directory")
                             #export("picker_value", destination_directory)
                             #export("picker_placeholder", "/Volumes/.../classement")
-                            #export("picker_file_input_id", "muniRenommageDestinationLocalPicker")
                             #export("picker_hint_id", "muniRenommageDestinationHint")
                             #export("picker_mode_input_id", "muniRenommageDestinationMode")
                             #export("picker_mode_name", "destination_directory_mode")
                             #export("picker_mode", "server")
                             #export("picker_required_attr", "required")
-                            #export("picker_hint", "Choisir sélectionne un dossier local; Serveur parcourt les dossiers accessibles à Orchiviste.")
+                            #export("picker_hint", "Choisir ouvre le sélecteur local macOS; Serveur parcourt les dossiers accessibles à Orchiviste.")
                         #endextend
                     </div>
 

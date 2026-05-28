@@ -537,6 +537,16 @@ private struct UIFolderListResponse: Content {
     let files: [UIFolderListEntry]
 }
 
+private struct UIChooseLocalFolderRequest: Content {
+    let current_path: String?
+}
+
+private struct UIChooseLocalFolderResponse: Content {
+    let selected: Bool
+    let path: String?
+    let message: String
+}
+
 private struct UIWorkerEnrollForm: Content {
     let name: String
     let capabilities: String?
@@ -666,6 +676,13 @@ func registerUIRoutes(_ app: Application) {
             directories: directories,
             files: files
         )
+    }
+
+    app.on(.POST, "ui", "fs", "choose-local-folder", body: .collect(maxSize: "4kb")) { req async throws -> UIChooseLocalFolderResponse in
+        let form = try req.content.decode(UIChooseLocalFolderRequest.self)
+        return try await req.application.threadPool.runIfActive(eventLoop: req.eventLoop) {
+            try chooseMacOSLocalFolder(startingAt: form.current_path)
+        }.get()
     }
 
     app.get("ui", "dashboard", "recent-jobs") { req async throws -> UIDashboardRecentJobsPayload in
@@ -3257,6 +3274,84 @@ private func uiFolderPickerRoots() -> [URL] {
         return existing
     }
     return [resolveUILocalIngestInboxDirectory().deletingLastPathComponent()]
+}
+
+private func chooseMacOSLocalFolder(startingAt rawStartPath: String?) throws -> UIChooseLocalFolderResponse {
+#if os(macOS)
+    let startPath = existingDirectoryForLocalFolderDialog(rawStartPath) ?? ""
+    let script = """
+    on run argv
+        set promptText to item 1 of argv
+        set startPath to item 2 of argv
+        if startPath is not "" then
+            set selectedFolder to choose folder with prompt promptText default location (POSIX file startPath)
+        else
+            set selectedFolder to choose folder with prompt promptText
+        end if
+        return POSIX path of selectedFolder
+    end run
+    """
+    let result = ShellCommand.run(
+        executable: "osascript",
+        arguments: [
+            "-e",
+            script,
+            "Choisissez un dossier accessible à Orchiviste.",
+            startPath
+        ],
+        timeoutSeconds: nil
+    )
+
+    if result.exitCode == 0, let selectedPath = normalizedMuniEmployeePathInput(result.stdout) {
+        let url = URL(fileURLWithPath: selectedPath, isDirectory: true).standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw Abort(.badRequest, reason: "Le dossier choisi est introuvable ou inaccessible.")
+        }
+        return UIChooseLocalFolderResponse(
+            selected: true,
+            path: url.path,
+            message: "Dossier local sélectionné."
+        )
+    }
+
+    let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+    if result.exitCode == -128 || stderr.localizedCaseInsensitiveContains("User canceled") {
+        return UIChooseLocalFolderResponse(
+            selected: false,
+            path: nil,
+            message: "Sélection locale annulée."
+        )
+    }
+
+    throw Abort(.serviceUnavailable, reason: "Le sélecteur local macOS est indisponible.")
+#else
+    return UIChooseLocalFolderResponse(
+        selected: false,
+        path: nil,
+        message: "Le sélecteur local est disponible seulement sur macOS."
+    )
+#endif
+}
+
+private func existingDirectoryForLocalFolderDialog(_ rawValue: String?) -> String? {
+    guard let normalized = normalizedMuniEmployeePathInput(rawValue) else {
+        return nil
+    }
+
+    var candidate = URL(fileURLWithPath: normalized, isDirectory: true).standardizedFileURL
+    var isDirectory: ObjCBool = false
+    if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory) {
+        return isDirectory.boolValue ? candidate.path : candidate.deletingLastPathComponent().path
+    }
+
+    while candidate.path != "/" {
+        candidate.deleteLastPathComponent()
+        if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            return candidate.path
+        }
+    }
+    return nil
 }
 
 private func resolveFolderPickerPath(_ requested: String?, roots: [URL]) throws -> URL {

@@ -13,7 +13,7 @@
         <button
             class="path-picker-button"
             type="button"
-            onclick="openMuniLocalDirectoryPicker('#import("picker_input_id")', '#import("picker_file_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
+            onclick="openMuniLocalDirectoryPicker('#import("picker_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
         >Choisir</button>
         <button
             class="path-picker-button"
@@ -21,15 +21,6 @@
             onclick="openMuniServerFolderPicker('#import("picker_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
         >Serveur</button>
     </div>
-    <input
-        id="#import("picker_file_input_id")"
-        type="file"
-        webkitdirectory
-        directory
-        multiple
-        style="display:none"
-        onchange="handleMuniLocalDirectorySelection('#import("picker_file_input_id")', '#import("picker_input_id")', '#import("picker_hint_id")', '#import("picker_mode_input_id")')"
-    >
     <input
         id="#import("picker_mode_input_id")"
         type="hidden"

@@ -23,63 +23,49 @@ const muniPathPickerState = {
     roots: []
 };
 
-async function openMuniLocalDirectoryPicker(inputId, fileInputId, hintId, modeInputId) {
-    const picker = document.getElementById(fileInputId);
-    if (!picker) {
-        setMuniPathPickerMode(modeInputId, "local");
-        return;
-    }
-    picker.value = "";
-    picker.click();
-}
-
-function handleMuniLocalDirectorySelection(fileInputId, inputId, hintId, modeInputId) {
-    setMuniPathPickerMode(modeInputId, "local");
-
-    const picker = document.getElementById(fileInputId);
+async function openMuniLocalDirectoryPicker(inputId, hintId, modeInputId) {
     const input = document.getElementById(inputId);
     const hint = document.getElementById(hintId);
-    const files = Array.from((picker && picker.files) || []);
-    if (!files.length) {
-        if (hint) {
-            hint.textContent = "Aucun dossier local sélectionné.";
-        }
-        return;
-    }
 
-    const firstFile = files[0];
-    const relativePath = firstFile.webkitRelativePath || firstFile.name;
-    const pathParts = relativePath.split("/").filter(Boolean);
-    const folderName = pathParts.length > 1 ? pathParts[0] : firstFile.name;
-    const exposedPath = firstFile.path || firstFile.mozFullPath || "";
-    const inferredRoot = inferMuniLocalRootPath(exposedPath, relativePath);
-
-    if (input) {
-        input.value = inferredRoot || "";
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-    }
     if (hint) {
-        if (inferredRoot) {
-            hint.textContent = `Dossier local sélectionné: ${inferredRoot} (${files.length} élément(s)).`;
-        } else {
-            hint.textContent = `Dossier local choisi: ${folderName}. Le navigateur n'a pas fourni le chemin complet; collez le chemin POSIX du dossier dans le champ.`;
+        hint.textContent = "Ouverture du sélecteur local macOS...";
+    }
+
+    try {
+        const response = await fetch("/ui/fs/choose-local-folder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ current_path: input && input.value ? input.value : "" })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const message = data.message || data.reason || `Sélection locale indisponible (${response.status}).`;
+            if (hint) {
+                hint.textContent = `${message} Vous pouvez coller le chemin POSIX dans le champ.`;
+            }
+            return;
+        }
+        if (!data.selected || !data.path) {
+            if (hint) {
+                hint.textContent = data.message || "Sélection locale annulée.";
+            }
+            return;
+        }
+
+        if (input) {
+            input.value = data.path;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        setMuniPathPickerMode(modeInputId, "local");
+        if (hint) {
+            hint.textContent = `Dossier local: ${data.path}`;
+        }
+    } catch (error) {
+        if (hint) {
+            hint.textContent = "Sélection locale impossible. Vous pouvez coller le chemin POSIX dans le champ.";
         }
     }
-}
-
-function inferMuniLocalRootPath(exposedPath, relativePath) {
-    if (!exposedPath || !relativePath || !relativePath.includes("/")) {
-        return "";
-    }
-
-    const relativeParts = relativePath.split("/").filter(Boolean);
-    const remainder = relativeParts.slice(1).join("/");
-    if (!remainder || !exposedPath.endsWith(remainder)) {
-        return "";
-    }
-
-    return exposedPath.slice(0, -remainder.length).replace(/\/$/, "");
 }
 
 function openMuniServerFolderPicker(inputId, hintId, modeInputId) {
@@ -156,6 +142,8 @@ function applyMuniPickedFolder() {
     const input = document.getElementById(muniPathPickerState.targetInputId);
     if (input) {
         input.value = muniPathPickerState.currentPath;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
     }
     const hint = document.getElementById(muniPathPickerState.targetHintId);
     if (hint) {
