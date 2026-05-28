@@ -606,12 +606,19 @@ func registerMuniConversionEmployeeUIRoutes(_ app: Application) {
 
 private func muniConversionProfileOptions(selectedID: String) -> [UIMuniConversionProfileOption] {
     [
-        ("docx_to_pdf", "DOCX -> PDF"),
+        ("doc_to_docx", "DOC -> DOCX"),
         ("doc_to_pdf", "DOC -> PDF"),
-        ("xlsx_to_pdf", "XLSX -> PDF"),
+        ("docx_to_pdf", "DOCX -> PDF"),
+        ("docx_to_doc", "DOCX -> DOC"),
+        ("xls_to_xlsx", "XLS -> XLSX"),
         ("xls_to_pdf", "XLS -> PDF"),
-        ("pptx_to_pdf", "PPTX -> PDF"),
+        ("xlsx_to_pdf", "XLSX -> PDF"),
+        ("xlsx_to_xls", "XLSX -> XLS"),
+        ("ppt_to_pptx", "PPT -> PPTX"),
         ("ppt_to_pdf", "PPT -> PDF"),
+        ("pptx_to_pdf", "PPTX -> PDF"),
+        ("pptx_to_ppt", "PPTX -> PPT"),
+        ("rtf_to_docx", "RTF -> DOCX"),
         ("rtf_to_pdf", "RTF -> PDF"),
         ("txt_to_pdf", "TXT -> PDF"),
         ("odt_to_pdf", "ODT -> PDF"),
